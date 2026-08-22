@@ -20,7 +20,8 @@ import {
   Sparkles,
   Swords,
   Shirt,
-  Info
+  Info,
+  Ticket
 } from 'lucide-react';
 
 export const CheckoutModal: React.FC = () => {
@@ -36,13 +37,15 @@ export const CheckoutModal: React.FC = () => {
     createOrder,
     setIsWalletOpen,
     setCurrentView,
-    orders
+    orders,
+    userInventory
   } = useApp();
 
   const [agreeTerms, setAgreeTerms] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
+  const [selectedVoucherId, setSelectedVoucherId] = useState<string>('');
 
   const [copiedUser, setCopiedUser] = useState(false);
   const [copiedPass, setCopiedPass] = useState(false);
@@ -52,9 +55,18 @@ export const CheckoutModal: React.FC = () => {
   const account = accounts.find(a => a.id === checkoutAccountId);
   if (!account) return null;
 
+  // Available vouchers in user inventory
+  const availableVouchers = userInventory.filter(
+    item => item.userId === currentUser.id && item.rewardType === 'voucher' && !item.isUsed
+  );
+
+  const selectedVoucher = availableVouchers.find(v => v.id === selectedVoucherId);
+  const voucherDiscount = selectedVoucher ? Math.min(account.price, selectedVoucher.value) : 0;
+  const finalPrice = Math.max(0, account.price - voucherDiscount);
+
   const completedOrder = completedOrderId ? orders.find(o => o.id === completedOrderId) : null;
-  const isBalanceSufficient = currentUser.balance >= account.price;
-  const deficitAmount = Math.max(0, account.price - currentUser.balance);
+  const isBalanceSufficient = currentUser.balance >= finalPrice;
+  const deficitAmount = Math.max(0, finalPrice - currentUser.balance);
 
   const handleClose = () => {
     setIsCheckoutOpen(false);
@@ -62,6 +74,7 @@ export const CheckoutModal: React.FC = () => {
       setCheckoutAccountId(null);
     }
     setCompletedOrderId(null);
+    setSelectedVoucherId('');
     setErrorMessage('');
     setIsProcessing(false);
   };
@@ -86,7 +99,15 @@ export const CheckoutModal: React.FC = () => {
     setErrorMessage('');
 
     setTimeout(() => {
-      const result = createOrder(account.id);
+      const voucherPayload = selectedVoucher
+        ? {
+            code: selectedVoucher.voucherCode || selectedVoucher.title,
+            discount: voucherDiscount,
+            inventoryItemId: selectedVoucher.id
+          }
+        : undefined;
+
+      const result = createOrder(account.id, voucherPayload);
       setIsProcessing(false);
 
       if (result.success && result.orderId) {
@@ -280,20 +301,65 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               </div>
 
+              {/* Voucher Selection from Mystery Box / Inventory */}
+              {availableVouchers.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/40 to-blue-950/40 border border-cyan-500/30 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                      <Ticket size={15} />
+                      <span>Áp Dụng Voucher Giảm Giá (Túi Mù):</span>
+                    </div>
+                    <span className="text-[11px] text-cyan-400/80 font-mono">
+                      Có {availableVouchers.length} mã
+                    </span>
+                  </div>
+
+                  <select
+                    value={selectedVoucherId}
+                    onChange={e => setSelectedVoucherId(e.target.value)}
+                    className="w-full bg-slate-900 border border-cyan-500/40 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-medium"
+                  >
+                    <option value="">-- Không sử dụng voucher --</option>
+                    {availableVouchers.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.title} - Giảm {v.value.toLocaleString('vi-VN')}đ {v.voucherCode ? `(${v.voucherCode})` : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedVoucher && (
+                    <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20 text-[11px] text-cyan-300 flex items-center justify-between">
+                      <span>Đã áp dụng giảm giá trực tiếp:</span>
+                      <span className="font-bold font-mono text-cyan-200">
+                        -{voucherDiscount.toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Order Cost Breakdown */}
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5 text-xs">
                 <div className="flex justify-between text-slate-300">
-                  <span>Giá bán tài khoản:</span>
+                  <span>Giá bán tài khoản niêm yết:</span>
                   <span className="font-bold text-white">{account.price.toLocaleString('vi-VN')}đ</span>
                 </div>
+                {voucherDiscount > 0 && (
+                  <div className="flex justify-between text-cyan-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Ticket size={13} /> Voucher giảm giá (Sàn tài trợ):
+                    </span>
+                    <span className="font-bold font-mono">-{voucherDiscount.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-slate-300">
                   <span>Phí bảo hiểm trung gian Escrow:</span>
                   <span className="text-emerald-400 font-bold">0đ (Miễn phí)</span>
                 </div>
                 <div className="pt-2 border-t border-slate-800 flex justify-between items-baseline">
-                  <span className="font-bold text-slate-200">Tổng tiền thanh toán:</span>
+                  <span className="font-bold text-slate-200">Người mua thực trả:</span>
                   <span className="text-xl font-black text-amber-400">
-                    {account.price.toLocaleString('vi-VN')}
+                    {finalPrice.toLocaleString('vi-VN')}
                     <span className="text-xs text-amber-500 ml-1">VNĐ</span>
                   </span>
                 </div>
@@ -318,7 +384,7 @@ export const CheckoutModal: React.FC = () => {
                       <span>Số dư ví khả dụng đủ để thanh toán.</span>
                     </div>
                     <span className="font-bold">
-                      Còn lại: {(currentUser.balance - account.price).toLocaleString('vi-VN')}đ
+                      Còn lại: {(currentUser.balance - finalPrice).toLocaleString('vi-VN')}đ
                     </span>
                   </div>
                 ) : (
@@ -347,6 +413,17 @@ export const CheckoutModal: React.FC = () => {
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Policy: Voucher Platform-Funded (Seller Protection) Notice */}
+              <div className="p-3.5 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 space-y-1 text-xs text-slate-300">
+                <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                  <ShieldCheck size={15} className="text-cyan-400" />
+                  <span>Chính Sách Bảo Vệ Thu Nhập Người Bán:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-300">
+                  Mọi khoản giảm giá từ <strong>Voucher Túi Mù</strong> do sàn <strong>LQMarket tài trợ 100%</strong>. Người bán vẫn nhận đủ <strong>100% doanh thu niêm yết ({account.price.toLocaleString('vi-VN')}đ)</strong> (trừ phí sàn tiêu chuẩn 5%), hoàn toàn không bị trừ vào tiền túi của người bán!
+                </p>
               </div>
 
               {/* Escrow Guarantee Notice */}

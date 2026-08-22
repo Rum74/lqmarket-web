@@ -52,5 +52,26 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Mystery Boxes & Lucky Gacha
+    match /mystery_boxes/{boxId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /mystery_rewards/{rewardId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /mystery_history/{historyId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /user_inventory/{inventoryId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

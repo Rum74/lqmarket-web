@@ -6,7 +6,8 @@ export type RankTier =
   | 'Kim Cương'
   | 'Tinh Anh'
   | 'Cao Thủ'
-  | 'Chiến Tướng';
+  | 'Chiến Tướng'
+  | 'Thách Đấu';
 
 export type AccountStatus = 'pending' | 'approved' | 'rejected' | 'sold' | 'hidden';
 
@@ -113,6 +114,8 @@ export interface OrderItem {
   accountCode: string;
   accountTitle: string;
   accountPrice: number;
+  voucherDiscount?: number;
+  voucherCodeUsed?: string;
   fee: number;
   totalAmount: number;
   buyerId: string;
@@ -181,4 +184,102 @@ export interface FilterOptions {
   securityType: string;
   badge: string;
   sortBy: 'price_asc' | 'price_desc' | 'newest' | 'most_skins' | 'most_heroes' | 'views';
+}
+
+// ----------------------------------------------------
+// MYSTERY BOX (TÚI MÙ MAY MẮN) TYPES
+// ----------------------------------------------------
+export type MysteryBoxTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'special';
+
+export type MysteryBoxRewardType = 'account' | 'cash' | 'voucher' | 'free_turn';
+
+export type RewardRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export interface MysteryBoxTierConfig {
+  id: string;
+  name: string;
+  tier: MysteryBoxTier;
+  price: number;
+  originalPrice?: number;
+  description: string;
+  badge?: string; // 'HOT' | 'TIẾT KIỆM' | 'TỶ LỆ CAO' | 'VIP SSS'
+  colorGradient: string;
+  borderColor: string;
+  iconBg: string;
+  totalOpened: number;
+  stockRemaining: number; // if limited daily (e.g. 50/50), -1 for unlimited
+  highlightText: string;
+  highlightRewards: {
+    name: string;
+    tag: string;
+    rate: string;
+    image?: string;
+  }[];
+  isActive: boolean;
+}
+
+export interface MysteryBoxRewardItem {
+  id: string;
+  boxTierId: string; // 'bronze' | 'silver' | 'gold' | 'diamond' | 'special' | 'all'
+  type: MysteryBoxRewardType;
+  title: string;
+  subtitle?: string;
+  image?: string;
+  value: number; // cash amount, or voucher value, or account value estimation
+  rarity: RewardRarity;
+  dropWeight: number; // probability weight
+  isJackpot?: boolean;
+  // Account details if type === 'account'
+  accountData?: {
+    rank: RankTier;
+    heroesCount: number;
+    skinsCount: number;
+    rareSkinName?: string;
+    credentials: AccountCredentials;
+    description?: string;
+  };
+  // Voucher details if type === 'voucher'
+  voucherCode?: string;
+  voucherDiscount?: number;
+  voucherMinOrder?: number;
+  // Stock limit
+  stock?: number;
+}
+
+export interface MysteryBoxHistoryItem {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  boxTierId: string;
+  boxName: string;
+  rewardId: string;
+  rewardType: MysteryBoxRewardType;
+  rewardTitle: string;
+  rewardValue: number;
+  rewardRarity: RewardRarity;
+  accountDelivered?: AccountCredentials;
+  voucherCodeDelivered?: string;
+  openedAt: string;
+}
+
+export interface UserInventoryItem {
+  id: string;
+  userId: string;
+  source: 'mystery_box' | 'direct_purchase' | 'event';
+  rewardType: MysteryBoxRewardType;
+  title: string;
+  value: number;
+  rarity: RewardRarity;
+  accountData?: {
+    rank: RankTier;
+    heroesCount: number;
+    skinsCount: number;
+    rareSkinName?: string;
+    credentials: AccountCredentials;
+  };
+  voucherCode?: string;
+  voucherDiscount?: number;
+  isUsed?: boolean;
+  receivedAt: string;
 }

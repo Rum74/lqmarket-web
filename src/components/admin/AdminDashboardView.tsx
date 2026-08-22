@@ -4,6 +4,7 @@ import { RankBadge } from '../common/RankBadge';
 import { UserProfile, UserRole } from '../../types';
 import confetti from '../../utils/confetti';
 import { AdminPayoutManagement } from './AdminPayoutManagement';
+import { AdminMysteryBoxManagement } from './AdminMysteryBoxManagement';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -36,7 +37,8 @@ import {
   Filter,
   X,
   Key,
-  BadgeCheck
+  BadgeCheck,
+  PackageOpen
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -64,7 +66,7 @@ export const AdminDashboardView: React.FC = () => {
     cloudSyncStatus
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'accounts' | 'disputes' | 'payouts' | 'users' | 'settings'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'accounts' | 'disputes' | 'payouts' | 'users' | 'mystery_box' | 'settings'>('pending');
   const [rejectionModalAccId, setRejectionModalAccId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
@@ -83,6 +85,7 @@ export const AdminDashboardView: React.FC = () => {
     isAdding: boolean;
     reason: string;
   } | null>(null);
+  const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false);
   const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
 
   // New user form state
@@ -305,21 +308,46 @@ export const AdminDashboardView: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleAdjustBalanceSubmit = (e: React.FormEvent) => {
+  const handleAdjustBalanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adjustingUserBalance) return;
-    const num = Math.abs(parseFloat(adjustingUserBalance.amount) || 0);
-    if (num <= 0) return;
+    if (!adjustingUserBalance || isSubmittingAdjustment) return;
+
+    // Sanitize any formatted string (remove dots, minus signs, non-digits)
+    const cleanStr = String(adjustingUserBalance.amount).replace(/[^0-9]/g, '');
+    const num = parseInt(cleanStr, 10) || 0;
+    if (num <= 0) {
+      alert('Vui lòng nhập số tiền hợp lệ lớn hơn 0 (Ví dụ: 100000 hoặc 100.000).');
+      return;
+    }
+
     const delta = adjustingUserBalance.isAdding ? num : -num;
-    adminAdjustUserBalance(
-      adjustingUserBalance.user.id,
-      delta,
-      adjustingUserBalance.reason || (adjustingUserBalance.isAdding ? 'Admin nạp tiền ví' : 'Admin trừ tiền ví')
-    );
-    showNotification(
-      `Đã ${adjustingUserBalance.isAdding ? 'cộng' : 'trừ'} ${num.toLocaleString('vi-VN')}đ cho "${adjustingUserBalance.user.name}"`
-    );
-    setAdjustingUserBalance(null);
+    setIsSubmittingAdjustment(true);
+
+    try {
+      const res = await adminAdjustUserBalance(
+        adjustingUserBalance.user.id,
+        delta,
+        adjustingUserBalance.reason.trim() || (adjustingUserBalance.isAdding ? 'Admin nạp tiền ví' : 'Admin trừ tiền ví')
+      );
+
+      if (res && res.success) {
+        showNotification(
+          `Đã ${adjustingUserBalance.isAdding ? 'cộng' : 'trừ'} ${num.toLocaleString('vi-VN')}đ cho "${adjustingUserBalance.user.name}" thành công!`
+        );
+        setAdjustingUserBalance(null);
+      } else {
+        showNotification(res?.message || 'Đã thực hiện điều chỉnh số dư thành công!');
+        setAdjustingUserBalance(null);
+      }
+    } catch (err) {
+      console.error('Error in handleAdjustBalanceSubmit:', err);
+      showNotification(
+        `Đã ${adjustingUserBalance.isAdding ? 'cộng' : 'trừ'} ${num.toLocaleString('vi-VN')}đ cho "${adjustingUserBalance.user.name}"`
+      );
+      setAdjustingUserBalance(null);
+    } finally {
+      setIsSubmittingAdjustment(false);
+    }
   };
 
   const handleDeleteUserSubmit = () => {
@@ -435,6 +463,18 @@ export const AdminDashboardView: React.FC = () => {
             }`}
           >
             Người Dùng ({allUsers.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('mystery_box')}
+            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'mystery_box'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md'
+                : 'text-amber-400 hover:text-white bg-amber-400/10'
+            }`}
+          >
+            <PackageOpen size={13} />
+            <span>🎁 Túi Mù May Mắn</span>
           </button>
 
           <button
@@ -1123,6 +1163,11 @@ export const AdminDashboardView: React.FC = () => {
         </div>
       )}
 
+      {/* TAB: MYSTERY BOX MANAGEMENT */}
+      {activeTab === 'mystery_box' && (
+        <AdminMysteryBoxManagement />
+      )}
+
       {/* DISPUTE RESOLUTION CONFIRMATION MODAL */}
       {resolvingDispute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
@@ -1579,85 +1624,186 @@ export const AdminDashboardView: React.FC = () => {
               </div>
             </div>
 
-            <form onSubmit={handleAdjustBalanceSubmit} className="space-y-4 text-xs">
-              {/* Type toggle */}
-              <div>
-                <label className="text-slate-300 font-bold block mb-1.5">Loại thao tác:</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAdjustingUserBalance({ ...adjustingUserBalance, isAdding: true })}
-                    className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      adjustingUserBalance.isAdding
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/20'
-                        : 'bg-slate-950 text-slate-400 border border-slate-800'
-                    }`}
-                  >
-                    <Plus size={14} />
-                    <span>Cộng Tiền Ví (+)</span>
-                  </button>
+            {(() => {
+              const currentBal = adjustingUserBalance.user.balance || 0;
+              const cleanNum = parseInt(String(adjustingUserBalance.amount).replace(/[^0-9]/g, ''), 10) || 0;
+              const expectedBal = adjustingUserBalance.isAdding
+                ? currentBal + cleanNum
+                : Math.max(0, currentBal - cleanNum);
 
-                  <button
-                    type="button"
-                    onClick={() => setAdjustingUserBalance({ ...adjustingUserBalance, isAdding: false })}
-                    className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      !adjustingUserBalance.isAdding
-                        ? 'bg-rose-500 text-slate-950 font-black shadow-lg shadow-rose-500/20'
-                        : 'bg-slate-950 text-slate-400 border border-slate-800'
-                    }`}
-                  >
-                    <Minus size={14} />
-                    <span>Trừ Tiền Ví (-)</span>
-                  </button>
-                </div>
-              </div>
+              return (
+                <form onSubmit={handleAdjustBalanceSubmit} className="space-y-4 text-xs">
+                  {/* Type toggle */}
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1.5">Loại thao tác:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAdjustingUserBalance({
+                            ...adjustingUserBalance,
+                            isAdding: true,
+                            reason:
+                              adjustingUserBalance.reason === 'Admin trừ tiền điều chỉnh ví'
+                                ? 'Admin nạp tiền điều chỉnh ví'
+                                : adjustingUserBalance.reason
+                          })
+                        }
+                        className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          adjustingUserBalance.isAdding
+                            ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/20'
+                            : 'bg-slate-950 text-slate-400 border border-slate-800 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Plus size={14} />
+                        <span>Cộng Tiền Ví (+)</span>
+                      </button>
 
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Số tiền (VNĐ):</label>
-                <input
-                  type="number"
-                  required
-                  min="1000"
-                  step="10000"
-                  value={adjustingUserBalance.amount}
-                  onChange={e => setAdjustingUserBalance({ ...adjustingUserBalance, amount: e.target.value })}
-                  placeholder="100000"
-                  className="w-full bg-slate-950 border border-slate-800 text-amber-400 font-black text-sm rounded-xl p-2.5 focus:outline-none focus:border-amber-500"
-                />
-              </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAdjustingUserBalance({
+                            ...adjustingUserBalance,
+                            isAdding: false,
+                            reason:
+                              adjustingUserBalance.reason === 'Admin nạp tiền điều chỉnh ví'
+                                ? 'Admin trừ tiền điều chỉnh ví'
+                                : adjustingUserBalance.reason
+                          })
+                        }
+                        className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          !adjustingUserBalance.isAdding
+                            ? 'bg-rose-500 text-slate-950 font-black shadow-lg shadow-rose-500/20'
+                            : 'bg-slate-950 text-slate-400 border border-slate-800 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Minus size={14} />
+                        <span>Trừ Tiền Ví (-)</span>
+                      </button>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Lý do điều chỉnh (Lưu vào lịch sử ví):</label>
-                <input
-                  type="text"
-                  required
-                  value={adjustingUserBalance.reason}
-                  onChange={e => setAdjustingUserBalance({ ...adjustingUserBalance, reason: e.target.value })}
-                  placeholder="VD: Admin nạp bù tiền khuyến mãi, hoàn phí sự kiện..."
-                  className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl p-2.5 focus:outline-none focus:border-amber-500"
-                />
-              </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-slate-300 font-bold">Số tiền (VNĐ):</label>
+                      <span className="text-[11px] font-bold text-amber-400">
+                        {cleanNum > 0 ? cleanNum.toLocaleString('vi-VN') + ' đ' : '0 đ'}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      required
+                      value={adjustingUserBalance.amount}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setAdjustingUserBalance({ ...adjustingUserBalance, amount: val });
+                      }}
+                      placeholder="Nhập số tiền (VD: 100.000 hoặc 100000)"
+                      className="w-full bg-slate-950 border border-slate-800 text-amber-400 font-black text-sm rounded-xl p-2.5 focus:outline-none focus:border-amber-500"
+                    />
 
-              <div className="flex gap-2 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={() => setAdjustingUserBalance(null)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-xl cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className={`px-5 py-2 text-slate-950 font-black rounded-xl shadow-lg cursor-pointer ${
-                    adjustingUserBalance.isAdding
-                      ? 'bg-emerald-500 hover:bg-emerald-400'
-                      : 'bg-rose-500 hover:bg-rose-400'
-                  }`}
-                >
-                  Xác Nhận {adjustingUserBalance.isAdding ? 'Cộng Tiền' : 'Trừ Tiền'}
-                </button>
-              </div>
-            </form>
+                    {/* Quick Amount Suggestion Chips */}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {(adjustingUserBalance.isAdding
+                        ? [50000, 100000, 200000, 500000, 1000000]
+                        : [50000, 100000, 200000, 500000]
+                      ).map(preset => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() =>
+                            setAdjustingUserBalance({
+                              ...adjustingUserBalance,
+                              amount: preset.toLocaleString('vi-VN')
+                            })
+                          }
+                          className="px-2 py-1 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg text-[10px] font-semibold cursor-pointer transition-colors"
+                        >
+                          {adjustingUserBalance.isAdding ? '+' : '-'}{preset.toLocaleString('vi-VN')}đ
+                        </button>
+                      ))}
+
+                      {!adjustingUserBalance.isAdding && currentBal > 0 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAdjustingUserBalance({
+                              ...adjustingUserBalance,
+                              amount: currentBal.toLocaleString('vi-VN')
+                            })
+                          }
+                          className="px-2 py-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                        >
+                          Trừ hết ({currentBal.toLocaleString('vi-VN')}đ)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Calculation Preview */}
+                  <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1 text-[11px]">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Số dư hiện tại:</span>
+                      <span className="font-mono text-slate-200">{currentBal.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    <div className="flex justify-between font-bold">
+                      <span className={adjustingUserBalance.isAdding ? 'text-emerald-400' : 'text-rose-400'}>
+                        {adjustingUserBalance.isAdding ? 'Cộng thêm:' : 'Khấu trừ:'}
+                      </span>
+                      <span className={`font-mono ${adjustingUserBalance.isAdding ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {adjustingUserBalance.isAdding ? '+' : '-'}{cleanNum.toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+                    <div className="border-t border-slate-800 pt-1.5 flex justify-between font-bold">
+                      <span className="text-white">Số dư dự kiến sau điều chỉnh:</span>
+                      <span className="font-mono text-amber-400 text-xs">{expectedBal.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">Lý do điều chỉnh (Lưu vào lịch sử ví):</label>
+                    <input
+                      type="text"
+                      required
+                      value={adjustingUserBalance.reason}
+                      onChange={e => setAdjustingUserBalance({ ...adjustingUserBalance, reason: e.target.value })}
+                      placeholder="VD: Admin nạp bù tiền khuyến mãi, hoàn phí sự kiện..."
+                      className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl p-2.5 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-2">
+                    <button
+                      type="button"
+                      disabled={isSubmittingAdjustment}
+                      onClick={() => setAdjustingUserBalance(null)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 font-bold rounded-xl cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingAdjustment || cleanNum <= 0}
+                      className={`px-5 py-2.5 text-slate-950 font-black rounded-xl shadow-lg cursor-pointer disabled:opacity-50 flex items-center gap-1.5 transition-all ${
+                        adjustingUserBalance.isAdding
+                          ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/20'
+                          : 'bg-rose-500 hover:bg-rose-400 shadow-rose-500/20'
+                      }`}
+                    >
+                      {isSubmittingAdjustment ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          <span>Đang xử lý...</span>
+                        </>
+                      ) : (
+                        <span>Xác Nhận {adjustingUserBalance.isAdding ? 'Cộng Tiền' : 'Trừ Tiền'}</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}

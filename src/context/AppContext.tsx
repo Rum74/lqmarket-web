@@ -8,9 +8,18 @@ import {
   WalletTransaction,
   UserRole,
   FilterOptions,
-  AccountStatus
+  AccountStatus,
+  MysteryBoxTierConfig,
+  MysteryBoxRewardItem,
+  MysteryBoxHistoryItem,
+  UserInventoryItem
 } from '../types';
 import { INITIAL_USERS, INITIAL_ACCOUNTS, INITIAL_ORDERS, INITIAL_TRANSACTIONS } from '../data/mockData';
+import {
+  DEFAULT_MYSTERY_BOX_TIERS,
+  DEFAULT_MYSTERY_BOX_REWARDS,
+  DEFAULT_MYSTERY_BOX_HISTORY
+} from '../data/mysteryBoxData';
 import { db } from '../lib/firebase';
 import {
   collection,
@@ -54,8 +63,8 @@ interface AppContextType {
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
 
   // Navigation & Views
-  currentView: 'home' | 'accounts' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide';
-  setCurrentView: (view: 'home' | 'accounts' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide') => void;
+  currentView: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide';
+  setCurrentView: (view: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide') => void;
   selectedAccountId: string | null;
   setSelectedAccountId: (id: string | null) => void;
   selectedSellerId: string | null;
@@ -95,7 +104,10 @@ interface AppContextType {
 
   // Orders & Escrow workflow
   orders: OrderItem[];
-  createOrder: (accountId: string) => { success: boolean; orderId?: string; message: string };
+  createOrder: (
+    accountId: string,
+    voucherOptions?: { code: string; discount: number; inventoryItemId?: string }
+  ) => { success: boolean; orderId?: string; message: string };
   confirmAccountDelivery: (orderId: string) => void;
   confirmOrderReceived: (orderId: string) => void;
   disputeOrder: (orderId: string, reason: string) => void;
@@ -137,6 +149,31 @@ interface AppContextType {
   notifications: AppNotification[];
   markNotificationAsRead: (id: string) => void;
   clearAllNotifications: () => void;
+
+  // Mystery Box (Túi Mù May Mắn)
+  mysteryBoxes: MysteryBoxTierConfig[];
+  mysteryRewards: MysteryBoxRewardItem[];
+  mysteryHistory: MysteryBoxHistoryItem[];
+  userInventory: UserInventoryItem[];
+  userFreeTurns: Record<string, number>;
+  isMysteryBoxEventActive: boolean;
+  selectedBoxTierForUnboxing: string | null;
+  setSelectedBoxTierForUnboxing: (tierId: string | null) => void;
+  openMysteryBox: (boxTierId: string) => Promise<{
+    success: boolean;
+    reward?: MysteryBoxRewardItem;
+    message: string;
+    isFreeTurn?: boolean;
+  }>;
+  useUserInventoryItem: (inventoryItemId: string) => { success: boolean; message: string };
+  adminToggleMysteryBoxEvent: (active: boolean) => Promise<{ success: boolean; message: string }>;
+  adminToggleTierActive: (tierId: string, isActive: boolean) => Promise<{ success: boolean; message: string }>;
+  adminAddMysteryReward: (reward: Omit<MysteryBoxRewardItem, 'id'>) => Promise<{ success: boolean; message: string }>;
+  adminUpdateMysteryReward: (id: string, updates: Partial<MysteryBoxRewardItem>) => Promise<{ success: boolean; message: string }>;
+  adminDeleteMysteryReward: (id: string) => Promise<{ success: boolean; message: string }>;
+  adminUpdateBoxTier: (tierId: string, updates: Partial<MysteryBoxTierConfig>) => Promise<{ success: boolean; message: string }>;
+  adminImportAccountToMysteryBox: (accountId: string, targetTierId: string) => Promise<{ success: boolean; message: string }>;
+  adminResetMysteryBoxes: () => Promise<{ success: boolean; message: string }>;
 
   // Admin User Management
   adminCreateUser: (userData: Omit<UserProfile, 'id' | 'createdAt'>) => Promise<{ success: boolean; message: string; userId?: string }>;
@@ -252,8 +289,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     savedData?.notifications || []
   );
 
+  // Mystery Box (Túi Mù May Mắn) States
+  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(
+    savedData?.mysteryBoxes || DEFAULT_MYSTERY_BOX_TIERS
+  );
+  const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>(
+    savedData?.mysteryRewards || DEFAULT_MYSTERY_BOX_REWARDS
+  );
+  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>(
+    savedData?.mysteryHistory || DEFAULT_MYSTERY_BOX_HISTORY
+  );
+  const [userInventory, setUserInventory] = useState<UserInventoryItem[]>(
+    savedData?.userInventory || []
+  );
+  const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>(
+    savedData?.userFreeTurns || {}
+  );
+  const [isMysteryBoxEventActive, setIsMysteryBoxEventActive] = useState<boolean>(true);
+  const [selectedBoxTierForUnboxing, setSelectedBoxTierForUnboxing] = useState<string | null>(null);
+
   // View States - Always start at Home
-  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide'>('home');
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -282,13 +338,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transactions,
         wishlistIds,
         chatMessages,
-        notifications
+        notifications,
+        mysteryBoxes,
+        mysteryRewards,
+        mysteryHistory,
+        userInventory,
+        userFreeTurns
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (e) {
       console.warn('LocalStorage save failed:', e);
     }
-  }, [allUsers, currentUserId, isLoggedIn, accounts, orders, transactions, wishlistIds, chatMessages, notifications]);
+  }, [
+    allUsers,
+    currentUserId,
+    isLoggedIn,
+    accounts,
+    orders,
+    transactions,
+    wishlistIds,
+    chatMessages,
+    notifications,
+    mysteryBoxes,
+    mysteryRewards,
+    mysteryHistory,
+    userInventory,
+    userFreeTurns
+  ]);
 
   // Firestore Sync Mechanism (Real-time Cloud Database Integration for all collections)
   useEffect(() => {
@@ -319,6 +395,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Seed initial accounts to Firestore
           for (const a of INITIAL_ACCOUNTS) {
             await setDoc(doc(db, 'accounts', a.id), cleanForFirestore(a));
+          }
+        }
+
+        // Initialize all 4 default Mystery Box tiers if missing in Firestore
+        const mysteryBoxesRef = collection(db, 'mystery_boxes');
+        const mysteryBoxesSnap = await getDocs(mysteryBoxesRef);
+        if (mysteryBoxesSnap.size < DEFAULT_MYSTERY_BOX_TIERS.length) {
+          for (const box of DEFAULT_MYSTERY_BOX_TIERS) {
+            await setDoc(doc(db, 'mystery_boxes', box.id), cleanForFirestore(box));
+          }
+        }
+
+        // Initialize default Mystery Box rewards if missing in Firestore
+        const mysteryRewardsRef = collection(db, 'mystery_rewards');
+        const mysteryRewardsSnap = await getDocs(mysteryRewardsRef);
+        if (mysteryRewardsSnap.empty) {
+          for (const rew of DEFAULT_MYSTERY_BOX_REWARDS) {
+            await setDoc(doc(db, 'mystery_rewards', rew.id), cleanForFirestore(rew));
           }
         }
 
@@ -497,6 +591,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           err => {
             console.warn('Firestore notifications listener error:', err);
           }
+        );
+
+        // 7. Subscribe to real-time mystery boxes
+        onSnapshot(
+          collection(db, 'mystery_boxes'),
+          snapshot => {
+            const cloudBoxesMap = new Map<string, MysteryBoxTierConfig>();
+            // Start with all 4 default tiers as base
+            DEFAULT_MYSTERY_BOX_TIERS.forEach(box => cloudBoxesMap.set(box.id, box));
+
+            snapshot.forEach(d => {
+              const box = d.data() as MysteryBoxTierConfig;
+              if (box && box.id) {
+                cloudBoxesMap.set(box.id, { ...cloudBoxesMap.get(box.id), ...box });
+              }
+            });
+
+            // Preserve canonical 4 tier order
+            const tierOrder = ['box_bronze', 'box_gold', 'box_diamond', 'box_special'];
+            const allBoxes = Array.from(cloudBoxesMap.values()).sort((a, b) => {
+              const idxA = tierOrder.indexOf(a.id);
+              const idxB = tierOrder.indexOf(b.id);
+              if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+              return 0;
+            });
+
+            setMysteryBoxes(allBoxes);
+          },
+          err => console.warn('Firestore mystery_boxes listener error:', err)
+        );
+
+        // 8. Subscribe to real-time mystery rewards
+        onSnapshot(
+          collection(db, 'mystery_rewards'),
+          snapshot => {
+            const cloudRewards: MysteryBoxRewardItem[] = [];
+            snapshot.forEach(d => {
+              const rew = d.data() as MysteryBoxRewardItem;
+              if (rew && rew.id) {
+                cloudRewards.push(rew);
+              }
+            });
+            if (cloudRewards.length > 0) {
+              setMysteryRewards(cloudRewards);
+            }
+          },
+          err => console.warn('Firestore mystery_rewards listener error:', err)
+        );
+
+        // 9. Subscribe to real-time mystery history
+        onSnapshot(
+          collection(db, 'mystery_history'),
+          snapshot => {
+            const cloudHist: MysteryBoxHistoryItem[] = [];
+            snapshot.forEach(d => {
+              const h = d.data() as MysteryBoxHistoryItem;
+              if (h && h.id) {
+                cloudHist.push(h);
+              }
+            });
+            if (cloudHist.length > 0) {
+              setMysteryHistory(cloudHist.slice(0, 50));
+            }
+          },
+          err => console.warn('Firestore mystery_history listener error:', err)
+        );
+
+        // 9.1 Subscribe to mystery box program status
+        onSnapshot(
+          doc(db, 'site_settings', 'mystery_box_config'),
+          docSnap => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (typeof data.isEventActive === 'boolean') {
+                setIsMysteryBoxEventActive(data.isEventActive);
+              }
+            }
+          },
+          err => console.warn('Firestore mystery_box_config listener error:', err)
+        );
+
+        // 10. Subscribe to user inventory
+        onSnapshot(
+          collection(db, 'user_inventory'),
+          snapshot => {
+            const cloudInv: UserInventoryItem[] = [];
+            snapshot.forEach(d => {
+              const inv = d.data() as UserInventoryItem;
+              if (inv && inv.id) {
+                cloudInv.push(inv);
+              }
+            });
+            if (cloudInv.length > 0) {
+              setUserInventory(cloudInv);
+            }
+          },
+          err => console.warn('Firestore user_inventory listener error:', err)
         );
       } catch (err) {
         console.warn('Firebase Firestore setup encountered offline mode:', err);
@@ -898,12 +1089,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Escrow Order Flow
-  const createOrder = (accountId: string): { success: boolean; orderId?: string; message: string } => {
+  const createOrder = (
+    accountId: string,
+    voucherOptions?: { code: string; discount: number; inventoryItemId?: string }
+  ): { success: boolean; orderId?: string; message: string } => {
     const acc = accounts.find(a => a.id === accountId);
     if (!acc) return { success: false, message: 'Không tìm thấy tài khoản!' };
     if (acc.status === 'sold') return { success: false, message: 'Tài khoản này đã có người mua!' };
 
-    const totalCost = acc.price;
+    const discountAmount = Math.max(0, voucherOptions?.discount || 0);
+    const totalCost = Math.max(0, acc.price - discountAmount); // Buyer pays after discount
+
     if (currentUser.balance < totalCost) {
       return {
         success: false,
@@ -911,7 +1107,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    // 1. Deduct buyer balance
+    // 1. Deduct buyer balance (only what buyer actually owes after voucher)
     setAllUsers(prev =>
       prev.map(u => (u.id === currentUser.id ? { ...u, balance: u.balance - totalCost } : u))
     );
@@ -921,11 +1117,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(a => (a.id === accountId ? { ...a, status: 'sold' as AccountStatus } : a))
     );
 
-    // 3. Create Escrow Order
+    // 3. Mark inventory voucher item as used if applicable
+    if (voucherOptions?.inventoryItemId) {
+      useUserInventoryItem(voucherOptions.inventoryItemId);
+    }
+
+    // 4. Create Escrow Order
+    // NOTE: Voucher is funded 100% by platform/Admin budget. Seller receives full payout based on original acc.price!
     const orderId = `ord_${Date.now()}`;
     const orderCodeNum = Math.floor(10000 + Math.random() * 90000);
     const platformFee = Math.round(acc.price * 0.05); // 5% platform fee
-    const sellerNetPending = acc.price - platformFee; // Net amount seller will receive (95%)
+    const sellerNetPending = acc.price - platformFee; // Net amount seller will receive (95% of listed price)
     const newOrder: OrderItem = {
       id: orderId,
       orderCode: `#ORD${orderCodeNum}`,
@@ -933,6 +1135,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       accountCode: acc.code,
       accountTitle: acc.title,
       accountPrice: acc.price,
+      voucherDiscount: discountAmount > 0 ? discountAmount : undefined,
+      voucherCodeUsed: voucherOptions?.code || undefined,
       fee: platformFee,
       totalAmount: totalCost,
       buyerId: currentUser.id,
@@ -946,19 +1150,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders(prev => [newOrder, ...prev]);
 
-    // 4. Create Wallet Transaction for Buyer
+    // 5. Create Wallet Transaction for Buyer
     const buyerTx: WalletTransaction = {
       id: `tx_${Date.now()}`,
       userId: currentUser.id,
       type: 'purchase',
       amount: -totalCost,
       status: 'success',
-      note: `Mua acc #${acc.code} (Hệ thống Escrow trung gian đang giữ tiền)`,
+      note: discountAmount > 0
+        ? `Mua acc #${acc.code} (Áp dụng voucher giảm ${discountAmount.toLocaleString('vi-VN')}đ do sàn tài trợ)`
+        : `Mua acc #${acc.code} (Hệ thống Escrow trung gian đang giữ tiền)`,
       createdAt: new Date().toISOString()
     };
     setTransactions(prev => [buyerTx, ...prev]);
 
-    // 5. Update Seller Pending Balance (net 95% after 5% platform fee)
+    // 6. Update Seller Pending Balance (net 95% after 5% platform fee - seller NOT affected by voucher!)
     setAllUsers(prev =>
       prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + sellerNetPending } : u))
     );
@@ -1646,6 +1852,398 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // --------------------------------------------------
+  // MYSTERY BOX ACTIONS & HANDLERS
+  // --------------------------------------------------
+  const openMysteryBox = async (
+    boxTierId: string
+  ): Promise<{ success: boolean; reward?: MysteryBoxRewardItem; message: string; isFreeTurn?: boolean }> => {
+    if (!isLoggedIn || !currentUser || !currentUser.id) {
+      openLoginModal();
+      return { success: false, message: 'Vui lòng đăng nhập để tham gia xé túi mù!' };
+    }
+
+    if (!isMysteryBoxEventActive) {
+      return { success: false, message: 'Chương trình Xé Túi Mù hiện đang tạm đóng. Vui lòng quay lại sau!' };
+    }
+
+    const box = mysteryBoxes.find(b => b.id === boxTierId);
+    if (!box || box.isActive === false) {
+      return { success: false, message: 'Hạng túi mù này hiện đang tạm đóng hoặc không tồn tại!' };
+    }
+
+    const hasFreeTurn = (userFreeTurns[boxTierId] || 0) > 0;
+
+    if (!hasFreeTurn && currentUser.balance < box.price) {
+      setIsWalletModalOpen(true);
+      return {
+        success: false,
+        message: `Số dư ví không đủ ${box.price.toLocaleString('vi-VN')}đ để mở túi "${box.name}". Vui lòng nạp thêm tiền vào ví!`
+      };
+    }
+
+    // Candidate rewards for this tier
+    const candidateRewards = mysteryRewards.filter(
+      r => (r.boxTierId === boxTierId || r.boxTierId === 'all') && (r.stock === undefined || r.stock > 0)
+    );
+
+    if (candidateRewards.length === 0) {
+      return { success: false, message: 'Kho phần thưởng của túi này đang được bảo trì. Vui lòng thử lại sau!' };
+    }
+
+    // Weighted random calculation
+    const totalWeight = candidateRewards.reduce((sum, r) => sum + (r.dropWeight || 1), 0);
+    let randomVal = Math.random() * totalWeight;
+    let pickedReward: MysteryBoxRewardItem = candidateRewards[0];
+
+    for (const r of candidateRewards) {
+      const w = r.dropWeight || 1;
+      if (randomVal <= w) {
+        pickedReward = r;
+        break;
+      }
+      randomVal -= w;
+    }
+
+    // Deduct cost or free turn
+    let newBalance = currentUser.balance;
+    const nowIso = new Date().toISOString();
+
+    if (hasFreeTurn) {
+      setUserFreeTurns(prev => ({ ...prev, [boxTierId]: Math.max(0, (prev[boxTierId] || 1) - 1) }));
+    } else {
+      newBalance = currentUser.balance - box.price;
+      const boxTx: WalletTransaction = {
+        id: `tx_box_${Date.now()}`,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userEmail: currentUser.email,
+        type: 'purchase',
+        amount: -box.price,
+        status: 'success',
+        note: `[Túi Mù] Mua lượt xé "${box.name}"`,
+        createdAt: nowIso
+      };
+
+      setTransactions(prev => [boxTx, ...prev]);
+      try {
+        await setDoc(doc(db, 'transactions', boxTx.id), cleanForFirestore(boxTx));
+      } catch (e) {
+        console.warn('Firestore box purchase tx error:', e);
+      }
+    }
+
+    // Process Reward Outcome
+    let rewardNotificationMsg = '';
+
+    if (pickedReward.type === 'cash') {
+      newBalance += pickedReward.value;
+      const cashWinTx: WalletTransaction = {
+        id: `tx_box_win_${Date.now()}`,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userEmail: currentUser.email,
+        type: 'deposit',
+        amount: pickedReward.value,
+        status: 'success',
+        note: `[Túi Mù] Trúng thưởng tiền mặt: ${pickedReward.title}`,
+        createdAt: nowIso
+      };
+      setTransactions(prev => [cashWinTx, ...prev]);
+      try {
+        await setDoc(doc(db, 'transactions', cashWinTx.id), cleanForFirestore(cashWinTx));
+      } catch (e) {
+        console.warn('Firestore cash win tx error:', e);
+      }
+      rewardNotificationMsg = `Chúc mừng bạn trúng ${pickedReward.value.toLocaleString('vi-VN')}đ tiền mặt vào ví!`;
+    } else if (pickedReward.type === 'free_turn') {
+      setUserFreeTurns(prev => ({
+        ...prev,
+        [boxTierId]: (prev[boxTierId] || 0) + 1
+      }));
+      rewardNotificationMsg = `Chúc mừng bạn nhận được 1 Lượt Xé Túi Mù Miễn Phí!`;
+    } else if (pickedReward.type === 'voucher') {
+      const newInvItem: UserInventoryItem = {
+        id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        userId: currentUser.id,
+        source: 'mystery_box',
+        rewardType: 'voucher',
+        title: pickedReward.title,
+        value: pickedReward.value,
+        rarity: pickedReward.rarity,
+        voucherCode: pickedReward.voucherCode || `VOUCHER_${Math.floor(1000 + Math.random() * 9000)}`,
+        voucherDiscount: pickedReward.voucherDiscount || pickedReward.value,
+        isUsed: false,
+        receivedAt: nowIso
+      };
+
+      setUserInventory(prev => [newInvItem, ...prev]);
+      try {
+        await setDoc(doc(db, 'user_inventory', newInvItem.id), cleanForFirestore(newInvItem));
+      } catch (e) {
+        console.warn('Firestore inventory save error:', e);
+      }
+      rewardNotificationMsg = `Bạn nhận được Voucher giảm giá ${pickedReward.value.toLocaleString('vi-VN')}đ!`;
+    } else if (pickedReward.type === 'account' && pickedReward.accountData) {
+      // 1. Add to user inventory
+      const newInvItem: UserInventoryItem = {
+        id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        userId: currentUser.id,
+        source: 'mystery_box',
+        rewardType: 'account',
+        title: pickedReward.title,
+        value: pickedReward.value,
+        rarity: pickedReward.rarity,
+        accountData: pickedReward.accountData,
+        receivedAt: nowIso
+      };
+      setUserInventory(prev => [newInvItem, ...prev]);
+      try {
+        await setDoc(doc(db, 'user_inventory', newInvItem.id), cleanForFirestore(newInvItem));
+      } catch (e) {
+        console.warn('Firestore inventory save error:', e);
+      }
+
+      // 2. Also register as a completed delivered order so it's fully visible in OrdersView
+      const newOrder: OrderItem = {
+        id: `ord_box_${Date.now()}`,
+        orderCode: `#BOX${Date.now().toString().slice(-6)}`,
+        accountId: `acc_reward_${Date.now()}`,
+        accountCode: `LQ${Math.floor(10000 + Math.random() * 90000)}`,
+        accountTitle: pickedReward.title,
+        accountPrice: pickedReward.value,
+        fee: 0,
+        totalAmount: hasFreeTurn ? 0 : box.price,
+        buyerId: currentUser.id,
+        buyerName: currentUser.name,
+        sellerId: 'admin_official',
+        sellerName: 'Kho Quà Túi Mù LQMarket',
+        status: 'completed',
+        credentialsDelivered: pickedReward.accountData.credentials,
+        createdAt: nowIso,
+        completedAt: nowIso
+      };
+      setOrders(prev => [newOrder, ...prev]);
+      try {
+        await setDoc(doc(db, 'orders', newOrder.id), cleanForFirestore(newOrder));
+      } catch (e) {
+        console.warn('Firestore order save error:', e);
+      }
+
+      rewardNotificationMsg = `SIÊU PHẨM! Bạn đã xé trúng ${pickedReward.title}! Tài khoản đã được chuyển thẳng vào Túi đồ & Đơn hàng của bạn.`;
+    }
+
+    // Update user profile balance
+    updateCurrentUserProfile({ balance: newBalance });
+
+    // Update Box Stats (totalOpened & stock)
+    setMysteryBoxes(prev =>
+      prev.map(b => {
+        if (b.id === boxTierId) {
+          const newOpened = (b.totalOpened || 0) + 1;
+          const newStock = b.stockRemaining > 0 ? b.stockRemaining - 1 : b.stockRemaining;
+          const updatedBox = { ...b, totalOpened: newOpened, stockRemaining: newStock };
+          setDoc(doc(db, 'mystery_boxes', b.id), cleanForFirestore(updatedBox)).catch(() => {});
+          return updatedBox;
+        }
+        return b;
+      })
+    );
+
+    // Save History Log
+    const newHistItem: MysteryBoxHistoryItem = {
+      id: `hist_${Date.now()}`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar,
+      boxTierId: box.id,
+      boxName: box.name,
+      rewardId: pickedReward.id,
+      rewardType: pickedReward.type,
+      rewardTitle: pickedReward.title,
+      rewardValue: pickedReward.value,
+      rewardRarity: pickedReward.rarity,
+      accountDelivered: pickedReward.accountData?.credentials,
+      voucherCodeDelivered: pickedReward.voucherCode,
+      openedAt: 'Vừa xong'
+    };
+
+    setMysteryHistory(prev => [newHistItem, ...prev.slice(0, 49)]);
+    try {
+      await setDoc(doc(db, 'mystery_history', newHistItem.id), cleanForFirestore(newHistItem));
+    } catch (e) {
+      console.warn('Firestore history save error:', e);
+    }
+
+    // Send In-App Notification
+    const notif: AppNotification = {
+      id: `notif_${Date.now()}`,
+      userId: currentUser.id,
+      title: `🎁 [Túi Mù] ${pickedReward.title}`,
+      message: rewardNotificationMsg || `Bạn đã nhận được "${pickedReward.title}" từ ${box.name}!`,
+      type: 'order',
+      read: false,
+      createdAt: nowIso
+    };
+    setNotifications(prev => [notif, ...prev]);
+
+    return {
+      success: true,
+      reward: pickedReward,
+      isFreeTurn: pickedReward.type === 'free_turn',
+      message: rewardNotificationMsg || `Mở túi thành công!`
+    };
+  };
+
+  const useUserInventoryItem = (inventoryItemId: string): { success: boolean; message: string } => {
+    const item = userInventory.find(i => i.id === inventoryItemId);
+    if (!item) return { success: false, message: 'Vật phẩm không tồn tại!' };
+    if (item.isUsed) return { success: false, message: 'Vật phẩm này đã được sử dụng!' };
+
+    setUserInventory(prev =>
+      prev.map(i => (i.id === inventoryItemId ? { ...i, isUsed: true } : i))
+    );
+    try {
+      updateDoc(doc(db, 'user_inventory', inventoryItemId), { isUsed: true });
+    } catch (e) {
+      console.warn('Firestore update inventory error:', e);
+    }
+    return { success: true, message: 'Đã đánh dấu đã sử dụng vật phẩm!' };
+  };
+
+  const adminAddMysteryReward = async (
+    reward: Omit<MysteryBoxRewardItem, 'id'>
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const newId = `rew_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      const newReward: MysteryBoxRewardItem = { ...reward, id: newId };
+      setMysteryRewards(prev => [...prev, newReward]);
+      await setDoc(doc(db, 'mystery_rewards', newId), cleanForFirestore(newReward));
+      return { success: true, message: 'Đã thêm phần thưởng vào kho Túi Mù thành công!' };
+    } catch (err) {
+      console.error('Error adding mystery reward:', err);
+      return { success: false, message: 'Lỗi khi thêm phần thưởng vào Firebase!' };
+    }
+  };
+
+  const adminUpdateMysteryReward = async (
+    id: string,
+    updates: Partial<MysteryBoxRewardItem>
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      setMysteryRewards(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
+      await updateDoc(doc(db, 'mystery_rewards', id), cleanForFirestore(updates));
+      return { success: true, message: 'Đã cập nhật phần thưởng thành công!' };
+    } catch (err) {
+      console.error('Error updating mystery reward:', err);
+      return { success: false, message: 'Lỗi khi cập nhật phần thưởng!' };
+    }
+  };
+
+  const adminDeleteMysteryReward = async (id: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      setMysteryRewards(prev => prev.filter(r => r.id !== id));
+      await deleteDoc(doc(db, 'mystery_rewards', id));
+      return { success: true, message: 'Đã xoá phần thưởng khỏi kho Túi Mù!' };
+    } catch (err) {
+      console.error('Error deleting mystery reward:', err);
+      return { success: false, message: 'Lỗi khi xoá phần thưởng!' };
+    }
+  };
+
+  const adminUpdateBoxTier = async (
+    tierId: string,
+    updates: Partial<MysteryBoxTierConfig>
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      setMysteryBoxes(prev => prev.map(b => (b.id === tierId ? { ...b, ...updates } : b)));
+      await updateDoc(doc(db, 'mystery_boxes', tierId), cleanForFirestore(updates));
+      return { success: true, message: 'Đã cập nhật cấu hình Túi Mù thành công!' };
+    } catch (err) {
+      console.error('Error updating box tier:', err);
+      return { success: false, message: 'Lỗi khi cập nhật cấu hình Túi Mù!' };
+    }
+  };
+
+  const adminImportAccountToMysteryBox = async (
+    accountId: string,
+    targetTierId: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const acc = accounts.find(a => a.id === accountId);
+    if (!acc) return { success: false, message: 'Tài khoản không tồn tại trên sàn!' };
+
+    const newReward: MysteryBoxRewardItem = {
+      id: `rew_import_${Date.now()}`,
+      boxTierId: targetTierId,
+      type: 'account',
+      title: `Acc ${acc.rank} ${acc.heroesCount}T ${acc.skinsCount}S - ${acc.title}`,
+      subtitle: `${acc.credentials.securityType} - Đổi thông tin ngay`,
+      value: acc.price,
+      rarity: acc.price >= 500000 ? 'legendary' : acc.price >= 150000 ? 'epic' : 'rare',
+      dropWeight: targetTierId === 'box_diamond' || targetTierId === 'box_special' ? 18 : 12,
+      accountData: {
+        rank: acc.rank,
+        heroesCount: acc.heroesCount,
+        skinsCount: acc.skinsCount,
+        rareSkinName: acc.rareSkins?.[0]?.name,
+        credentials: acc.credentials,
+        description: acc.description
+      }
+    };
+
+    setMysteryRewards(prev => [...prev, newReward]);
+    // Mark account on marketplace as sold / moved to mystery box
+    updateAccountStatus(accountId, 'sold', 'Đã chuyển vào kho quà Túi Mù may mắn');
+
+    try {
+      await setDoc(doc(db, 'mystery_rewards', newReward.id), cleanForFirestore(newReward));
+    } catch (e) {
+      console.warn('Firestore reward save error:', e);
+    }
+
+    return {
+      success: true,
+      message: `Đã nhập Acc #${acc.code} vào kho quà của "${targetTierId}" thành công!`
+    };
+  };
+
+  const adminToggleMysteryBoxEvent = async (active: boolean): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsMysteryBoxEventActive(active);
+      await setDoc(doc(db, 'site_settings', 'mystery_box_config'), { isEventActive: active }, { merge: true });
+      return {
+        success: true,
+        message: active
+          ? 'Đã BẬT toàn bộ chương trình Xé Túi Mù May Mắn thành công!'
+          : 'Đã TẮT toàn bộ chương trình Xé Túi Mù May Mắn thành công!'
+      };
+    } catch (err) {
+      console.error('Error toggling mystery box event:', err);
+      return { success: false, message: 'Lỗi khi cập nhật trạng thái chương trình Túi Mù!' };
+    }
+  };
+
+  const adminToggleTierActive = async (tierId: string, isActive: boolean): Promise<{ success: boolean; message: string }> => {
+    return adminUpdateBoxTier(tierId, { isActive });
+  };
+
+  const adminResetMysteryBoxes = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      setMysteryBoxes(DEFAULT_MYSTERY_BOX_TIERS);
+      for (const box of DEFAULT_MYSTERY_BOX_TIERS) {
+        await setDoc(doc(db, 'mystery_boxes', box.id), cleanForFirestore(box));
+      }
+      setMysteryRewards(DEFAULT_MYSTERY_BOX_REWARDS);
+      for (const rew of DEFAULT_MYSTERY_BOX_REWARDS) {
+        await setDoc(doc(db, 'mystery_rewards', rew.id), cleanForFirestore(rew));
+      }
+      return { success: true, message: 'Đã khôi phục 4 hạng Túi Mù & toàn bộ kho quà chuẩn lên hệ thống thành công!' };
+    } catch (err) {
+      console.error('Error resetting mystery boxes:', err);
+      return { success: false, message: 'Lỗi khi khôi phục 4 hạng Túi Mù!' };
+    }
+  };
+
   // Seed Sample Demo Data into Firebase
   const seedSampleData = async (): Promise<{ success: boolean; message: string }> => {
     try {
@@ -1769,6 +2367,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminApproveWithdrawal,
         adminRejectWithdrawal,
         adminDisburseEarly,
+
+        // Mystery Box
+        mysteryBoxes,
+        mysteryRewards,
+        mysteryHistory,
+        userInventory,
+        userFreeTurns,
+        isMysteryBoxEventActive,
+        selectedBoxTierForUnboxing,
+        setSelectedBoxTierForUnboxing,
+        openMysteryBox,
+        useUserInventoryItem,
+        adminToggleMysteryBoxEvent,
+        adminToggleTierActive,
+        adminAddMysteryReward,
+        adminUpdateMysteryReward,
+        adminDeleteMysteryReward,
+        adminUpdateBoxTier,
+        adminImportAccountToMysteryBox,
+        adminResetMysteryBoxes,
 
         resetToDefaultData,
         clearAllFirebaseData,

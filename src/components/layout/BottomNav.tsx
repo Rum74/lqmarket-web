@@ -9,7 +9,9 @@ import {
   Wallet,
   ShieldCheck,
   Flame,
-  Heart
+  Heart,
+  PackageOpen,
+  Sparkles
 } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
@@ -85,29 +87,27 @@ export const BottomNav: React.FC = () => {
           <span className="text-[10px] mt-1 tracking-tight leading-none">Mua Acc</span>
         </button>
 
-        {/* Tab 3: Đăng Bán (Prominent Center Button) */}
+        {/* Tab 3: Túi Mù (Prominent Center Button with glowing animation) */}
         <div className="flex items-center justify-center -mt-4">
           <button
-            id="mobile-nav-sell"
+            id="mobile-nav-mystery-box"
             onClick={() => {
-              if (!isLoggedIn) {
-                openLoginModal();
-              } else {
-                setCurrentView('sell');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }
+              setCurrentView('mystery_box');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-lg transition-all transform active:scale-95 cursor-pointer ${
-              currentView === 'sell'
-                ? 'bg-gradient-to-tr from-amber-400 to-orange-500 text-slate-950 shadow-amber-500/40 ring-2 ring-amber-400'
-                : 'bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 shadow-amber-500/25 hover:brightness-110'
+            className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-lg transition-all transform active:scale-95 cursor-pointer relative ${
+              currentView === 'mystery_box'
+                ? 'bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 text-slate-950 shadow-amber-500/50 ring-2 ring-amber-300 scale-105'
+                : 'bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400 text-slate-950 shadow-amber-500/30 hover:brightness-110'
             }`}
-            title="Đăng bán acc Liên Quân"
+            title="Xé Túi Mù May Mắn"
           >
-            <PlusCircle className="w-6 h-6 stroke-[2.5]" />
+            <PackageOpen className="w-6 h-6 stroke-[2.5] text-slate-950" />
             <span className="text-[8px] font-black tracking-tighter uppercase leading-none mt-0.5">
-              Bán Acc
+              Túi Mù
             </span>
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full" />
           </button>
         </div>
 

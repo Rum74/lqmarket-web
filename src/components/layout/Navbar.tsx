@@ -167,6 +167,22 @@ export const Navbar: React.FC = () => {
               Tất Cả Acc
             </button>
 
+            <button
+              id="nav-btn-mystery-box"
+              onClick={() => setCurrentView('mystery_box')}
+              className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentView === 'mystery_box'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md shadow-amber-500/25'
+                  : 'text-amber-400 bg-amber-400/10 border border-amber-400/30 hover:bg-amber-400/20'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+              <span>Xé Túi Mù</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">
+                HOT
+              </span>
+            </button>
+
             {/* Sell button visible only for non-buyers (Sellers, Admins, or Visitors) */}
             {(!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
               <button
@@ -530,6 +546,22 @@ export const Navbar: React.FC = () => {
               }`}
             >
               <span>⚔️ Tất Cả Acc Liên Quân ({accounts.filter(a => a.status === 'approved').length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentView('mystery_box');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between ${
+                currentView === 'mystery_box'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black'
+                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span>🎁 Xé Túi Mù May Mắn</span>
+                <span className="px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full animate-pulse">HOT</span>
+              </span>
             </button>
             <button
               onClick={() => {

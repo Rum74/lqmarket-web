@@ -10,6 +10,7 @@ import { OrdersView } from './components/orders/OrdersView';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { WishlistView } from './components/wishlist/WishlistView';
 import { GuideView } from './components/guide/GuideView';
+import { MysteryBoxView } from './components/mysteryBox/MysteryBoxView';
 import { AccountDetailModal } from './components/accounts/AccountDetailModal';
 import { CheckoutModal } from './components/checkout/CheckoutModal';
 import { WalletModal } from './components/wallet/WalletModal';
@@ -30,6 +31,7 @@ const MainLayout: React.FC = () => {
       <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6">
         {currentView === 'home' && <HomeView />}
         {currentView === 'accounts' && <AccountsListView />}
+        {currentView === 'mystery_box' && <MysteryBoxView />}
         {currentView === 'sell' && <SellAccountView />}
         {currentView === 'orders' && <OrdersView />}
         {currentView === 'admin' && <AdminDashboardView />}

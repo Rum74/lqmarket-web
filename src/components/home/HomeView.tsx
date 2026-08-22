@@ -23,11 +23,13 @@ import {
   MessageCircle,
   ExternalLink,
   Shield,
-  UserCheck
+  UserCheck,
+  PackageOpen,
+  Gift
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
-  const { accounts, orders, allUsers, setCurrentView, setFilterOptions, openSellerProfile, openChatWith } = useApp();
+  const { accounts, orders, allUsers, setCurrentView, setFilterOptions, openSellerProfile, openChatWith, mysteryBoxes } = useApp();
 
   const approvedAccounts = accounts.filter(a => a.status === 'approved');
 
@@ -195,6 +197,63 @@ export const HomeView: React.FC = () => {
               <div className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5">{item.count}</div>
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* MYSTERY BOX PROMOTIONAL HIGHLIGHT SECTION */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-950/40 via-purple-950/40 to-slate-900 border-2 border-amber-500/40 p-5 sm:p-8 shadow-2xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
+          <div className="space-y-3 text-center lg:text-left max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider">
+              <Sparkles size={14} className="animate-spin" />
+              <span>TÍNH NĂNG MỚI: XÉ TÚI MÙ MAY MẮN</span>
+              <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full animate-pulse">HOT</span>
+            </div>
+
+            <h2 className="text-xl sm:text-3xl font-black text-white leading-tight">
+              Cơ Hội Nhận Ngay <span className="text-amber-400">Acc VIP SSS, Chiến Tướng</span> Chỉ Từ 20K!
+            </h2>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Mỗi túi mù cam kết 100% mở ra phần thưởng giá trị: Tài khoản Liên Quân trắng thông tin, tiền hoàn ví tức thì, hoặc voucher ưu đãi mua nick!
+            </p>
+
+            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+              <button
+                id="home-open-mystery-box-btn"
+                onClick={() => {
+                  setCurrentView('mystery_box');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="px-6 py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 hover:from-amber-400 hover:to-orange-300 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+              >
+                <PackageOpen size={18} />
+                <span>VÀO XÉ TÚI MÙ NGAY</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Mini Tier Preview Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3 w-full lg:w-auto">
+            {mysteryBoxes.slice(0, 4).map(box => (
+              <button
+                key={box.id}
+                onClick={() => {
+                  setCurrentView('mystery_box');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="p-3 bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-2xl text-center space-y-2 cursor-pointer transition-all hover:scale-105"
+              >
+                <div className={`w-12 h-12 mx-auto rounded-xl bg-gradient-to-br ${box.colorGradient} flex items-center justify-center shadow-md`}>
+                  <PackageOpen className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-xs font-black text-white truncate">{box.name}</div>
+                <div className="text-xs font-mono font-bold text-amber-400">{box.price.toLocaleString('vi-VN')}đ</div>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
