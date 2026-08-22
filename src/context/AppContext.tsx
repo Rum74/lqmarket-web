@@ -924,6 +924,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. Create Escrow Order
     const orderId = `ord_${Date.now()}`;
     const orderCodeNum = Math.floor(10000 + Math.random() * 90000);
+    const platformFee = Math.round(acc.price * 0.05); // 5% platform fee
+    const sellerNetPending = acc.price - platformFee; // Net amount seller will receive (95%)
     const newOrder: OrderItem = {
       id: orderId,
       orderCode: `#ORD${orderCodeNum}`,
@@ -931,7 +933,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       accountCode: acc.code,
       accountTitle: acc.title,
       accountPrice: acc.price,
-      fee: 0,
+      fee: platformFee,
       totalAmount: totalCost,
       buyerId: currentUser.id,
       buyerName: currentUser.name,
@@ -956,9 +958,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [buyerTx, ...prev]);
 
-    // 5. Update Seller Pending Balance
+    // 5. Update Seller Pending Balance (net 95% after 5% platform fee)
     setAllUsers(prev =>
-      prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + acc.price } : u))
+      prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + sellerNetPending } : u))
     );
 
     // Sync to Firestore
@@ -969,7 +971,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateDoc(doc(db, 'users', currentUser.id), { balance: currentUser.balance - totalCost });
       const seller = allUsers.find(u => u.id === acc.sellerId);
       if (seller) {
-        updateDoc(doc(db, 'users', acc.sellerId), { pendingBalance: seller.pendingBalance + acc.price });
+        updateDoc(doc(db, 'users', acc.sellerId), { pendingBalance: seller.pendingBalance + sellerNetPending });
       }
     } catch (e) {
       console.warn('Firestore order sync fallback:', e);
@@ -990,7 +992,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `notif_${Date.now()}_2`,
       userId: acc.sellerId,
       title: 'Bạn có đơn hàng mới đã bán',
-      message: `Khách hàng ${currentUser.name} vừa mua acc #${acc.code}. Tiền (${acc.price.toLocaleString('vi-VN')}đ) đang được tạm giữ an toàn trong ví Escrow.`,
+      message: `Khách hàng ${currentUser.name} vừa mua acc #${acc.code}. Giá bán: ${acc.price.toLocaleString('vi-VN')}đ. Tiền thực nhận (${sellerNetPending.toLocaleString('vi-VN')}đ sau khi trừ 5% phí sàn -${platformFee.toLocaleString('vi-VN')}đ) đang được tạm giữ an toàn trong ví Escrow.`,
       type: 'order',
       read: false,
       createdAt: new Date().toISOString()
@@ -1016,7 +1018,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Buyer confirms they received account ok -> Release Escrow money to Seller
+  // Buyer confirms they received account ok -> Release Escrow money to Seller (minus 5% platform fee)
   const confirmOrderReceived = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -1028,8 +1030,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
+    // Calculate 5% platform fee & net payout for seller
+    const feeAmount = typeof order.fee === 'number' && order.fee > 0 ? order.fee : Math.round(order.accountPrice * 0.05);
+    const payoutAmount = Math.max(0, order.accountPrice - feeAmount);
+
     // Transfer money from pending to real balance for seller
-    const payoutAmount = order.accountPrice;
     setAllUsers(prev =>
       prev.map(u =>
         u.id === order.sellerId
@@ -1050,13 +1055,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'seller_payout',
       amount: payoutAmount,
       status: 'success',
-      note: `Nhận tiền bán acc ${order.accountCode} (Đơn hàng ${order.orderCode} hoàn tất)`,
+      note: `Nhận tiền bán acc ${order.accountCode} (Đơn hàng ${order.orderCode} - Đã trừ 5% phí sàn: -${feeAmount.toLocaleString('vi-VN')}đ)`,
       createdAt: new Date().toISOString()
     };
     setTransactions(prev => [sellerTx, ...prev]);
 
     try {
-      updateDoc(doc(db, 'orders', orderId), { status: 'completed', completedAt });
+      updateDoc(doc(db, 'orders', orderId), { status: 'completed', completedAt, fee: feeAmount });
       setDoc(doc(db, 'transactions', sellerTx.id), sellerTx);
       const seller = allUsers.find(u => u.id === order.sellerId);
       if (seller) {
@@ -1075,7 +1080,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `notif_${Date.now()}`,
       userId: order.sellerId,
       title: 'Đơn hàng hoàn tất - Tiền đã vào ví',
-      message: `Người mua đã xác nhận nhận acc ${order.accountCode}. Bạn nhận được +${payoutAmount.toLocaleString('vi-VN')}đ vào số dư khả dụng!`,
+      message: `Người mua đã xác nhận nhận acc ${order.accountCode}. Bạn nhận được +${payoutAmount.toLocaleString('vi-VN')}đ vào số dư khả dụng (Đã khấu trừ 5% phí sàn: -${feeAmount.toLocaleString('vi-VN')}đ)!`,
       type: 'wallet',
       read: false,
       createdAt: new Date().toISOString()
@@ -1151,10 +1156,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
 
       // Reduce pending balance from seller
+      const sellerPendingDeduction = order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05));
       setAllUsers(prev =>
         prev.map(u =>
           u.id === order.sellerId
-            ? { ...u, pendingBalance: Math.max(0, u.pendingBalance - order.accountPrice) }
+            ? { ...u, pendingBalance: Math.max(0, u.pendingBalance - sellerPendingDeduction) }
             : u
         )
       );
@@ -1180,7 +1186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         const seller = allUsers.find(u => u.id === order.sellerId);
         if (seller) {
-          updateDoc(doc(db, 'users', order.sellerId), { pendingBalance: Math.max(0, seller.pendingBalance - order.accountPrice) });
+          updateDoc(doc(db, 'users', order.sellerId), { pendingBalance: Math.max(0, seller.pendingBalance - sellerPendingDeduction) });
         }
       } catch (e) {
         console.warn('Firestore refund fallback:', e);
@@ -1393,10 +1399,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!order) return { success: false, message: 'Không tìm thấy đơn hàng' };
     if (order.status === 'completed') return { success: false, message: 'Đơn hàng đã hoàn tất trước đó' };
 
+    const feeAmount = typeof order.fee === 'number' && order.fee > 0 ? order.fee : Math.round(order.accountPrice * 0.05);
+    const payoutAmount = Math.max(0, order.accountPrice - feeAmount);
+
     confirmOrderReceived(orderId);
     return {
       success: true,
-      message: `Đã giải ngân sớm ${order.accountPrice.toLocaleString('vi-VN')}đ cho người bán ${order.sellerName}!`
+      message: `Đã giải ngân sớm ${payoutAmount.toLocaleString('vi-VN')}đ (Đã trừ 5% phí sàn -${feeAmount.toLocaleString('vi-VN')}đ) cho người bán ${order.sellerName}!`
     };
   };
 

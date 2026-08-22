@@ -34,7 +34,6 @@ export const CheckoutModal: React.FC = () => {
     isLoggedIn,
     openLoginModal,
     createOrder,
-    depositFunds,
     setIsWalletOpen,
     setCurrentView,
     orders
@@ -105,12 +104,6 @@ export const CheckoutModal: React.FC = () => {
         setErrorMessage(result.message || 'Giao dịch không thành công. Vui lòng thử lại!');
       }
     }, 600);
-  };
-
-  const handleQuickDeposit = () => {
-    // Deposit the exact deficit amount + bonus so buyer can checkout smoothly
-    depositFunds(deficitAmount, 'VietQR');
-    setErrorMessage('');
   };
 
   const handleCopy = (text: string, type: 'user' | 'pass') => {
@@ -329,35 +322,29 @@ export const CheckoutModal: React.FC = () => {
                     </span>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs space-y-2">
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs space-y-2.5">
                     <div className="flex items-center justify-between text-rose-400 font-bold">
                       <div className="flex items-center gap-1.5">
                         <AlertCircle size={14} />
                         <span>Số dư không đủ thanh toán</span>
                       </div>
-                      <span>Thiếu: {deficitAmount.toLocaleString('vi-VN')}đ</span>
+                      <span className="font-mono">Thiếu: {deficitAmount.toLocaleString('vi-VN')}đ</span>
                     </div>
 
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => {
-                          setIsCheckoutOpen(false);
-                          setIsWalletOpen(true);
-                        }}
-                        className="flex-1 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <PlusCircle size={13} />
-                        <span>Nạp Tiền VietQR</span>
-                      </button>
+                    <p className="text-[11px] text-slate-400">
+                      Vui lòng nạp tiền vào ví qua cổng thanh toán QR Pay để hoàn tất mua tài khoản này.
+                    </p>
 
-                      <button
-                        onClick={handleQuickDeposit}
-                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-semibold text-[11px] rounded-lg border border-amber-500/30 transition-colors cursor-pointer"
-                        title="Tự động nạp số tiền còn thiếu để mua ngay"
-                      >
-                        ⚡ Nạp nhanh +{deficitAmount.toLocaleString('vi-VN')}đ
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => {
+                        setIsCheckoutOpen(false);
+                        setIsWalletOpen(true);
+                      }}
+                      className="w-full py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <PlusCircle size={14} />
+                      <span>Nạp Tiền Vào Ví (QR Pay 24/7)</span>
+                    </button>
                   </div>
                 )}
               </div>

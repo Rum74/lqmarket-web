@@ -819,7 +819,7 @@ export const AdminDashboardView: React.FC = () => {
                             orderId: order.id,
                             type: 'payout_seller',
                             orderCode: order.orderCode,
-                            amount: order.totalAmount,
+                            amount: order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05)),
                             buyerName: order.buyerName,
                             sellerName: order.sellerName
                           })
@@ -827,7 +827,7 @@ export const AdminDashboardView: React.FC = () => {
                         className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <CheckCircle2 size={13} />
-                        <span>💰 Bác bỏ khiếu nại: Giải Ngân Cho Người Bán</span>
+                        <span>💰 Bác bỏ khiếu nại: Giải Ngân Cho Người Bán (+{(order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05))).toLocaleString('vi-VN')}đ)</span>
                       </button>
                     </div>
                   </div>

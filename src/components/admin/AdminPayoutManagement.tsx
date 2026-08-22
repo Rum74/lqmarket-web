@@ -732,7 +732,7 @@ export const AdminPayoutManagement: React.FC = () => {
                       className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md cursor-pointer"
                     >
                       <Zap size={14} />
-                      <span>Giải Ngân Sớm Cho Người Bán (+{order.accountPrice.toLocaleString('vi-VN')}đ)</span>
+                      <span>Giải Ngân Sớm Cho Người Bán (+{(order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05))).toLocaleString('vi-VN')}đ)</span>
                     </button>
                   </div>
                 </div>
@@ -981,19 +981,27 @@ export const AdminPayoutManagement: React.FC = () => {
                 <strong className="text-emerald-400">{selectedOrderForEarlyPayout.sellerName}</strong>
               </div>
               <div className="flex justify-between">
-                <span>Số tiền giải ngân:</span>
-                <strong className="text-amber-400 font-black font-mono text-sm">
-                  +{selectedOrderForEarlyPayout.accountPrice.toLocaleString('vi-VN')}đ
+                <span>Giá bán tài khoản:</span>
+                <strong className="text-slate-300 font-mono">{selectedOrderForEarlyPayout.accountPrice.toLocaleString('vi-VN')}đ</strong>
+              </div>
+              <div className="flex justify-between text-rose-400">
+                <span>Khấu trừ phí sàn (5%):</span>
+                <span className="font-mono font-bold">-{(selectedOrderForEarlyPayout.fee || Math.round(selectedOrderForEarlyPayout.accountPrice * 0.05)).toLocaleString('vi-VN')}đ</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-800 pt-2 text-emerald-400 font-bold">
+                <span>Số tiền thực giải ngân:</span>
+                <strong className="text-emerald-400 font-black font-mono text-sm">
+                  +{(selectedOrderForEarlyPayout.accountPrice - (selectedOrderForEarlyPayout.fee || Math.round(selectedOrderForEarlyPayout.accountPrice * 0.05))).toLocaleString('vi-VN')}đ
                 </strong>
               </div>
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed">
               Hệ thống sẽ chuyển ngay{' '}
-              <strong className="text-white">
-                {selectedOrderForEarlyPayout.accountPrice.toLocaleString('vi-VN')}đ
+              <strong className="text-emerald-400 font-bold">
+                +{(selectedOrderForEarlyPayout.accountPrice - (selectedOrderForEarlyPayout.fee || Math.round(selectedOrderForEarlyPayout.accountPrice * 0.05))).toLocaleString('vi-VN')}đ
               </strong>{' '}
-              từ số dư tạm giữ Escrow sang <strong>số dư khả dụng</strong> của người bán và đánh dấu đơn hàng là hoàn tất.
+              (đã khấu trừ 5% phí sàn) từ số dư tạm giữ Escrow sang <strong>số dư khả dụng</strong> của người bán và đánh dấu đơn hàng là hoàn tất.
             </p>
 
             <div className="flex gap-2 justify-end pt-2">

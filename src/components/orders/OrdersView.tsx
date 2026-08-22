@@ -322,11 +322,23 @@ export const OrdersView: React.FC = () => {
                   </div>
 
                   <div className="text-right">
-                    <div className="text-xs text-slate-400">Tổng tiền thanh toán:</div>
-                    <div className="text-lg sm:text-xl font-black text-amber-400">
-                      {order.totalAmount.toLocaleString('vi-VN')}đ
-                    </div>
-                    <span className="text-[10px] text-emerald-400">Phí trung gian: 0đ (Được bảo hiểm)</span>
+                    {activeTab === 'buy_orders' ? (
+                      <>
+                        <div className="text-xs text-slate-400">Tổng tiền thanh toán:</div>
+                        <div className="text-lg sm:text-xl font-black text-amber-400">
+                          {order.totalAmount.toLocaleString('vi-VN')}đ
+                        </div>
+                        <span className="text-[10px] text-emerald-400 font-semibold">Phí trung gian người mua: 0đ (Miễn phí)</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-xs text-slate-400">Giá bán: <span className="font-bold text-slate-200">{order.accountPrice.toLocaleString('vi-VN')}đ</span></div>
+                        <div className="text-xs text-rose-400">Phí sàn (5%): -{(order.fee || Math.round(order.accountPrice * 0.05)).toLocaleString('vi-VN')}đ</div>
+                        <div className="text-base sm:text-lg font-black text-emerald-400 mt-0.5">
+                          Thực nhận: +{(order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05))).toLocaleString('vi-VN')}đ
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -509,8 +521,16 @@ export const OrdersView: React.FC = () => {
                 <strong className="text-white">{confirmingOrder.accountTitle}</strong>
               </div>
               <div className="flex justify-between">
-                <span>Số tiền giải ngân cho shop:</span>
-                <strong className="text-emerald-400 font-bold">{confirmingOrder.accountPrice.toLocaleString('vi-VN')}đ</strong>
+                <span>Giá bán tài khoản:</span>
+                <strong className="text-white font-mono">{confirmingOrder.accountPrice.toLocaleString('vi-VN')}đ</strong>
+              </div>
+              <div className="flex justify-between text-rose-400">
+                <span>Khấu trừ phí sàn (5%):</span>
+                <span className="font-mono font-bold">-{(confirmingOrder.fee || Math.round(confirmingOrder.accountPrice * 0.05)).toLocaleString('vi-VN')}đ</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-800 pt-2 text-emerald-400 font-bold">
+                <span>Số tiền thực giải ngân cho shop:</span>
+                <span className="text-sm font-mono">+{(confirmingOrder.accountPrice - (confirmingOrder.fee || Math.round(confirmingOrder.accountPrice * 0.05))).toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
 
