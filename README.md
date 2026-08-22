@@ -12,4 +12,4 @@ Hệ thống sàn thương mại điện tử chuyên biệt cho cộng đồng 
 ## 🛠️ Công Nghệ Sử Dụng
 - **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, Framer Motion
 - **Database & Storage**: Google Cloud Firestore, Firebase Authentication
-- **Deployment**: Vercel / Cloud Run
+- **Deployment**: Vercel / Cloud Run (Version 2.5 - Release 2026)

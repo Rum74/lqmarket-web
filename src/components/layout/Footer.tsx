@@ -213,7 +213,7 @@ export const Footer: React.FC = () => {
             Tuyên bố miễn trừ trách nhiệm: LQMarket là nền tảng sàn thương mại điện tử độc lập phục vụ việc kết nối giao dịch giữa các cá nhân game thủ. LQMarket không liên kết chính thức hoặc được tài trợ bởi Garena / Tencent Games. Tên thương hiệu và hình ảnh Liên Quân Mobile thuộc quyền sở hữu của các bên liên quan.
           </p>
           <p className="mt-2 text-slate-400">
-            © {new Date().getFullYear()} LQMarket.vn - Sàn Giao Dịch Acc Liên Quân Uy Tín Hàng Đầu.
+            © {new Date().getFullYear()} LQMarket.vn - Sàn Giao Dịch Acc Liên Quân Uy Tín Hàng Đầu. (Hệ thống v2.5 - Cập nhật 5% Phí Sàn)
           </p>
         </div>
       </div>
