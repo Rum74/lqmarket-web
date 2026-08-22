@@ -1,0 +1,125 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role, wallet balance, bank details, and seller reputation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string", "enum": ["buyer", "seller", "admin"] },
+        "balance": { "type": "number" },
+        "pendingBalance": { "type": "number" },
+        "rating": { "type": "number" },
+        "completedSales": { "type": "number" },
+        "isVerifiedSeller": { "type": "boolean" },
+        "sellerTier": { "type": "string" },
+        "bankName": { "type": "string" },
+        "bankAccount": { "type": "string" },
+        "bankAccountName": { "type": "string" },
+        "bio": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "AccountItem": {
+      "title": "AccountItem",
+      "description": "Lien Quan Mobile game account listing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "rank": { "type": "string" },
+        "level": { "type": "number" },
+        "heroesCount": { "type": "number" },
+        "skinsCount": { "type": "number" },
+        "runePages": { "type": "string" },
+        "server": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "sold", "hidden"] },
+        "createdAt": { "type": "string" },
+        "views": { "type": "number" },
+        "likes": { "type": "number" }
+      },
+      "required": ["id", "title", "price", "rank", "sellerId", "status"]
+    },
+    "OrderItem": {
+      "title": "OrderItem",
+      "description": "Escrow order linking buyer, seller, and account.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderCode": { "type": "string" },
+        "accountId": { "type": "string" },
+        "accountTitle": { "type": "string" },
+        "accountPrice": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "buyerId": { "type": "string" },
+        "buyerName": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "accountId", "buyerId", "sellerId", "totalAmount", "status"]
+    },
+    "ReviewItem": {
+      "title": "ReviewItem",
+      "description": "Rating and feedback for seller after successful purchase.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "buyerName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "sellerId", "buyerId", "rating", "comment"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Direct message between buyer and seller or admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "senderId", "recipientId", "text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile records."
+    },
+    "/accounts/{accountId}": {
+      "schema": "AccountItem",
+      "description": "Game account listings."
+    },
+    "/orders/{orderId}": {
+      "schema": "OrderItem",
+      "description": "Escrow orders."
+    },
+    "/reviews/{reviewId}": {
+      "schema": "ReviewItem",
+      "description": "Buyer reviews."
+    },
+    "/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Chat messages."
+    }
+  }
+}

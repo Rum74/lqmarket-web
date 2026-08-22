@@ -1,0 +1,6 @@
+{
+  "name": "LQMarket - Sàn Mua Bán Acc Liên Quân Mobile",
+  "description": "Sàn giao dịch tài khoản Liên Quân Mobile trung gian uy tín với đầy đủ tính năng tìm kiếm, bộ lọc rank/skin, đăng bán kiểm duyệt, ví tiền và quản trị viên.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
