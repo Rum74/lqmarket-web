@@ -57,8 +57,7 @@ export const SellAccountView: React.FC = () => {
     allUsers,
     orders,
     openLoginModal,
-    openRegisterModal,
-    loginUser
+    openRegisterModal
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
@@ -237,10 +236,10 @@ export const SellAccountView: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
-            onClick={() => loginUser('shop.lq.nguyenvana@gmail.com', '123456')}
+            onClick={openLoginModal}
             className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/20 cursor-pointer"
           >
-            Đăng Nhập Nhanh Shop Mẫu (1-Click)
+            Đăng Nhập Ngay
           </button>
           <button
             onClick={() => openRegisterModal('seller')}
@@ -284,10 +283,10 @@ export const SellAccountView: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
-            onClick={() => loginUser('shop.lq.nguyenvana@gmail.com', '123456')}
+            onClick={() => openRegisterModal('seller')}
             className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-xs font-bold rounded-xl transition-all cursor-pointer"
           >
-            Chuyển Sang Tài Khoản Shop Mẫu
+            Đăng Ký Tài Khoản Shop Mới
           </button>
           <button
             onClick={() => setCurrentView('accounts')}

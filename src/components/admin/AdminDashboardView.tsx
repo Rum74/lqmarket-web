@@ -44,7 +44,6 @@ import {
 export const AdminDashboardView: React.FC = () => {
   const {
     currentUser,
-    loginUser,
     setCurrentView,
     openLoginModal,
     accounts,

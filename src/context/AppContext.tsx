@@ -22,6 +22,12 @@ import {
 } from '../data/mysteryBoxData';
 import { db, auth } from '../lib/firebase';
 import {
+  registerWithFirebase,
+  loginWithFirebase,
+  logoutFromFirebase,
+  normalizeEmail
+} from '../lib/authService';
+import {
   collection,
   doc,
   getDocs,
@@ -35,11 +41,7 @@ import {
   limit
 } from 'firebase/firestore';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile
+  onAuthStateChanged
 } from 'firebase/auth';
 
 interface AppContextType {
@@ -618,70 +620,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginUser = async (identifier: string, password?: string): Promise<{ success: boolean; message: string }> => {
-    const rawInput = (identifier || '').trim();
-    const cleanInput = rawInput.toLowerCase();
-
-    // 1. Try Firebase Auth first if credentials exist
-    if (password && cleanInput.length >= 3) {
-      try {
-        const formattedEmail = cleanInput.includes('@') ? cleanInput : `${cleanInput.replace(/[^a-z0-9._-]/g, '')}@cholienquan.com`;
-        const fbCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
-        if (fbCredential.user) {
-          setCurrentUserId(fbCredential.user.uid);
-          setIsLoggedIn(true);
-          setIsAuthModalOpen(false);
-          return { success: true, message: `Đăng nhập thành công qua Firebase Auth!` };
-        }
-      } catch (fbAuthErr: any) {
-        // Fallback to Firestore users lookup
-      }
+    if (!password) {
+      return { success: false, message: 'Vui lòng nhập mật khẩu đăng nhập!' };
     }
-
-    // 2. Match in Firestore allUsers collection
-    const user = allUsers.find(u => {
-      if (!u) return false;
-      const matchUsername = u.username && u.username.toLowerCase() === cleanInput;
-      const matchEmail = u.email && u.email.toLowerCase() === cleanInput;
-      const matchEmailPrefix = u.email && u.email.split('@')[0].toLowerCase() === cleanInput;
-      const matchPhone = u.phone && u.phone.trim() === rawInput;
-      const matchName = u.name && u.name.toLowerCase() === cleanInput;
-      return matchUsername || matchEmail || matchEmailPrefix || matchPhone || matchName;
-    });
-
-    if (!user) {
-      return {
-        success: false,
-        message: 'Tên tài khoản hoặc mật khẩu không đúng. Vui lòng kiểm tra lại!'
-      };
+    const res = await loginWithFirebase(identifier, password);
+    if (res.success && res.user) {
+      setCurrentUserId(res.user.id);
+      setIsLoggedIn(true);
+      setIsAuthModalOpen(false);
+      return { success: true, message: res.message };
     }
-
-    if (password && user.password && user.password !== password) {
-      return {
-        success: false,
-        message: 'Mật khẩu đăng nhập không chính xác. Vui lòng thử lại!'
-      };
-    }
-
-    setCurrentUserId(user.id);
-    setIsLoggedIn(true);
-    setIsAuthModalOpen(false);
-
-    // Add login notification
-    const loginNotif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: user.id,
-      title: 'Đăng nhập thành công',
-      message: `Chào mừng trở lại ${user.name} (${user.role.toUpperCase()})!`,
-      type: 'system',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [loginNotif, ...prev]);
-
-    return {
-      success: true,
-      message: `Đăng nhập thành công với vai trò ${user.role.toUpperCase()}`
-    };
+    return { success: false, message: res.message };
   };
 
   const registerUser = async (
@@ -689,114 +638,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     usernameOrEmail: string,
     password: string,
     role: UserRole,
-    phone: string = '0988888888'
+    phone: string = ''
   ): Promise<{ success: boolean; message: string }> => {
-    const rawAccount = (usernameOrEmail || '').trim();
-    const cleanAccount = rawAccount.toLowerCase();
+    const res = await registerWithFirebase(name, usernameOrEmail, password, role, phone);
+    if (res.success && res.user) {
+      setCurrentUserId(res.user.id);
+      setIsLoggedIn(true);
+      setIsAuthModalOpen(false);
 
-    // Check if account already taken in Firestore
-    const existing = allUsers.find(u => {
-      if (!u) return false;
-      const matchUsername = u.username && u.username.toLowerCase() === cleanAccount;
-      const matchEmail = u.email && u.email.toLowerCase() === cleanAccount;
-      const matchEmailPrefix = u.email && u.email.split('@')[0].toLowerCase() === cleanAccount;
-      return matchUsername || matchEmail || matchEmailPrefix;
-    });
-
-    if (existing) {
-      return {
-        success: false,
-        message: 'Tên tài khoản hoặc Email này đã được sử dụng. Vui lòng chọn tên khác!'
+      // Create welcome notification
+      const welcomeNotif: AppNotification = {
+        id: `notif_${Date.now()}`,
+        userId: res.user.id,
+        title: 'Đăng ký tài khoản thành công',
+        message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được đồng bộ trực tiếp trên Cloud Firestore.`,
+        type: 'system',
+        read: false,
+        createdAt: new Date().toISOString()
       };
-    }
-
-    const validatedRole: UserRole = role === 'admin' ? 'buyer' : role;
-    const isEmailFormat = cleanAccount.includes('@');
-    const assignedUsername = isEmailFormat ? cleanAccount.split('@')[0] : cleanAccount;
-    const assignedEmail = isEmailFormat ? cleanAccount : `${cleanAccount.replace(/[^a-z0-9._-]/g, '')}@cholienquan.com`;
-
-    let newUserId = `user_${Date.now()}`;
-
-    // Create Firebase Auth user
-    try {
-      const fbCredential = await createUserWithEmailAndPassword(auth, assignedEmail, password);
-      if (fbCredential.user) {
-        newUserId = fbCredential.user.uid;
-        await updateProfile(fbCredential.user, { displayName: name.trim() });
+      setNotifications(prev => [welcomeNotif, ...prev]);
+      try {
+        await setDoc(doc(db, 'notifications', welcomeNotif.id), cleanForFirestore(welcomeNotif));
+      } catch (e) {
+        console.warn('Firestore notif save notice:', e);
       }
-    } catch (authErr) {
-      console.warn('Firebase Auth user creation notice:', authErr);
+
+      return { success: true, message: res.message };
     }
-
-    const newUser: UserProfile = {
-      id: newUserId,
-      name: name.trim(),
-      username: assignedUsername,
-      email: assignedEmail,
-      password: password,
-      phone: phone.trim(),
-      avatar:
-        validatedRole === 'seller'
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80'
-          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
-      role: validatedRole,
-      balance: 0,
-      pendingBalance: 0,
-      rating: 5.0,
-      completedSales: 0,
-      isVerifiedSeller: validatedRole === 'seller',
-      sellerTier: validatedRole === 'seller' ? 'BASIC' : 'FREE',
-      createdAt: new Date().toISOString()
-    };
-
-    setAllUsers(prev => [newUser, ...prev]);
-    setCurrentUserId(newUserId);
-    setIsLoggedIn(true);
-    setIsAuthModalOpen(false);
-
-    // Save directly to Firestore users collection
-    try {
-      await setDoc(doc(db, 'users', newUserId), cleanForFirestore(newUser));
-    } catch (e) {
-      console.warn('Firestore user save notice:', e);
-    }
-
-    // Welcome notification
-    const welcomeNotif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: newUserId,
-      title: 'Đăng ký tài khoản thành công',
-      message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được đồng bộ trực tiếp trên Cloud Firestore.`,
-      type: 'system',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [welcomeNotif, ...prev]);
-    try {
-      await setDoc(doc(db, 'notifications', welcomeNotif.id), cleanForFirestore(welcomeNotif));
-    } catch (e) {
-      console.warn('Firestore notif save notice:', e);
-    }
-
-    return {
-      success: true,
-      message: 'Đăng ký tài khoản thành công!'
-    };
+    return { success: false, message: res.message };
   };
 
-  const logoutUser = () => {
-    signOut(auth).catch(() => {});
+  const logoutUser = async () => {
+    await logoutFromFirebase();
     setIsLoggedIn(false);
     setCurrentUserId('');
     setCurrentView('home');
   };
 
-  const quickSwitchUser = (userId: string) => {
-    const target = allUsers.find(u => u.id === userId);
-    if (target) {
-      setCurrentUserId(userId);
-      setIsLoggedIn(true);
-    }
+  const quickSwitchUser = (_userId: string) => {
+    // Disabled in production to prevent authentication bypass
   };
 
   const openProfileModal = () => {

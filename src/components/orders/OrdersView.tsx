@@ -33,8 +33,7 @@ export const OrdersView: React.FC = () => {
     openSellerProfile,
     setCurrentView,
     openLoginModal,
-    openRegisterModal,
-    loginUser
+    openRegisterModal
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'buy_orders' | 'sell_orders'>('buy_orders');

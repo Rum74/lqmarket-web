@@ -196,7 +196,7 @@ export const AuthModal: React.FC = () => {
             <form onSubmit={handleLoginSubmit} className="space-y-3.5">
               <div>
                 <label className="text-xs font-medium text-slate-300 block mb-1.5">
-                  Tên tài khoản / Email / Số điện thoại:
+                  Email hoặc Tên tài khoản:
                 </label>
                 <div className="relative">
                   <input
@@ -204,7 +204,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={accountInput}
                     onChange={e => setAccountInput(e.target.value)}
-                    placeholder="Nhập tên tài khoản, email hoặc số điện thoại..."
+                    placeholder="Ví dụ: user1@gmail.com hoặc user1"
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
                   />
                   <User size={15} className="absolute left-3 top-3 text-slate-400" />
@@ -307,14 +307,14 @@ export const AuthModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Tên tài khoản:</label>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Email hoặc Tên tài khoản:</label>
                 <div className="relative">
                   <input
                     type="text"
                     required
                     value={accountInput}
                     onChange={e => setAccountInput(e.target.value)}
-                    placeholder="Nhập tên tài khoản đăng nhập..."
+                    placeholder="Ví dụ: user1@gmail.com hoặc user1"
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                   <User size={14} className="absolute left-3 top-2.5 text-slate-400" />

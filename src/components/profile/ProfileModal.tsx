@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { compressAvatar } from '../../utils/imageCompressor';
+import { changeFirebasePassword } from '../../lib/authService';
 import {
   User,
   Shield,
@@ -220,11 +221,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (currentUser.password && currentPassword !== currentUser.password) {
-      showToast('error', 'Mật khẩu hiện tại không chính xác');
-      return;
-    }
-
     if (newPassword.length < 6) {
       showToast('error', 'Mật khẩu mới phải có ít nhất 6 ký tự');
       return;
@@ -237,13 +233,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
     setIsSaving(true);
     try {
-      await updateUserProfile({ password: newPassword });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      showToast('success', 'Đổi mật khẩu tài khoản thành công! Dữ liệu đã được bảo mật.');
+      const res = await changeFirebasePassword(newPassword);
+      if (res.success) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        showToast('success', res.message);
+      } else {
+        showToast('error', res.message);
+      }
     } catch {
-      showToast('error', 'Không thể đổi mật khẩu');
+      showToast('error', 'Không thể đổi mật khẩu qua Firebase Auth');
     } finally {
       setIsSaving(false);
     }
@@ -578,32 +578,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <strong>Bảo mật tài khoản:</strong> Mật khẩu mới cần tối thiểu 6 ký tự. Hãy sử dụng mật khẩu mạnh để bảo vệ số dư và các tài khoản game của bạn.
                 </div>
               </div>
-
-              {currentUser.password && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Lock size={13} className="text-slate-400" />
-                    <span>Mật Khẩu Hiện Tại:</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showCurrentPassword ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={e => setCurrentPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 pr-10 font-mono"
-                      placeholder="Nhập mật khẩu hiện tại..."
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
-                    >
-                      {showCurrentPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
