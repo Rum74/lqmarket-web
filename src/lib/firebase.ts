@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import firebaseConfigData from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -17,4 +18,6 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Connect to the specific database instance provisioned for LQMarket
 export const db = getFirestore(app, firebaseConfigData.firestoreDatabaseId || '(default)');
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 export default app;
+

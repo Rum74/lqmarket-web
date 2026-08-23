@@ -40,6 +40,7 @@ export const AdminMysteryBoxManagement: React.FC = () => {
     adminToggleMysteryBoxEvent,
     adminToggleTierActive,
     adminAddMysteryReward,
+    adminUpdateMysteryReward,
     adminDeleteMysteryReward,
     adminUpdateBoxTier,
     adminImportAccountToMysteryBox,
@@ -55,6 +56,9 @@ export const AdminMysteryBoxManagement: React.FC = () => {
   const [isResettingTiers, setIsResettingTiers] = useState(false);
   const [isTogglingMasterEvent, setIsTogglingMasterEvent] = useState(false);
 
+  // Show/Hide password toggle in table
+  const [showPasswordIds, setShowPasswordIds] = useState<Record<string, boolean>>({});
+
   // Import Account modal
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedAccIdForImport, setSelectedAccIdForImport] = useState<string>('');
@@ -62,13 +66,44 @@ export const AdminMysteryBoxManagement: React.FC = () => {
 
   // New Reward modal
   const [newRewardModalOpen, setNewRewardModalOpen] = useState(false);
-  const [newRewardType, setNewRewardType] = useState<'cash' | 'voucher' | 'free_turn' | 'account'>('cash');
+  const [newRewardType, setNewRewardType] = useState<'account' | 'cash' | 'voucher' | 'free_turn'>('account');
   const [newRewardTier, setNewRewardTier] = useState<string>('box_bronze');
   const [newRewardTitle, setNewRewardTitle] = useState('');
-  const [newRewardValue, setNewRewardValue] = useState<number>(20000);
-  const [newRewardRarity, setNewRewardRarity] = useState<'common' | 'rare' | 'epic' | 'legendary'>('common');
-  const [newRewardWeight, setNewRewardWeight] = useState<number>(30);
+  const [newRewardSubtitle, setNewRewardSubtitle] = useState('');
+  const [newRewardValue, setNewRewardValue] = useState<number>(50000);
+  const [newRewardRarity, setNewRewardRarity] = useState<'common' | 'rare' | 'epic' | 'legendary'>('rare');
+  const [newRewardWeight, setNewRewardWeight] = useState<number>(15);
   const [newRewardVoucherCode, setNewRewardVoucherCode] = useState('');
+
+  // Account specific inputs for New Reward
+  const [newAccUsername, setNewAccUsername] = useState('');
+  const [newAccPassword, setNewAccPassword] = useState('');
+  const [newAccSecurityType, setNewAccSecurityType] = useState<'Trắng Thông Tin' | 'SĐT Có Thể Đổi' | 'Email Đã Đổi' | 'Facebook Đã Huỷ'>('Trắng Thông Tin');
+  const [newAccRank, setNewAccRank] = useState<any>('Kim Cương');
+  const [newAccHeroes, setNewAccHeroes] = useState<number>(45);
+  const [newAccSkins, setNewAccSkins] = useState<number>(30);
+  const [newAccRareSkin, setNewAccRareSkin] = useState('');
+  const [newAccSecretNotes, setNewAccSecretNotes] = useState('');
+
+  // Edit Reward Modal State
+  const [editingReward, setEditingReward] = useState<MysteryBoxRewardItem | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSubtitle, setEditSubtitle] = useState('');
+  const [editTier, setEditTier] = useState('box_bronze');
+  const [editValue, setEditValue] = useState<number>(0);
+  const [editRarity, setEditRarity] = useState<'common' | 'rare' | 'epic' | 'legendary'>('rare');
+  const [editWeight, setEditWeight] = useState<number>(10);
+  const [editVoucherCode, setEditVoucherCode] = useState('');
+  // Edit Account credentials
+  const [editAccUsername, setEditAccUsername] = useState('');
+  const [editAccPassword, setEditAccPassword] = useState('');
+  const [editAccSecurityType, setEditAccSecurityType] = useState<'Trắng Thông Tin' | 'SĐT Có Thể Đổi' | 'Email Đã Đổi' | 'Facebook Đã Huỷ'>('Trắng Thông Tin');
+  const [editAccRank, setEditAccRank] = useState<any>('Kim Cương');
+  const [editAccHeroes, setEditAccHeroes] = useState<number>(40);
+  const [editAccSkins, setEditAccSkins] = useState<number>(30);
+  const [editAccRareSkin, setEditAccRareSkin] = useState('');
+  const [editAccSecretNotes, setEditAccSecretNotes] = useState('');
+  const [isSavingRewardEdit, setIsSavingRewardEdit] = useState(false);
 
   // Editing Tier Price/Stock
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
@@ -78,6 +113,10 @@ export const AdminMysteryBoxManagement: React.FC = () => {
   const showNotification = (text: string) => {
     setMsg(text);
     setTimeout(() => setMsg(null), 3500);
+  };
+
+  const togglePasswordVisibility = (rewardId: string) => {
+    setShowPasswordIds(prev => ({ ...prev, [rewardId]: !prev[rewardId] }));
   };
 
   const handleToggleMasterEvent = async (targetActive: boolean) => {
@@ -130,6 +169,76 @@ export const AdminMysteryBoxManagement: React.FC = () => {
     }
   };
 
+  const handleOpenEditRewardModal = (rew: MysteryBoxRewardItem) => {
+    setEditingReward(rew);
+    setEditTitle(rew.title);
+    setEditSubtitle(rew.subtitle || '');
+    setEditTier(rew.boxTierId);
+    setEditValue(rew.value);
+    setEditRarity(rew.rarity);
+    setEditWeight(rew.dropWeight || 10);
+    setEditVoucherCode(rew.voucherCode || '');
+
+    if (rew.accountData) {
+      setEditAccUsername(rew.accountData.credentials?.username || '');
+      setEditAccPassword(rew.accountData.credentials?.password || '');
+      setEditAccSecurityType(rew.accountData.credentials?.securityType || 'Trắng Thông Tin');
+      setEditAccRank(rew.accountData.rank || 'Kim Cương');
+      setEditAccHeroes(rew.accountData.heroesCount || 40);
+      setEditAccSkins(rew.accountData.skinsCount || 30);
+      setEditAccRareSkin(rew.accountData.rareSkinName || '');
+      setEditAccSecretNotes(rew.accountData.credentials?.secretNotes || '');
+    } else {
+      setEditAccUsername('');
+      setEditAccPassword('');
+      setEditAccSecurityType('Trắng Thông Tin');
+      setEditAccRank('Kim Cương');
+      setEditAccHeroes(40);
+      setEditAccSkins(30);
+      setEditAccRareSkin('');
+      setEditAccSecretNotes('');
+    }
+  };
+
+  const handleSaveRewardEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReward) return;
+
+    setIsSavingRewardEdit(true);
+    const updates: Partial<MysteryBoxRewardItem> = {
+      title: editTitle.trim(),
+      subtitle: editSubtitle.trim() || undefined,
+      boxTierId: editTier,
+      value: Number(editValue),
+      rarity: editRarity,
+      dropWeight: Number(editWeight),
+      voucherCode: editingReward.type === 'voucher' ? editVoucherCode.trim() : undefined
+    };
+
+    if (editingReward.type === 'account') {
+      updates.accountData = {
+        rank: editAccRank,
+        heroesCount: Number(editAccHeroes),
+        skinsCount: Number(editAccSkins),
+        rareSkinName: editAccRareSkin.trim() || undefined,
+        description: editSubtitle.trim() || undefined,
+        credentials: {
+          username: editAccUsername.trim(),
+          password: editAccPassword.trim(),
+          securityType: editAccSecurityType,
+          secretNotes: editAccSecretNotes.trim() || undefined
+        }
+      };
+    }
+
+    const res = await adminUpdateMysteryReward(editingReward.id, updates);
+    setIsSavingRewardEdit(false);
+    showNotification(res.message);
+    if (res.success) {
+      setEditingReward(null);
+    }
+  };
+
   const handleCreateReward = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRewardTitle.trim()) {
@@ -141,18 +250,42 @@ export const AdminMysteryBoxManagement: React.FC = () => {
       boxTierId: newRewardTier,
       type: newRewardType,
       title: newRewardTitle.trim(),
+      subtitle: newRewardSubtitle.trim() || undefined,
       value: Number(newRewardValue),
       rarity: newRewardRarity,
       dropWeight: Number(newRewardWeight),
       voucherCode: newRewardType === 'voucher' ? newRewardVoucherCode.trim() || `VOUCHER_${Date.now().toString().slice(-4)}` : undefined
     };
 
+    if (newRewardType === 'account') {
+      if (!newAccUsername.trim() || !newAccPassword.trim()) {
+        alert('Vui lòng nhập đầy đủ Tài khoản và Mật khẩu thật để trao cho người trúng!');
+        return;
+      }
+      payload.accountData = {
+        rank: newAccRank,
+        heroesCount: Number(newAccHeroes),
+        skinsCount: Number(newAccSkins),
+        rareSkinName: newAccRareSkin.trim() || undefined,
+        description: newRewardSubtitle.trim() || undefined,
+        credentials: {
+          username: newAccUsername.trim(),
+          password: newAccPassword.trim(),
+          securityType: newAccSecurityType,
+          secretNotes: newAccSecretNotes.trim() || undefined
+        }
+      };
+    }
+
     const res = await adminAddMysteryReward(payload);
     showNotification(res.message);
     if (res.success) {
       setNewRewardModalOpen(false);
       setNewRewardTitle('');
-      setNewRewardValue(20000);
+      setNewRewardSubtitle('');
+      setNewRewardValue(50000);
+      setNewAccUsername('');
+      setNewAccPassword('');
     }
   };
 

@@ -14,7 +14,19 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { AccountItem, OrderItem, UserProfile, ChatMessage, WalletTransaction, ReviewItem } from '../types';
+import {
+  AccountItem,
+  OrderItem,
+  UserProfile,
+  ChatMessage,
+  WalletTransaction,
+  ReviewItem,
+  AppNotification,
+  MysteryBoxTierConfig,
+  MysteryBoxRewardItem,
+  MysteryBoxHistoryItem,
+  UserInventoryItem
+} from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -54,12 +66,22 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
 }
 
+// Clean object recursively to eliminate undefined values for Firestore compatibility
+export function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as unknown as T;
+  }
+  return JSON.parse(
+    JSON.stringify(data, (_, value) => (value === undefined ? null : value))
+  );
+}
+
 // -------------------------------------------------------------
-// USERS COLLECTION
+// 1. USERS COLLECTION
 // -------------------------------------------------------------
 export async function syncUserToDb(user: UserProfile): Promise<void> {
   try {
-    await setDoc(doc(db, 'users', user.id), user, { merge: true });
+    await setDoc(doc(db, 'users', user.id), cleanForFirestore(user), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `users/${user.id}`);
   }
@@ -79,12 +101,20 @@ export async function fetchUsersFromDb(): Promise<UserProfile[]> {
   }
 }
 
+export async function deleteUserFromDb(userId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
+  }
+}
+
 // -------------------------------------------------------------
-// ACCOUNTS COLLECTION
+// 2. ACCOUNTS / PRODUCTS COLLECTION
 // -------------------------------------------------------------
 export async function syncAccountToDb(account: AccountItem): Promise<void> {
   try {
-    await setDoc(doc(db, 'accounts', account.id), account, { merge: true });
+    await setDoc(doc(db, 'accounts', account.id), cleanForFirestore(account), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `accounts/${account.id}`);
   }
@@ -113,11 +143,11 @@ export async function fetchAccountsFromDb(): Promise<AccountItem[]> {
 }
 
 // -------------------------------------------------------------
-// ORDERS COLLECTION
+// 3. ORDERS COLLECTION
 // -------------------------------------------------------------
 export async function syncOrderToDb(order: OrderItem): Promise<void> {
   try {
-    await setDoc(doc(db, 'orders', order.id), order, { merge: true });
+    await setDoc(doc(db, 'orders', order.id), cleanForFirestore(order), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `orders/${order.id}`);
   }
@@ -138,11 +168,36 @@ export async function fetchOrdersFromDb(): Promise<OrderItem[]> {
 }
 
 // -------------------------------------------------------------
-// REVIEWS COLLECTION
+// 4. TRANSACTIONS / WALLET TRANSACTIONS COLLECTION
+// -------------------------------------------------------------
+export async function syncTransactionToDb(tx: WalletTransaction): Promise<void> {
+  try {
+    await setDoc(doc(db, 'transactions', tx.id), cleanForFirestore(tx), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `transactions/${tx.id}`);
+  }
+}
+
+export async function fetchTransactionsFromDb(): Promise<WalletTransaction[]> {
+  try {
+    const snap = await getDocs(collection(db, 'transactions'));
+    const list: WalletTransaction[] = [];
+    snap.forEach(d => {
+      list.push(d.data() as WalletTransaction);
+    });
+    return list;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, 'transactions');
+    return [];
+  }
+}
+
+// -------------------------------------------------------------
+// 5. REVIEWS COLLECTION
 // -------------------------------------------------------------
 export async function syncReviewToDb(review: ReviewItem): Promise<void> {
   try {
-    await setDoc(doc(db, 'reviews', review.id), review, { merge: true });
+    await setDoc(doc(db, 'reviews', review.id), cleanForFirestore(review), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `reviews/${review.id}`);
   }
@@ -163,11 +218,11 @@ export async function fetchReviewsFromDb(): Promise<ReviewItem[]> {
 }
 
 // -------------------------------------------------------------
-// MESSAGES COLLECTION
+// 6. MESSAGES COLLECTION
 // -------------------------------------------------------------
 export async function syncMessageToDb(msg: ChatMessage): Promise<void> {
   try {
-    await setDoc(doc(db, 'messages', msg.id), msg, { merge: true });
+    await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `messages/${msg.id}`);
   }
@@ -188,38 +243,55 @@ export async function fetchMessagesFromDb(): Promise<ChatMessage[]> {
 }
 
 // -------------------------------------------------------------
-// BATCH INITIAL SEEDING HELPER
+// 7. NOTIFICATIONS COLLECTION
 // -------------------------------------------------------------
-export async function seedInitialDatabaseIfEmpty(
-  users: UserProfile[],
-  accounts: AccountItem[],
-  orders: OrderItem[]
-): Promise<void> {
+export async function syncNotificationToDb(notif: AppNotification): Promise<void> {
   try {
-    const accountsSnap = await getDocs(collection(db, 'accounts'));
-    if (accountsSnap.empty) {
-      console.log('Seeding initial data to Firestore database...');
-      const batch = writeBatch(db);
-
-      // Seed Users
-      for (const u of users) {
-        batch.set(doc(db, 'users', u.id), u);
-      }
-
-      // Seed Accounts
-      for (const a of accounts) {
-        batch.set(doc(db, 'accounts', a.id), a);
-      }
-
-      // Seed Orders
-      for (const o of orders) {
-        batch.set(doc(db, 'orders', o.id), o);
-      }
-
-      await batch.commit();
-      console.log('Database initialized successfully with relational records!');
-    }
+    await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif), { merge: true });
   } catch (err) {
-    console.warn('Initial seed skipped or completed:', err);
+    handleFirestoreError(err, OperationType.WRITE, `notifications/${notif.id}`);
+  }
+}
+
+// -------------------------------------------------------------
+// 8. MYSTERY BOXES & REWARDS & INVENTORY
+// -------------------------------------------------------------
+export async function syncMysteryBoxTierToDb(box: MysteryBoxTierConfig): Promise<void> {
+  try {
+    await setDoc(doc(db, 'mystery_boxes', box.id), cleanForFirestore(box), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `mystery_boxes/${box.id}`);
+  }
+}
+
+export async function syncMysteryRewardToDb(reward: MysteryBoxRewardItem): Promise<void> {
+  try {
+    await setDoc(doc(db, 'mystery_rewards', reward.id), cleanForFirestore(reward), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `mystery_rewards/${reward.id}`);
+  }
+}
+
+export async function deleteMysteryRewardFromDb(rewardId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'mystery_rewards', rewardId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `mystery_rewards/${rewardId}`);
+  }
+}
+
+export async function syncMysteryHistoryToDb(hist: MysteryBoxHistoryItem): Promise<void> {
+  try {
+    await setDoc(doc(db, 'mystery_history', hist.id), cleanForFirestore(hist), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `mystery_history/${hist.id}`);
+  }
+}
+
+export async function syncUserInventoryItemToDb(item: UserInventoryItem): Promise<void> {
+  try {
+    await setDoc(doc(db, 'user_inventory', item.id), cleanForFirestore(item), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `user_inventory/${item.id}`);
   }
 }

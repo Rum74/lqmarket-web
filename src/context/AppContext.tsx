@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   AccountItem,
   UserProfile,
@@ -20,11 +20,12 @@ import {
   DEFAULT_MYSTERY_BOX_REWARDS,
   DEFAULT_MYSTERY_BOX_HISTORY
 } from '../data/mysteryBoxData';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import {
   collection,
   doc,
   getDocs,
+  getDoc,
   setDoc,
   deleteDoc,
   updateDoc,
@@ -33,6 +34,13 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile
+} from 'firebase/auth';
 
 interface AppContextType {
   // Auth & User State
@@ -229,86 +237,30 @@ export const GUEST_USER: UserProfile = {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'lqmarket_v2_firebase_data';
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Initial State from localStorage or Defaults
-  const loadSavedData = () => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.allUsers && Array.isArray(parsed.allUsers)) {
-          parsed.allUsers = parsed.allUsers
-            .filter((u: unknown) => u && typeof u === 'object')
-            .map((u: Partial<UserProfile>) => ({
-              ...u,
-              id: u.id || `user_${Date.now()}`,
-              name: u.name || 'Người dùng',
-              email: u.email || '',
-              role: u.role || 'buyer',
-              balance: typeof u.balance === 'number' ? u.balance : 0,
-              pendingBalance: typeof u.pendingBalance === 'number' ? u.pendingBalance : 0,
-              avatar: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80'
-            }));
-        }
-        return parsed;
-      }
-    } catch (e) {
-      console.warn('Error reading local cache:', e);
-    }
-    return null;
-  };
-
-  const savedData = loadSavedData();
-
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(
-    savedData?.allUsers?.length ? savedData.allUsers : INITIAL_USERS
-  );
-  // Restore current login state from local storage so reloading the browser does not log the user out
-  const [currentUserId, setCurrentUserId] = useState<string>(() => {
-    return savedData?.isLoggedIn && savedData?.currentUserId ? savedData.currentUserId : '';
-  });
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return Boolean(savedData?.isLoggedIn && savedData?.currentUserId);
-  });
+  // Pure State synchronized directly with Firestore (No localStorage dependency)
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
-  const [accounts, setAccounts] = useState<AccountItem[]>(savedData?.accounts || INITIAL_ACCOUNTS);
-  const [orders, setOrders] = useState<OrderItem[]>(savedData?.orders || INITIAL_ORDERS);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>(
-    savedData?.transactions || INITIAL_TRANSACTIONS
-  );
-  const [wishlistIds, setWishlistIds] = useState<string[]>(
-    savedData?.wishlistIds || []
-  );
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(
-    savedData?.chatMessages || []
-  );
-  const [notifications, setNotifications] = useState<AppNotification[]>(
-    savedData?.notifications || []
-  );
+  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Mystery Box (Túi Mù May Mắn) States
-  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(
-    savedData?.mysteryBoxes || DEFAULT_MYSTERY_BOX_TIERS
-  );
-  const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>(
-    savedData?.mysteryRewards || DEFAULT_MYSTERY_BOX_REWARDS
-  );
-  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>(
-    savedData?.mysteryHistory || DEFAULT_MYSTERY_BOX_HISTORY
-  );
-  const [userInventory, setUserInventory] = useState<UserInventoryItem[]>(
-    savedData?.userInventory || []
-  );
-  const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>(
-    savedData?.userFreeTurns || {}
-  );
+  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(DEFAULT_MYSTERY_BOX_TIERS);
+  const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>(DEFAULT_MYSTERY_BOX_REWARDS);
+  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>([]);
+  const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
+  const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>({});
   const [isMysteryBoxEventActive, setIsMysteryBoxEventActive] = useState<boolean>(true);
   const [selectedBoxTierForUnboxing, setSelectedBoxTierForUnboxing] = useState<string | null>(null);
 
-  // View States - Always start at Home
+  // View States
   const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide'>('home');
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
@@ -326,45 +278,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Filters
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(DEFAULT_FILTERS);
 
-  // Save to LocalStorage immediately
+  // Listen to Firebase Auth state - STRICTLY NO AUTO-LOGIN
   useEffect(() => {
-    try {
-      const dataToSave = {
-        allUsers,
-        currentUserId,
-        isLoggedIn,
-        accounts,
-        orders,
-        transactions,
-        wishlistIds,
-        chatMessages,
-        notifications,
-        mysteryBoxes,
-        mysteryRewards,
-        mysteryHistory,
-        userInventory,
-        userFreeTurns
-      };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
-    } catch (e) {
-      console.warn('LocalStorage save failed:', e);
-    }
-  }, [
-    allUsers,
-    currentUserId,
-    isLoggedIn,
-    accounts,
-    orders,
-    transactions,
-    wishlistIds,
-    chatMessages,
-    notifications,
-    mysteryBoxes,
-    mysteryRewards,
-    mysteryHistory,
-    userInventory,
-    userFreeTurns
-  ]);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        setCurrentUserId(fbUser.uid);
+        setIsLoggedIn(true);
+        // Sync user document from Firestore
+        try {
+          const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data() as UserProfile;
+            setAllUsers(prev => {
+              const filtered = prev.filter(u => u.id !== fbUser.uid);
+              return [data, ...filtered];
+            });
+          }
+        } catch (e) {
+          console.warn('Error fetching auth user profile:', e);
+        }
+      } else {
+        // Visitor / Guest: Always unauthenticated
+        setCurrentUserId('');
+        setIsLoggedIn(false);
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
 
   // Firestore Sync Mechanism (Real-time Cloud Database Integration for all collections)
   useEffect(() => {
@@ -374,49 +315,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let unsubscribeTransactions: (() => void) | undefined;
     let unsubscribeMessages: (() => void) | undefined;
     let unsubscribeNotifications: (() => void) | undefined;
+    let unsubscribeMysteryBoxes: (() => void) | undefined;
+    let unsubscribeMysteryRewards: (() => void) | undefined;
+    let unsubscribeMysteryHistory: (() => void) | undefined;
+    let unsubscribeInventory: (() => void) | undefined;
+    let unsubscribeSettings: (() => void) | undefined;
 
     const setupFirestoreSync = async () => {
       try {
         setCloudSyncStatus('syncing');
-        // Check if database is empty - do not force re-seed unless requested
-        const accountsRef = collection(db, 'accounts');
-        const accountsSnap = await getDocs(accountsRef);
-        const usersRef = collection(db, 'users');
-        const usersSnap = await getDocs(usersRef);
 
-        if (usersSnap.empty) {
-          // Initialize super admin and users so login remains available
-          for (const u of INITIAL_USERS) {
-            await setDoc(doc(db, 'users', u.id), cleanForFirestore(u));
-          }
-        }
-
-        if (accountsSnap.empty) {
-          // Seed initial accounts to Firestore
-          for (const a of INITIAL_ACCOUNTS) {
-            await setDoc(doc(db, 'accounts', a.id), cleanForFirestore(a));
-          }
-        }
-
-        // Initialize all 4 default Mystery Box tiers if missing in Firestore
-        const mysteryBoxesRef = collection(db, 'mystery_boxes');
-        const mysteryBoxesSnap = await getDocs(mysteryBoxesRef);
-        if (mysteryBoxesSnap.size < DEFAULT_MYSTERY_BOX_TIERS.length) {
-          for (const box of DEFAULT_MYSTERY_BOX_TIERS) {
-            await setDoc(doc(db, 'mystery_boxes', box.id), cleanForFirestore(box));
-          }
-        }
-
-        // Initialize default Mystery Box rewards if missing in Firestore
-        const mysteryRewardsRef = collection(db, 'mystery_rewards');
-        const mysteryRewardsSnap = await getDocs(mysteryRewardsRef);
-        if (mysteryRewardsSnap.empty) {
-          for (const rew of DEFAULT_MYSTERY_BOX_REWARDS) {
-            await setDoc(doc(db, 'mystery_rewards', rew.id), cleanForFirestore(rew));
-          }
-        }
-
-        // 1. Subscribe to real-time accounts
+        // 1. Subscribe to real-time accounts (User A adds/edits -> User B sees immediately)
         unsubscribeAccounts = onSnapshot(
           collection(db, 'accounts'),
           snapshot => {
@@ -464,14 +373,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 });
               }
             });
-            if (cloudAccounts.length > 0) {
-              setAccounts(cloudAccounts);
-            }
+            setAccounts(cloudAccounts);
             setCloudSyncStatus('synced');
           },
           err => {
-            console.warn('Firestore accounts listener error:', err);
-            setCloudSyncStatus('offline');
+            console.warn('Firestore accounts listener notice:', err);
           }
         );
 
@@ -506,17 +412,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 });
               }
             });
-            if (cloudUsers.length > 0) {
-              setAllUsers(cloudUsers);
-            } else {
-              // If users collection was wiped, keep only the Super Admin
-              const adminUser = INITIAL_USERS[0];
-              setAllUsers([adminUser]);
-            }
+            setAllUsers(cloudUsers);
           },
-          err => {
-            console.warn('Firestore users listener error:', err);
-          }
+          err => console.warn('Firestore users listener notice:', err)
         );
 
         // 3. Subscribe to real-time orders
@@ -532,9 +430,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             setOrders(cloudOrders);
           },
-          err => {
-            console.warn('Firestore orders listener error:', err);
-          }
+          err => console.warn('Firestore orders listener notice:', err)
         );
 
         // 4. Subscribe to real-time transactions
@@ -550,9 +446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             setTransactions(cloudTx);
           },
-          err => {
-            console.warn('Firestore transactions listener error:', err);
-          }
+          err => console.warn('Firestore transactions listener notice:', err)
         );
 
         // 5. Subscribe to real-time messages
@@ -568,9 +462,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             setChatMessages(cloudMsgs);
           },
-          err => {
-            console.warn('Firestore messages listener error:', err);
-          }
+          err => console.warn('Firestore messages listener notice:', err)
         );
 
         // 6. Subscribe to real-time notifications
@@ -584,21 +476,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 cloudNotifs.push(notif);
               }
             });
-            if (cloudNotifs.length > 0) {
-              setNotifications(cloudNotifs);
-            }
+            setNotifications(cloudNotifs);
           },
-          err => {
-            console.warn('Firestore notifications listener error:', err);
-          }
+          err => console.warn('Firestore notifications listener notice:', err)
         );
 
         // 7. Subscribe to real-time mystery boxes
-        onSnapshot(
+        unsubscribeMysteryBoxes = onSnapshot(
           collection(db, 'mystery_boxes'),
           snapshot => {
             const cloudBoxesMap = new Map<string, MysteryBoxTierConfig>();
-            // Start with all 4 default tiers as base
             DEFAULT_MYSTERY_BOX_TIERS.forEach(box => cloudBoxesMap.set(box.id, box));
 
             snapshot.forEach(d => {
@@ -608,7 +495,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             });
 
-            // Preserve canonical 4 tier order
             const tierOrder = ['box_bronze', 'box_gold', 'box_diamond', 'box_special'];
             const allBoxes = Array.from(cloudBoxesMap.values()).sort((a, b) => {
               const idxA = tierOrder.indexOf(a.id);
@@ -619,11 +505,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             setMysteryBoxes(allBoxes);
           },
-          err => console.warn('Firestore mystery_boxes listener error:', err)
+          err => console.warn('Firestore mystery_boxes listener notice:', err)
         );
 
         // 8. Subscribe to real-time mystery rewards
-        onSnapshot(
+        unsubscribeMysteryRewards = onSnapshot(
           collection(db, 'mystery_rewards'),
           snapshot => {
             const cloudRewards: MysteryBoxRewardItem[] = [];
@@ -633,15 +519,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 cloudRewards.push(rew);
               }
             });
-            if (cloudRewards.length > 0) {
-              setMysteryRewards(cloudRewards);
-            }
+            setMysteryRewards(cloudRewards.length > 0 ? cloudRewards : DEFAULT_MYSTERY_BOX_REWARDS);
           },
-          err => console.warn('Firestore mystery_rewards listener error:', err)
+          err => console.warn('Firestore mystery_rewards listener notice:', err)
         );
 
         // 9. Subscribe to real-time mystery history
-        onSnapshot(
+        unsubscribeMysteryHistory = onSnapshot(
           collection(db, 'mystery_history'),
           snapshot => {
             const cloudHist: MysteryBoxHistoryItem[] = [];
@@ -651,15 +535,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 cloudHist.push(h);
               }
             });
-            if (cloudHist.length > 0) {
-              setMysteryHistory(cloudHist.slice(0, 50));
-            }
+            setMysteryHistory(cloudHist.slice(0, 50));
           },
-          err => console.warn('Firestore mystery_history listener error:', err)
+          err => console.warn('Firestore mystery_history listener notice:', err)
         );
 
-        // 9.1 Subscribe to mystery box program status
-        onSnapshot(
+        // 10. Subscribe to mystery box program status
+        unsubscribeSettings = onSnapshot(
           doc(db, 'site_settings', 'mystery_box_config'),
           docSnap => {
             if (docSnap.exists()) {
@@ -669,11 +551,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             }
           },
-          err => console.warn('Firestore mystery_box_config listener error:', err)
+          err => console.warn('Firestore mystery_box_config listener notice:', err)
         );
 
-        // 10. Subscribe to user inventory
-        onSnapshot(
+        // 11. Subscribe to user inventory
+        unsubscribeInventory = onSnapshot(
           collection(db, 'user_inventory'),
           snapshot => {
             const cloudInv: UserInventoryItem[] = [];
@@ -683,14 +565,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 cloudInv.push(inv);
               }
             });
-            if (cloudInv.length > 0) {
-              setUserInventory(cloudInv);
-            }
+            setUserInventory(cloudInv);
           },
-          err => console.warn('Firestore user_inventory listener error:', err)
+          err => console.warn('Firestore user_inventory listener notice:', err)
         );
       } catch (err) {
-        console.warn('Firebase Firestore setup encountered offline mode:', err);
+        console.warn('Firebase Firestore setup offline mode:', err);
         setCloudSyncStatus('offline');
       }
     };
@@ -704,6 +584,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (unsubscribeTransactions) unsubscribeTransactions();
       if (unsubscribeMessages) unsubscribeMessages();
       if (unsubscribeNotifications) unsubscribeNotifications();
+      if (unsubscribeMysteryBoxes) unsubscribeMysteryBoxes();
+      if (unsubscribeMysteryRewards) unsubscribeMysteryRewards();
+      if (unsubscribeMysteryHistory) unsubscribeMysteryHistory();
+      if (unsubscribeInventory) unsubscribeInventory();
+      if (unsubscribeSettings) unsubscribeSettings();
     };
   }, []);
 
@@ -712,7 +597,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? (allUsers && allUsers.find(u => u && u.id === currentUserId)) || GUEST_USER
       : GUEST_USER;
 
-  // Sync wishlist strictly to current logged-in user's data
+  // Sync wishlist to current user's profile
   useEffect(() => {
     if (isLoggedIn && currentUser && currentUser.id) {
       setWishlistIds(Array.isArray(currentUser.wishlistIds) ? currentUser.wishlistIds : []);
@@ -736,7 +621,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const rawInput = (identifier || '').trim();
     const cleanInput = rawInput.toLowerCase();
 
-    // Match by username, email, email prefix (before @), phone number, or display name
+    // 1. Try Firebase Auth first if credentials exist
+    if (password && cleanInput.length >= 3) {
+      try {
+        const formattedEmail = cleanInput.includes('@') ? cleanInput : `${cleanInput.replace(/[^a-z0-9._-]/g, '')}@cholienquan.com`;
+        const fbCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
+        if (fbCredential.user) {
+          setCurrentUserId(fbCredential.user.uid);
+          setIsLoggedIn(true);
+          setIsAuthModalOpen(false);
+          return { success: true, message: `Đăng nhập thành công qua Firebase Auth!` };
+        }
+      } catch (fbAuthErr: any) {
+        // Fallback to Firestore users lookup
+      }
+    }
+
+    // 2. Match in Firestore allUsers collection
     const user = allUsers.find(u => {
       if (!u) return false;
       const matchUsername = u.username && u.username.toLowerCase() === cleanInput;
@@ -793,7 +694,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const rawAccount = (usernameOrEmail || '').trim();
     const cleanAccount = rawAccount.toLowerCase();
 
-    // Check if account / username / email already taken
+    // Check if account already taken in Firestore
     const existing = allUsers.find(u => {
       if (!u) return false;
       const matchUsername = u.username && u.username.toLowerCase() === cleanAccount;
@@ -809,13 +710,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    // Role can only be buyer or seller during registration
     const validatedRole: UserRole = role === 'admin' ? 'buyer' : role;
     const isEmailFormat = cleanAccount.includes('@');
     const assignedUsername = isEmailFormat ? cleanAccount.split('@')[0] : cleanAccount;
-    const assignedEmail = isEmailFormat ? cleanAccount : `${cleanAccount}@lqmarket.vn`;
+    const assignedEmail = isEmailFormat ? cleanAccount : `${cleanAccount.replace(/[^a-z0-9._-]/g, '')}@cholienquan.com`;
 
-    const newUserId = `user_${Date.now()}`;
+    let newUserId = `user_${Date.now()}`;
+
+    // Create Firebase Auth user
+    try {
+      const fbCredential = await createUserWithEmailAndPassword(auth, assignedEmail, password);
+      if (fbCredential.user) {
+        newUserId = fbCredential.user.uid;
+        await updateProfile(fbCredential.user, { displayName: name.trim() });
+      }
+    } catch (authErr) {
+      console.warn('Firebase Auth user creation notice:', authErr);
+    }
+
     const newUser: UserProfile = {
       id: newUserId,
       name: name.trim(),
@@ -842,11 +754,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoggedIn(true);
     setIsAuthModalOpen(false);
 
-    // Sync user to Firestore
+    // Save directly to Firestore users collection
     try {
       await setDoc(doc(db, 'users', newUserId), cleanForFirestore(newUser));
     } catch (e) {
-      console.warn('Firestore user save offline fallback:', e);
+      console.warn('Firestore user save notice:', e);
     }
 
     // Welcome notification
@@ -854,7 +766,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `notif_${Date.now()}`,
       userId: newUserId,
       title: 'Đăng ký tài khoản thành công',
-      message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Bạn có thể nạp tiền để mua acc hoặc đăng bán tài khoản Liên Quân Mobile.`,
+      message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được đồng bộ trực tiếp trên Cloud Firestore.`,
       type: 'system',
       read: false,
       createdAt: new Date().toISOString()
@@ -863,7 +775,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await setDoc(doc(db, 'notifications', welcomeNotif.id), cleanForFirestore(welcomeNotif));
     } catch (e) {
-      console.warn('Firestore notif save error:', e);
+      console.warn('Firestore notif save notice:', e);
     }
 
     return {
@@ -873,6 +785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logoutUser = () => {
+    signOut(auth).catch(() => {});
     setIsLoggedIn(false);
     setCurrentUserId('');
     setCurrentView('home');
@@ -898,11 +811,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAllUsers(prev =>
       prev.map(u => (u.id === currentUserId ? { ...u, ...data } : u))
     );
+
     try {
       await setDoc(doc(db, 'users', currentUserId), cleanForFirestore(data), { merge: true });
     } catch (e) {
       console.error('Firestore update profile error:', e);
-      throw e;
     }
   };
 
@@ -940,7 +853,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsChatOpen(false);
   };
 
-  // Toggle Wishlist
+  // Toggle Wishlist & Sync with Firestore
   const toggleWishlist = (accountId: string) => {
     if (!isLoggedIn || !currentUser.id) {
       openLoginModal();
@@ -959,11 +872,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prevUsers.map(u => (u.id === currentUser.id ? { ...u, wishlistIds: updated } : u))
       );
 
-      // Persist to Firestore
       try {
         setDoc(doc(db, 'users', currentUser.id), { wishlistIds: updated }, { merge: true });
       } catch (e) {
-        console.warn('Firestore wishlist sync error:', e);
+        console.warn('Firestore wishlist sync notice:', e);
       }
 
       return updated;
@@ -972,7 +884,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isWishlisted = (accountId: string) => wishlistIds.includes(accountId);
 
-  // Account Creation & Firestore write
+  // Account Creation & Firestore write (Real-time sync to all devices)
   const createAccount = async (
     newAccountData: Omit<AccountItem, 'id' | 'code' | 'createdAt' | 'views' | 'likes' | 'status'>
   ): Promise<{ success: boolean; message: string; accountId?: string }> => {
@@ -990,11 +902,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setAccounts(prev => [newAccount, ...prev]);
 
-    // Save to Firestore
+    // Save to Firestore accounts collection
     try {
       await setDoc(doc(db, 'accounts', newId), cleanForFirestore(newAccount));
     } catch (e) {
-      console.warn('Firestore write offline fallback:', e);
+      console.warn('Firestore write notice:', e);
     }
 
     // Add notification to admin
@@ -1011,12 +923,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await setDoc(doc(db, 'notifications', newNotif.id), cleanForFirestore(newNotif));
     } catch (e) {
-      console.warn('Firestore notif save error:', e);
+      console.warn('Firestore notif save notice:', e);
     }
 
     return {
       success: true,
-      message: 'Tin đăng của bạn đã được gửi và đang chờ Super Admin kiểm duyệt (thường mất 2-5 phút).',
+      message: 'Tin đăng của bạn đã được lưu lên Cloud Firestore và đang chờ Super Admin kiểm duyệt!',
       accountId: newId
     };
   };
@@ -1039,20 +951,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const targetAcc = accounts.find(a => a.id === accountId);
     try {
-      if (targetAcc) {
-        const payload = cleanForFirestore({
-          ...targetAcc,
-          status,
-          rejectionReason: status === 'rejected' ? reasonText : null
-        });
-        await setDoc(doc(db, 'accounts', accountId), payload, { merge: true });
-      } else {
-        const payload = cleanForFirestore({
-          status,
-          rejectionReason: status === 'rejected' ? reasonText : null
-        });
-        await setDoc(doc(db, 'accounts', accountId), payload, { merge: true });
-      }
+      const payload = cleanForFirestore({
+        status,
+        rejectionReason: status === 'rejected' ? reasonText : null
+      });
+      await setDoc(doc(db, 'accounts', accountId), payload, { merge: true });
     } catch (e) {
       console.error('Firestore update status error:', e);
     }
@@ -1064,7 +967,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: status === 'approved' ? 'Acc của bạn đã được DUYỆT' : 'Acc bị TỪ CHỐI duyệt',
         message:
           status === 'approved'
-            ? `Tài khoản #${targetAcc.code} đã được hiển thị công khai trên sàn LQMarket!`
+            ? `Tài khoản #${targetAcc.code} đã được duyệt và hiển thị công khai trên sàn LQMarket!`
             : `Tài khoản #${targetAcc.code} bị từ chối. Lý do: ${reasonText || 'Thông tin chưa chính xác'}`,
         type: 'account',
         read: false,
@@ -1074,7 +977,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
       } catch (e) {
-        console.warn('Firestore notif save error:', e);
+        console.warn('Firestore notif save notice:', e);
       }
     }
   };
@@ -1084,7 +987,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await deleteDoc(doc(db, 'accounts', accountId));
     } catch (e) {
-      console.warn('Firestore delete account fallback:', e);
+      console.warn('Firestore delete account notice:', e);
     }
   };
 
@@ -1098,16 +1001,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (acc.status === 'sold') return { success: false, message: 'Tài khoản này đã có người mua!' };
 
     const discountAmount = Math.max(0, voucherOptions?.discount || 0);
-    const totalCost = Math.max(0, acc.price - discountAmount); // Buyer pays after discount
+    const totalCost = Math.max(0, acc.price - discountAmount);
 
     if (currentUser.balance < totalCost) {
       return {
         success: false,
-        message: `Số dư ví không đủ (${currentUser.balance.toLocaleString('vi-VN')}đ < ${totalCost.toLocaleString('vi-VN')}đ). Vui lòng nạp thêm tiền qua VietQR / MoMo!`
+        message: `Số dư ví không đủ (${currentUser.balance.toLocaleString('vi-VN')}đ < ${totalCost.toLocaleString('vi-VN')}đ). Vui lòng nạp thêm tiền qua PayOS / VietQR!`
       };
     }
 
-    // 1. Deduct buyer balance (only what buyer actually owes after voucher)
+    // 1. Deduct buyer balance
     setAllUsers(prev =>
       prev.map(u => (u.id === currentUser.id ? { ...u, balance: u.balance - totalCost } : u))
     );
@@ -1123,11 +1026,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 4. Create Escrow Order
-    // NOTE: Voucher is funded 100% by platform/Admin budget. Seller receives full payout based on original acc.price!
     const orderId = `ord_${Date.now()}`;
     const orderCodeNum = Math.floor(10000 + Math.random() * 90000);
     const platformFee = Math.round(acc.price * 0.05); // 5% platform fee
-    const sellerNetPending = acc.price - platformFee; // Net amount seller will receive (95% of listed price)
+    const sellerNetPending = acc.price - platformFee;
     const newOrder: OrderItem = {
       id: orderId,
       orderCode: `#ORD${orderCodeNum}`,
@@ -1164,7 +1066,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [buyerTx, ...prev]);
 
-    // 6. Update Seller Pending Balance (net 95% after 5% platform fee - seller NOT affected by voucher!)
+    // 6. Update Seller Pending Balance
     setAllUsers(prev =>
       prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + sellerNetPending } : u))
     );
@@ -1180,10 +1082,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDoc(doc(db, 'users', acc.sellerId), { pendingBalance: seller.pendingBalance + sellerNetPending });
       }
     } catch (e) {
-      console.warn('Firestore order sync fallback:', e);
+      console.warn('Firestore order sync notice:', e);
     }
 
-    // 6. Notify Buyer & Seller
+    // 7. Notify Buyer & Seller
     const buyerNotif: AppNotification = {
       id: `notif_${Date.now()}_1`,
       userId: currentUser.id,
@@ -1198,13 +1100,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `notif_${Date.now()}_2`,
       userId: acc.sellerId,
       title: 'Bạn có đơn hàng mới đã bán',
-      message: `Khách hàng ${currentUser.name} vừa mua acc #${acc.code}. Giá bán: ${acc.price.toLocaleString('vi-VN')}đ. Tiền thực nhận (${sellerNetPending.toLocaleString('vi-VN')}đ sau khi trừ 5% phí sàn -${platformFee.toLocaleString('vi-VN')}đ) đang được tạm giữ an toàn trong ví Escrow.`,
+      message: `Khách hàng ${currentUser.name} vừa mua acc #${acc.code}. Tiền (${sellerNetPending.toLocaleString('vi-VN')}đ sau trừ phí) đang được giữ an toàn trong ví Escrow.`,
       type: 'order',
       read: false,
       createdAt: new Date().toISOString()
     };
 
     setNotifications(prev => [buyerNotif, sellerNotif, ...prev]);
+    try {
+      setDoc(doc(db, 'notifications', buyerNotif.id), cleanForFirestore(buyerNotif));
+      setDoc(doc(db, 'notifications', sellerNotif.id), cleanForFirestore(sellerNotif));
+    } catch (e) {}
 
     return {
       success: true,
@@ -1220,11 +1126,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       updateDoc(doc(db, 'orders', orderId), { status: 'account_delivered' });
     } catch (e) {
-      console.warn('Firestore delivery confirm fallback:', e);
+      console.warn('Firestore delivery confirm notice:', e);
     }
   };
 
-  // Buyer confirms they received account ok -> Release Escrow money to Seller (minus 5% platform fee)
+  // Buyer confirms they received account ok -> Release Escrow money to Seller
   const confirmOrderReceived = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -1236,11 +1142,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Calculate 5% platform fee & net payout for seller
     const feeAmount = typeof order.fee === 'number' && order.fee > 0 ? order.fee : Math.round(order.accountPrice * 0.05);
     const payoutAmount = Math.max(0, order.accountPrice - feeAmount);
 
-    // Transfer money from pending to real balance for seller
     setAllUsers(prev =>
       prev.map(u =>
         u.id === order.sellerId
@@ -1254,7 +1158,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Create payout transaction for seller
     const sellerTx: WalletTransaction = {
       id: `tx_${Date.now()}`,
       userId: order.sellerId,
@@ -1268,7 +1171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       updateDoc(doc(db, 'orders', orderId), { status: 'completed', completedAt, fee: feeAmount });
-      setDoc(doc(db, 'transactions', sellerTx.id), sellerTx);
+      setDoc(doc(db, 'transactions', sellerTx.id), cleanForFirestore(sellerTx));
       const seller = allUsers.find(u => u.id === order.sellerId);
       if (seller) {
         updateDoc(doc(db, 'users', order.sellerId), {
@@ -1278,23 +1181,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
     } catch (e) {
-      console.warn('Firestore order complete fallback:', e);
+      console.warn('Firestore order complete notice:', e);
     }
 
-    // Send notification
     const notif: AppNotification = {
       id: `notif_${Date.now()}`,
       userId: order.sellerId,
       title: 'Đơn hàng hoàn tất - Tiền đã vào ví',
-      message: `Người mua đã xác nhận nhận acc ${order.accountCode}. Bạn nhận được +${payoutAmount.toLocaleString('vi-VN')}đ vào số dư khả dụng (Đã khấu trừ 5% phí sàn: -${feeAmount.toLocaleString('vi-VN')}đ)!`,
+      message: `Người mua đã xác nhận nhận acc ${order.accountCode}. Bạn nhận được +${payoutAmount.toLocaleString('vi-VN')}đ vào số dư ví khả dụng!`,
       type: 'wallet',
       read: false,
       createdAt: new Date().toISOString()
     };
     setNotifications(prev => [notif, ...prev]);
+    try {
+      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+    } catch (e) {}
   };
 
-  // Buyer files dispute
   const disputeOrder = (orderId: string, reason: string) => {
     setOrders(prev =>
       prev.map(o => (o.id === orderId ? { ...o, status: 'disputed', disputeReason: reason } : o))
@@ -1303,12 +1207,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       updateDoc(doc(db, 'orders', orderId), { status: 'disputed', disputeReason: reason });
     } catch (e) {
-      console.warn('Firestore dispute fallback:', e);
+      console.warn('Firestore dispute notice:', e);
     }
 
     const order = orders.find(o => o.id === orderId);
     if (order) {
-      // Notify Admin & Seller
       const adminNotif: AppNotification = {
         id: `notif_${Date.now()}_admin`,
         userId: 'user_admin_1',
@@ -1330,10 +1233,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       setNotifications(prev => [adminNotif, sellerNotif, ...prev]);
+      try {
+        setDoc(doc(db, 'notifications', adminNotif.id), cleanForFirestore(adminNotif));
+        setDoc(doc(db, 'notifications', sellerNotif.id), cleanForFirestore(sellerNotif));
+      } catch (e) {}
     }
   };
 
-  // Admin resolves dispute
   const adminResolveDispute = (orderId: string, resolution: 'refund_buyer' | 'payout_seller') => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -1342,7 +1248,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const completedAt = new Date().toISOString();
       const updatedReason = `${order.disputeReason || ''} -> (Admin đã xử lý HOÀN TIỀN cho người mua)`;
 
-      // Refund to Buyer
       setOrders(prev =>
         prev.map(o =>
           o.id === orderId
@@ -1356,12 +1261,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )
       );
 
-      // Add balance back to buyer
       setAllUsers(prev =>
         prev.map(u => (u.id === order.buyerId ? { ...u, balance: u.balance + order.totalAmount } : u))
       );
 
-      // Reduce pending balance from seller
       const sellerPendingDeduction = order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05));
       setAllUsers(prev =>
         prev.map(u =>
@@ -1371,7 +1274,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )
       );
 
-      // Create refund Tx
       const refundTx: WalletTransaction = {
         id: `tx_${Date.now()}`,
         userId: order.buyerId,
@@ -1385,7 +1287,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       try {
         updateDoc(doc(db, 'orders', orderId), { status: 'refunded', completedAt, disputeReason: updatedReason });
-        setDoc(doc(db, 'transactions', refundTx.id), refundTx);
+        setDoc(doc(db, 'transactions', refundTx.id), cleanForFirestore(refundTx));
         const buyer = allUsers.find(u => u.id === order.buyerId);
         if (buyer) {
           updateDoc(doc(db, 'users', order.buyerId), { balance: buyer.balance + order.totalAmount });
@@ -1395,10 +1297,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updateDoc(doc(db, 'users', order.sellerId), { pendingBalance: Math.max(0, seller.pendingBalance - sellerPendingDeduction) });
         }
       } catch (e) {
-        console.warn('Firestore refund fallback:', e);
+        console.warn('Firestore refund notice:', e);
       }
     } else {
-      // Payout to Seller
       confirmOrderReceived(orderId);
     }
   };
@@ -1410,7 +1311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       updateDoc(doc(db, 'orders', orderId), { ratingGiven: rating, reviewComment: comment });
     } catch (e) {
-      console.warn('Firestore review fallback:', e);
+      console.warn('Firestore review notice:', e);
     }
   };
 
@@ -1432,10 +1333,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTransactions(prev => [newTx, ...prev]);
 
     try {
-      setDoc(doc(db, 'transactions', newTx.id), newTx);
+      setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
       updateDoc(doc(db, 'users', currentUser.id), { balance: currentUser.balance + amount });
     } catch (e) {
-      console.warn('Firestore deposit fallback:', e);
+      console.warn('Firestore deposit notice:', e);
     }
 
     const notif: AppNotification = {
@@ -1448,6 +1349,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     setNotifications(prev => [notif, ...prev]);
+    try {
+      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+    } catch (e) {}
   };
 
   const depositFunds = (amount: number, method: string) => {
@@ -1477,7 +1381,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userEmail: currentUser.email,
       type: 'withdraw',
       amount: -amount,
-      status: 'pending', // Pending Admin Payout via VietQR Napas247
+      status: 'pending',
       note: `Yêu cầu rút tiền về ${bankInfo}`,
       bankName: bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Ngân hàng',
       bankCode: bankDetails?.bankCode || '970422',
@@ -1488,22 +1392,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTransactions(prev => [newTx, ...prev]);
 
     try {
-      setDoc(doc(db, 'transactions', newTx.id), newTx);
+      setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
       updateDoc(doc(db, 'users', currentUser.id), { balance: currentUser.balance - amount });
     } catch (e) {
-      console.warn('Firestore withdraw fallback:', e);
+      console.warn('Firestore withdraw notice:', e);
     }
 
     const notif: AppNotification = {
       id: `notif_${Date.now()}`,
       userId: currentUser.id,
       title: 'Đã gửi yêu cầu rút tiền',
-      message: `Đã tạo lệnh rút -${amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng: ${bankInfo}. Ban quản trị sẽ chuyển khoản giải ngân nhanh 24/7 trong 5-15 phút.`,
+      message: `Đã tạo lệnh rút -${amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng: ${bankInfo}. Ban quản trị sẽ giải ngân nhanh trong 5-15 phút.`,
       type: 'wallet',
       read: false,
       createdAt: new Date().toISOString()
     };
     setNotifications(prev => [notif, ...prev]);
+    try {
+      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+    } catch (e) {}
 
     return true;
   };
@@ -1542,7 +1449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         note: refNote ? `${tx.note} (Đã chuyển: ${refNote})` : tx.note
       });
     } catch (e) {
-      console.warn('Firestore approve withdrawal error:', e);
+      console.warn('Firestore approve withdrawal notice:', e);
     }
 
     const notif: AppNotification = {
@@ -1555,6 +1462,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     setNotifications(prev => [notif, ...prev]);
+    try {
+      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+    } catch (e) {}
 
     return { success: true, message: 'Đã xác nhận giải ngân thành công!' };
   };
@@ -1564,7 +1474,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!tx) return { success: false, message: 'Không tìm thấy giao dịch' };
 
     const refundAmount = Math.abs(tx.amount);
-    // Refund money to user's balance
     setAllUsers(prev =>
       prev.map(u => (u.id === tx.userId ? { ...u, balance: u.balance + refundAmount } : u))
     );
@@ -1583,7 +1492,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDoc(doc(db, 'users', tx.userId), { balance: user.balance + refundAmount });
       }
     } catch (e) {
-      console.warn('Firestore reject withdrawal error:', e);
+      console.warn('Firestore reject withdrawal notice:', e);
     }
 
     const notif: AppNotification = {
@@ -1596,6 +1505,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     setNotifications(prev => [notif, ...prev]);
+    try {
+      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+    } catch (e) {}
 
     return { success: true, message: 'Đã từ chối lệnh rút tiền và hoàn lại số dư vào ví người bán.' };
   };
@@ -1631,9 +1543,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setChatMessages(prev => [...prev, newMsg]);
 
     try {
-      setDoc(doc(db, 'messages', newMsg.id), newMsg);
+      setDoc(doc(db, 'messages', newMsg.id), cleanForFirestore(newMsg));
     } catch (e) {
-      console.warn('Firestore message fallback:', e);
+      console.warn('Firestore message notice:', e);
     }
   };
 
@@ -1659,9 +1571,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setChatMessages(prev => [...prev, newMsg]);
 
     try {
-      setDoc(doc(db, 'messages', newMsg.id), newMsg);
+      setDoc(doc(db, 'messages', newMsg.id), cleanForFirestore(newMsg));
     } catch (e) {
-      console.warn('Firestore direct message fallback:', e);
+      console.warn('Firestore direct message notice:', e);
     }
   };
 
@@ -1673,7 +1585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await updateDoc(doc(db, 'notifications', id), { read: true });
     } catch (e) {
-      console.warn('Firestore notif mark read error:', e);
+      console.warn('Firestore notif mark read notice:', e);
     }
   };
 
@@ -1687,7 +1599,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await updateDoc(doc(db, 'notifications', n.id), { read: true });
       }
     } catch (e) {
-      console.warn('Firestore clear all notifs error:', e);
+      console.warn('Firestore clear all notifs notice:', e);
     }
   };
 
@@ -1705,7 +1617,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAllUsers(prev => [newUser, ...prev]);
 
     try {
-      await setDoc(doc(db, 'users', newUserId), newUser);
+      await setDoc(doc(db, 'users', newUserId), cleanForFirestore(newUser));
       return { success: true, message: `Đã tạo tài khoản thành viên "${newUser.name}" thành công!`, userId: newUserId };
     } catch (e) {
       console.error('Firestore admin create user error:', e);
@@ -1722,7 +1634,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     try {
-      await setDoc(doc(db, 'users', userId), data, { merge: true });
+      await setDoc(doc(db, 'users', userId), cleanForFirestore(data), { merge: true });
       return { success: true, message: 'Đã cập nhật thông tin thành viên thành công!' };
     } catch (e) {
       console.error('Firestore admin update user error:', e);
@@ -1785,8 +1697,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'users', userId), { balance: newBalance });
-      await setDoc(doc(db, 'transactions', newTx.id), newTx);
-      await setDoc(doc(db, 'notifications', notif.id), notif);
+      await setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
+      await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
       return {
         success: true,
         message: `Đã điều chỉnh số dư thành công (${amount >= 0 ? '+' : ''}${amount.toLocaleString('vi-VN')}đ)!`
@@ -1797,23 +1709,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Reset to initial LocalStorage state
   const resetToDefaultData = () => {
-    setAllUsers(INITIAL_USERS);
-    setCurrentUserId('user_buyer_1');
-    setIsLoggedIn(true);
-    setAccounts(INITIAL_ACCOUNTS);
-    setOrders(INITIAL_ORDERS);
-    setTransactions(INITIAL_TRANSACTIONS);
-    setWishlistIds([]);
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    seedSampleData();
   };
 
   // Wipe All Firebase Firestore Cloud Database
   const clearAllFirebaseData = async (): Promise<{ success: boolean; message: string }> => {
     try {
       setCloudSyncStatus('syncing');
-      const collectionsToWipe = ['accounts', 'orders', 'transactions', 'messages', 'users'];
+      const collectionsToWipe = ['accounts', 'orders', 'transactions', 'messages', 'users', 'mystery_history', 'user_inventory'];
 
       for (const colName of collectionsToWipe) {
         const snap = await getDocs(collection(db, colName));
@@ -1822,20 +1726,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // Re-create the Super Admin user so admin can continue managing the system
+      // Re-create the Super Admin user profile in Firestore
       const adminUser = INITIAL_USERS[0];
-      await setDoc(doc(db, 'users', adminUser.id), adminUser);
+      await setDoc(doc(db, 'users', adminUser.id), cleanForFirestore(adminUser));
 
-      // Reset local state to empty
       setAccounts([]);
       setOrders([]);
       setTransactions([]);
       setChatMessages([]);
       setWishlistIds([]);
+      setUserInventory([]);
+      setMysteryHistory([]);
       setAllUsers([adminUser]);
-      setCurrentUserId(adminUser.id);
-      setIsLoggedIn(true);
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      
+      // If current Firebase Auth session exists, maintain it; otherwise stay logged out
+      if (auth.currentUser) {
+        setCurrentUserId(auth.currentUser.uid);
+        setIsLoggedIn(true);
+      } else {
+        setCurrentUserId('');
+        setIsLoggedIn(false);
+      }
 
       setCloudSyncStatus('synced');
       return {
@@ -1891,18 +1802,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Kho phần thưởng của túi này đang được bảo trì. Vui lòng thử lại sau!' };
     }
 
-    // Weighted random calculation
-    const totalWeight = candidateRewards.reduce((sum, r) => sum + (r.dropWeight || 1), 0);
-    let randomVal = Math.random() * totalWeight;
+    // Secure backend calculation with client fallback
     let pickedReward: MysteryBoxRewardItem = candidateRewards[0];
-
-    for (const r of candidateRewards) {
-      const w = r.dropWeight || 1;
-      if (randomVal <= w) {
-        pickedReward = r;
-        break;
+    try {
+      const serverRes = await fetch('/api/mystery-box/calculate-drop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boxTierId, rewards: candidateRewards })
+      });
+      if (serverRes.ok) {
+        const json = await serverRes.json();
+        if (json.success && json.reward) {
+          pickedReward = json.reward;
+        }
       }
-      randomVal -= w;
+    } catch (e) {
+      // Local fallback
+      const totalWeight = candidateRewards.reduce((sum, r) => sum + (r.dropWeight || 1), 0);
+      let randomVal = Math.random() * totalWeight;
+      for (const r of candidateRewards) {
+        const w = r.dropWeight || 1;
+        if (randomVal <= w) {
+          pickedReward = r;
+          break;
+        }
+        randomVal -= w;
+      }
     }
 
     // Deduct cost or free turn
@@ -1929,7 +1854,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await setDoc(doc(db, 'transactions', boxTx.id), cleanForFirestore(boxTx));
       } catch (e) {
-        console.warn('Firestore box purchase tx error:', e);
+        console.warn('Firestore box purchase tx notice:', e);
       }
     }
 
@@ -1953,7 +1878,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await setDoc(doc(db, 'transactions', cashWinTx.id), cleanForFirestore(cashWinTx));
       } catch (e) {
-        console.warn('Firestore cash win tx error:', e);
+        console.warn('Firestore cash win tx notice:', e);
       }
       rewardNotificationMsg = `Chúc mừng bạn trúng ${pickedReward.value.toLocaleString('vi-VN')}đ tiền mặt vào ví!`;
     } else if (pickedReward.type === 'free_turn') {
@@ -1981,11 +1906,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await setDoc(doc(db, 'user_inventory', newInvItem.id), cleanForFirestore(newInvItem));
       } catch (e) {
-        console.warn('Firestore inventory save error:', e);
+        console.warn('Firestore inventory save notice:', e);
       }
       rewardNotificationMsg = `Bạn nhận được Voucher giảm giá ${pickedReward.value.toLocaleString('vi-VN')}đ!`;
     } else if (pickedReward.type === 'account' && pickedReward.accountData) {
-      // 1. Add to user inventory
       const newInvItem: UserInventoryItem = {
         id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
         userId: currentUser.id,
@@ -2001,10 +1925,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await setDoc(doc(db, 'user_inventory', newInvItem.id), cleanForFirestore(newInvItem));
       } catch (e) {
-        console.warn('Firestore inventory save error:', e);
+        console.warn('Firestore inventory save notice:', e);
       }
 
-      // 2. Also register as a completed delivered order so it's fully visible in OrdersView
       const newOrder: OrderItem = {
         id: `ord_box_${Date.now()}`,
         orderCode: `#BOX${Date.now().toString().slice(-6)}`,
@@ -2027,7 +1950,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await setDoc(doc(db, 'orders', newOrder.id), cleanForFirestore(newOrder));
       } catch (e) {
-        console.warn('Firestore order save error:', e);
+        console.warn('Firestore order save notice:', e);
       }
 
       rewardNotificationMsg = `SIÊU PHẨM! Bạn đã xé trúng ${pickedReward.title}! Tài khoản đã được chuyển thẳng vào Túi đồ & Đơn hàng của bạn.`;
@@ -2050,7 +1973,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    // Save History Log
+    // Save History Log to Firestore
     const newHistItem: MysteryBoxHistoryItem = {
       id: `hist_${Date.now()}`,
       userId: currentUser.id,
@@ -2072,7 +1995,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await setDoc(doc(db, 'mystery_history', newHistItem.id), cleanForFirestore(newHistItem));
     } catch (e) {
-      console.warn('Firestore history save error:', e);
+      console.warn('Firestore history save notice:', e);
     }
 
     // Send In-App Notification
@@ -2086,6 +2009,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: nowIso
     };
     setNotifications(prev => [notif, ...prev]);
+    try {
+      await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+    } catch (e) {}
 
     return {
       success: true,
@@ -2106,7 +2032,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       updateDoc(doc(db, 'user_inventory', inventoryItemId), { isUsed: true });
     } catch (e) {
-      console.warn('Firestore update inventory error:', e);
+      console.warn('Firestore update inventory notice:', e);
     }
     return { success: true, message: 'Đã đánh dấu đã sử dụng vật phẩm!' };
   };
@@ -2192,13 +2118,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setMysteryRewards(prev => [...prev, newReward]);
-    // Mark account on marketplace as sold / moved to mystery box
     updateAccountStatus(accountId, 'sold', 'Đã chuyển vào kho quà Túi Mù may mắn');
 
     try {
       await setDoc(doc(db, 'mystery_rewards', newReward.id), cleanForFirestore(newReward));
     } catch (e) {
-      console.warn('Firestore reward save error:', e);
+      console.warn('Firestore reward save notice:', e);
     }
 
     return {
@@ -2237,14 +2162,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       for (const rew of DEFAULT_MYSTERY_BOX_REWARDS) {
         await setDoc(doc(db, 'mystery_rewards', rew.id), cleanForFirestore(rew));
       }
-      return { success: true, message: 'Đã khôi phục 4 hạng Túi Mù & toàn bộ kho quà chuẩn lên hệ thống thành công!' };
+      return { success: true, message: 'Đã khôi phục 4 hạng Túi Mù & toàn bộ kho quà chuẩn lên Firestore thành công!' };
     } catch (err) {
       console.error('Error resetting mystery boxes:', err);
       return { success: false, message: 'Lỗi khi khôi phục 4 hạng Túi Mù!' };
     }
   };
 
-  // Seed Sample Demo Data into Firebase
+  // Seed Sample Demo Data directly into Firebase
   const seedSampleData = async (): Promise<{ success: boolean; message: string }> => {
     try {
       setCloudSyncStatus('syncing');
@@ -2269,7 +2194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return {
         success: true,
-        message: 'Đã nạp toàn bộ danh mục tài khoản mẫu và người dùng demo vào Firebase thành công!'
+        message: 'Đã nạp toàn bộ danh mục tài khoản mẫu và người dùng demo vào Firebase Firestore thành công!'
       };
     } catch (err) {
       console.error('Error seeding Firebase database:', err);

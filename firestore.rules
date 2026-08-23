@@ -53,6 +53,18 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Categories & Taxonomy
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Site Settings
+    match /site_settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Mystery Boxes & Lucky Gacha
     match /mystery_boxes/{boxId} {
       allow read: if true;

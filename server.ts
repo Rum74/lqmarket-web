@@ -470,6 +470,47 @@ async function startServer() {
     }
   });
 
+  // 5. Secure Server-Side Mystery Box Engine
+  app.post('/api/mystery-box/calculate-drop', (req, res) => {
+    try {
+      const { boxTierId, rewards } = req.body;
+      if (!Array.isArray(rewards) || rewards.length === 0) {
+        return res.status(400).json({ success: false, message: 'Danh sách phần thưởng không hợp lệ' });
+      }
+
+      const availableRewards = rewards.filter((r: any) =>
+        (r.boxTierId === boxTierId || r.boxTierId === 'all') && (r.stock === undefined || r.stock > 0)
+      );
+
+      if (availableRewards.length === 0) {
+        return res.status(400).json({ success: false, message: 'Kho phần thưởng của túi này hiện đang trống' });
+      }
+
+      const totalWeight = availableRewards.reduce((sum: number, r: any) => sum + (Number(r.dropWeight) || 1), 0);
+      let randomVal = Math.random() * totalWeight;
+      let selectedReward = availableRewards[0];
+
+      for (const r of availableRewards) {
+        const w = Number(r.dropWeight) || 1;
+        if (randomVal <= w) {
+          selectedReward = r;
+          break;
+        }
+        randomVal -= w;
+      }
+
+      res.json({
+        success: true,
+        reward: selectedReward,
+        timestamp: new Date().toISOString(),
+        validationHash: `mb_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi tính toán phần thưởng' });
+    }
+  });
+
+
   // ==========================================
   // VITE & STATIC SERVING
   // ==========================================

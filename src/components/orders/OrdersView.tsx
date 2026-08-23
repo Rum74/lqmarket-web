@@ -76,16 +76,16 @@ export const OrdersView: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
-            onClick={() => loginUser('vanb.gamer@gmail.com', '123456')}
+            onClick={openLoginModal}
             className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
           >
-            Đăng Nhập Khách Mua Mẫu (1-Click)
+            Đăng Nhập Ngay
           </button>
           <button
-            onClick={openLoginModal}
+            onClick={() => openRegisterModal('buyer')}
             className="w-full sm:w-auto px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
           >
-            Đăng Nhập Tài Khoản Khác
+            Đăng Ký Tài Khoản
           </button>
         </div>
       </div>

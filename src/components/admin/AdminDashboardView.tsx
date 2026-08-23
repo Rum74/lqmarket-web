@@ -1135,12 +1135,17 @@ export const AdminDashboardView: React.FC = () => {
               {/* Seed Sample Demo Accounts */}
               <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-800/40 space-y-3 flex flex-col justify-between">
                 <div>
-                  <h5 className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-                    <Sparkles size={14} />
-                    <span>Nạp Dữ Liệu Mẫu Lên Firebase</span>
-                  </h5>
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                      <Sparkles size={14} />
+                      <span>Nạp Dữ Liệu Mẫu (Seed Data)</span>
+                    </h5>
+                    <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded font-mono font-bold">
+                      DEV ONLY
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Nạp lại danh sách tài khoản Liên Quân demo (VIP, Chiến Tướng, Nakroth Thứ Nguyên...) và user mẫu lên Firebase Firestore.
+                    Nạp lại danh sách tài khoản demo và tài khoản test lên Firestore để phục vụ thử nghiệm tính năng (Chỉ dùng khi test).
                   </p>
                 </div>
                 <button

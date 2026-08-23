@@ -4,6 +4,7 @@ import { RankTier, RareSkin, AccountItem } from '../../types';
 import { RankBadge } from '../common/RankBadge';
 import { compressImage } from '../../utils/imageCompressor';
 import { getDynamicSellerInfo } from '../../utils/sellerHelper';
+import { uploadImageToStorage } from '../../lib/storageService';
 import {
   PlusCircle,
   CheckCircle2,
@@ -131,19 +132,14 @@ export const SellAccountView: React.FC = () => {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.type.startsWith('image/')) {
-          // Compress image to fit well within Firestore quota (<100KB)
-          const compressedBase64 = await compressImage(file, {
-            maxWidth: 1024,
-            maxHeight: 768,
-            quality: 0.75,
-            mimeType: 'image/jpeg'
-          });
-          setSelectedImages(prev => [...prev, compressedBase64]);
+          // Upload to Firebase Storage or compress with high fidelity fallback
+          const uploadedUrl = await uploadImageToStorage(file, 'accounts');
+          setSelectedImages(prev => [...prev, uploadedUrl]);
         }
       }
     } catch (err) {
-      console.error('Error compressing uploaded screenshot:', err);
-      alert('Không thể nén hình ảnh tải lên. Vui lòng thử lại với định dạng JPEG hoặc PNG.');
+      console.error('Error uploading screenshot to Firebase Storage:', err);
+      alert('Không thể tải hình ảnh lên. Vui lòng thử lại với định dạng JPEG hoặc PNG.');
     } finally {
       setIsCompressingImage(false);
       if (fileInputRef.current) {
