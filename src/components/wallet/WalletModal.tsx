@@ -91,6 +91,11 @@ export const WalletModal: React.FC = () => {
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [checkPaymentMessage, setCheckPaymentMessage] = useState<string>('Đang tải, vui lòng đợi...');
 
+  // Manual Order Code Sync Recovery
+  const [manualSyncCode, setManualSyncCode] = useState<string>('');
+  const [isSyncingOrder, setIsSyncingOrder] = useState(false);
+  const [manualSyncFeedback, setManualSyncFeedback] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
+
   // Withdraw state - Automatically loaded from current user's profile
   const [withdrawAmount, setWithdrawAmount] = useState<number>(50000);
   const [userWithdrawBank, setUserWithdrawBank] = useState<string>('MB Bank (Ngân Hàng Quân Đội)');
@@ -148,14 +153,22 @@ export const WalletModal: React.FC = () => {
   const createPayOsLink = async (amountToDeposit: number, memoCode: string) => {
     setIsCreatingPayOsLink(true);
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const res = await fetch('/api/payos/create-payment-link', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           amount: amountToDeposit,
           description: `NAP ${memoCode}`,
-          returnUrl: `${window.location.origin}/?payment=success&code=${memoCode}`,
-          cancelUrl: `${window.location.origin}/?payment=cancelled&code=${memoCode}`
+          userId: currentUser?.id,
+          userName: currentUser?.name,
+          userEmail: currentUser?.email,
+          memoCode: memoCode,
+          returnUrl: `${window.location.origin}/?payment=success&orderCode=${memoCode}`,
+          cancelUrl: `${window.location.origin}/?payment=cancelled&orderCode=${memoCode}`
         })
       });
 
@@ -170,6 +183,82 @@ export const WalletModal: React.FC = () => {
       console.warn('Could not generate PayOS link, using standard VietQR fallback:', err);
     } finally {
       setIsCreatingPayOsLink(false);
+    }
+  };
+
+  // Manual Sync Specific Order Code (For transactions completed outside the window)
+  const handleSyncSpecificOrder = async (overrideCode?: string) => {
+    const targetCode = (overrideCode || manualSyncCode || (payOsOrderCode ? String(payOsOrderCode) : '')).trim();
+    if (!targetCode) {
+      setManualSyncFeedback({ type: 'error', msg: 'Vui lòng nhập mã đơn hàng PayOS!' });
+      return;
+    }
+
+    setIsSyncingOrder(true);
+    setManualSyncFeedback({ type: 'info', msg: 'Đang liên hệ cổng PayOS để kiểm tra giao dịch...' });
+
+    try {
+      // 1. Try manual-sync endpoint (which triggers creditUserDeposit on backend)
+      const syncRes = await fetch('/api/payos/manual-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderCode: Number(targetCode),
+          userId: currentUser?.id,
+          userEmail: currentUser?.email,
+          userName: currentUser?.name
+        })
+      });
+      const syncData = await syncRes.json();
+
+      if (syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+        const creditedAmount = syncData.amount || depositAmount || 50000;
+        depositBalance(
+          creditedAmount,
+          'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
+          `Đồng bộ PayOS đơn #${targetCode}`
+        );
+        setManualSyncFeedback({
+          type: 'success',
+          msg: `Thành công! Đã cộng +${creditedAmount.toLocaleString('vi-VN')}đ vào ví!`
+        });
+        try {
+          confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
+        } catch {}
+        return;
+      }
+
+      // 2. Fallback to check-payment endpoint
+      const checkRes = await fetch(`/api/payos/check-payment/${targetCode}`);
+      const checkData = await checkRes.json();
+
+      if (checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
+        const creditedAmount = checkData.amount || depositAmount || 50000;
+        depositBalance(
+          creditedAmount,
+          'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
+          `Đồng bộ PayOS đơn #${targetCode}`
+        );
+        setManualSyncFeedback({
+          type: 'success',
+          msg: `Thành công! Đã cộng +${creditedAmount.toLocaleString('vi-VN')}đ vào ví!`
+        });
+        try {
+          confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
+        } catch {}
+      } else {
+        setManualSyncFeedback({
+          type: 'error',
+          msg: `Đơn hàng #${targetCode} chưa ghi nhận thanh toán PAID trên PayOS (Trạng thái: ${checkData.status || 'PENDING'}).`
+        });
+      }
+    } catch (e: any) {
+      setManualSyncFeedback({
+        type: 'error',
+        msg: `Lỗi kết nối khi đồng bộ: ${e.message || 'Vui lòng thử lại sau.'}`
+      });
+    } finally {
+      setIsSyncingOrder(false);
     }
   };
 
@@ -679,6 +768,52 @@ export const WalletModal: React.FC = () => {
                       <CheckCircle2 size={16} />
                       <span>Nạp ngay</span>
                     </button>
+                  </div>
+
+                  {/* PayOS Manual Order Recovery Box (For users who paid but need instant sync) */}
+                  <div className="mt-2 p-3 bg-slate-950/80 border border-slate-800/90 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                        <RefreshCw size={13} className="text-amber-400" />
+                        <span>Đã thanh toán PayOS nhưng chưa thấy cộng tiền?</span>
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nhập mã đơn PayOS (VD: 1740398...)"
+                        value={manualSyncCode}
+                        onChange={e => setManualSyncCode(e.target.value)}
+                        className="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSyncSpecificOrder()}
+                        disabled={isSyncingOrder || !manualSyncCode.trim()}
+                        className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                      >
+                        <RefreshCw size={13} className={isSyncingOrder ? 'animate-spin' : ''} />
+                        <span>Đồng bộ ngay</span>
+                      </button>
+                    </div>
+                    {manualSyncFeedback && (
+                      <div
+                        className={`p-2 rounded-xl text-[11px] flex items-center gap-1.5 ${
+                          manualSyncFeedback.type === 'success'
+                            ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                            : manualSyncFeedback.type === 'error'
+                            ? 'bg-red-500/15 border border-red-500/30 text-red-300'
+                            : 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
+                        }`}
+                      >
+                        {manualSyncFeedback.type === 'success' ? (
+                          <CheckCircle size={13} className="shrink-0 text-emerald-400" />
+                        ) : (
+                          <AlertCircle size={13} className="shrink-0" />
+                        )}
+                        <span>{manualSyncFeedback.msg}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

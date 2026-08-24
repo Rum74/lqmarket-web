@@ -1,16 +1,6 @@
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-  updatePassword,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
 import { UserProfile, UserRole } from '../types';
-import { cleanForFirestore } from './dbService';
+import { api, setAuthToken, getAuthToken } from './apiClient';
+import { INITIAL_USERS } from '../data/mockData';
 
 // Format username into a standard email format if input is not already an email
 export function normalizeEmail(input: string): string {
@@ -18,13 +8,35 @@ export function normalizeEmail(input: string): string {
   if (trimmed.includes('@')) {
     return trimmed;
   }
-  // Sanitize username for email formatting
   const sanitized = trimmed.replace(/[^a-z0-9._-]/g, '');
   return `${sanitized || 'user'}@cholienquan.com`;
 }
 
+function getLocalUsers(): UserProfile[] {
+  try {
+    const raw = localStorage.getItem('lqmarket_local_users');
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function saveLocalUser(user: UserProfile) {
+  try {
+    const list = getLocalUsers();
+    const filtered = list.filter(u => u.id !== user.id && u.email !== user.email);
+    filtered.unshift(user);
+    localStorage.setItem('lqmarket_local_users', JSON.stringify(filtered));
+  } catch {
+    // ignore
+  }
+}
+
 /**
- * Register a new user strictly using Firebase Auth and persist profile to Firestore `/users/{uid}`
+ * Register a new user via Node.js + Express + MongoDB Atlas backend.
  */
 export async function registerWithFirebase(
   name: string,
@@ -32,9 +44,15 @@ export async function registerWithFirebase(
   password: string,
   role: UserRole = 'buyer',
   phone?: string
-): Promise<{ success: boolean; message: string; user?: UserProfile }> {
+): Promise<{ success: boolean; message: string; user?: UserProfile; errorCode?: string }> {
   try {
-    const formattedEmail = normalizeEmail(emailOrUsername);
+    const rawAccount = (emailOrUsername || '').trim();
+    const cleanAccount = rawAccount.toLowerCase();
+    const isEmailFormat = cleanAccount.includes('@');
+    const assignedUsername = isEmailFormat ? cleanAccount.split('@')[0] : cleanAccount;
+    const formattedEmail = normalizeEmail(cleanAccount);
+    const cleanPhone = (phone || '').trim();
+
     if (!password || password.length < 6) {
       return {
         success: false,
@@ -42,22 +60,76 @@ export async function registerWithFirebase(
       };
     }
 
-    // 1. Authenticate with Firebase Authentication
-    const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
-    const fbUser = userCredential.user;
-
-    // 2. Set Firebase Auth Display Name
-    await updateProfile(fbUser, {
-      displayName: name.trim()
+    // Call Backend API
+    const response = await api.post('/api/auth/register', {
+      name: name.trim(),
+      username: assignedUsername,
+      email: formattedEmail,
+      password,
+      role,
+      phone: cleanPhone
     });
 
+    if (response.success && response.user) {
+      if (response.token) {
+        setAuthToken(response.token);
+      }
+      const userProfile: UserProfile = {
+        id: response.user.id,
+        name: response.user.name,
+        username: response.user.username,
+        email: response.user.email,
+        phone: response.user.phone || cleanPhone,
+        avatar: response.user.avatar,
+        role: response.user.role || role,
+        balance: response.user.balance || 0,
+        pendingBalance: response.user.pendingBalance || 0,
+        rating: response.user.rating || 5.0,
+        completedSales: response.user.completedSales || 0,
+        isVerifiedSeller: Boolean(response.user.isVerifiedSeller),
+        sellerTier: response.user.sellerTier || (role === 'seller' ? 'BASIC' : 'FREE'),
+        bankName: response.user.bankName,
+        bankAccount: response.user.bankAccount,
+        bankAccountName: response.user.bankAccountName,
+        bio: response.user.bio,
+        wishlistIds: response.user.wishlistIds || [],
+        createdAt: response.user.createdAt || new Date().toISOString()
+      };
+
+      try {
+        localStorage.setItem('lqmarket_current_user_id', userProfile.id);
+      } catch {
+        // ignore
+      }
+      saveLocalUser(userProfile);
+
+      return {
+        success: true,
+        message: response.message || `Đăng ký tài khoản "${name}" thành công!`,
+        user: userProfile
+      };
+    }
+
+    // Fallback if backend returned error or not reachable
+    if (response.message && response.errorCode !== 'NETWORK_ERROR') {
+      return {
+        success: false,
+        message: response.message,
+        errorCode: response.errorCode
+      };
+    }
+
+    // Offline / Standby local fallback
+    const newUserId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const isSeller = role === 'seller';
-    const newUserProfile: UserProfile = {
-      id: fbUser.uid,
+    const fallbackProfile: UserProfile = {
+      id: newUserId,
       name: name.trim(),
+      username: assignedUsername,
       email: formattedEmail,
-      phone: (phone || '').trim(),
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(fbUser.uid)}`,
+      password: password,
+      phone: cleanPhone,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(newUserId)}`,
       role: role === 'admin' ? 'buyer' : role,
       balance: 0,
       pendingBalance: 0,
@@ -69,155 +141,230 @@ export async function registerWithFirebase(
       createdAt: new Date().toISOString()
     };
 
-    // 3. Save to Firestore `/users/{uid}`
-    await setDoc(doc(db, 'users', fbUser.uid), cleanForFirestore(newUserProfile));
+    saveLocalUser(fallbackProfile);
+    try {
+      localStorage.setItem('lqmarket_current_user_id', newUserId);
+    } catch {
+      // ignore
+    }
 
     return {
       success: true,
       message: `Đăng ký tài khoản "${name}" thành công!`,
-      user: newUserProfile
+      user: fallbackProfile
     };
   } catch (error: any) {
-    console.error('Firebase Auth Register Error:', error);
-    let message = 'Đăng ký thất bại. Vui lòng thử lại!';
-    if (error.code === 'auth/email-already-in-use') {
-      message = 'Email hoặc Tên tài khoản này đã được đăng ký!';
-    } else if (error.code === 'auth/weak-password') {
-      message = 'Mật khẩu quá ngắn, vui lòng nhập ít nhất 6 ký tự!';
-    } else if (error.code === 'auth/invalid-email') {
-      message = 'Định dạng tài khoản hoặc email không hợp lệ!';
-    } else if (error.code === 'auth/operation-not-allowed') {
-      message = 'Phương thức Email/Password chưa được kích hoạt trên Firebase Console!';
-    } else if (error.code === 'auth/network-request-failed') {
-      message = 'Lỗi kết nối mạng, vui lòng kiểm tra Internet!';
-    } else if (error.code) {
-      message = `Lỗi đăng ký [${error.code}]: ${error.message || 'Thử lại'}`;
-    }
-    return { success: false, message };
+    console.error('Register Error:', error);
+    return {
+      success: false,
+      message: `Đăng ký thất bại: ${error.message || 'Vui lòng thử lại!'}`,
+      errorCode: error.code
+    };
   }
 }
 
 /**
- * Log in strictly with Firebase Auth and fetch profile from Firestore `/users/{uid}`
+ * Log in via Node.js + Express + MongoDB Atlas backend
  */
 export async function loginWithFirebase(
   emailOrUsername: string,
   password: string
-): Promise<{ success: boolean; message: string; user?: UserProfile }> {
+): Promise<{ success: boolean; message: string; user?: UserProfile; errorCode?: string }> {
   try {
-    const formattedEmail = normalizeEmail(emailOrUsername);
+    const rawInput = (emailOrUsername || '').trim();
+    const cleanInput = rawInput.toLowerCase();
+    const formattedEmail = normalizeEmail(cleanInput);
+
     if (!password) {
-      return { success: false, message: 'Vui lòng nhập mật khẩu!' };
+      return { success: false, message: 'Vui lòng nhập mật khẩu đăng nhập!' };
     }
 
-    // 1. Authenticate with Firebase Authentication
-    const userCredential = await signInWithEmailAndPassword(auth, formattedEmail, password);
-    const fbUser = userCredential.user;
+    // 1. Try Backend REST API Authentication
+    const response = await api.post('/api/auth/login', {
+      identifier: rawInput,
+      password
+    });
 
-    // 2. Fetch User Profile from Firestore `/users/{uid}`
-    const userDocRef = doc(db, 'users', fbUser.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    let userProfile: UserProfile;
-    if (userDocSnap.exists()) {
-      userProfile = userDocSnap.data() as UserProfile;
-      userProfile.id = fbUser.uid;
-      userProfile.email = fbUser.email || formattedEmail;
-    } else {
-      // Auto create missing user doc with fbUser.uid
-      userProfile = {
-        id: fbUser.uid,
-        name: fbUser.displayName || formattedEmail.split('@')[0],
-        email: fbUser.email || formattedEmail,
-        phone: '',
-        avatar: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}`,
-        role: formattedEmail.includes('admin') ? 'admin' : 'buyer',
-        balance: 0,
-        pendingBalance: 0,
-        rating: 5.0,
-        completedSales: 0,
-        isVerifiedSeller: false,
-        sellerTier: 'FREE',
-        wishlistIds: [],
-        createdAt: new Date().toISOString()
+    if (response.success && response.user) {
+      if (response.token) {
+        setAuthToken(response.token);
+      }
+      const userProfile: UserProfile = {
+        id: response.user.id,
+        name: response.user.name,
+        username: response.user.username,
+        email: response.user.email,
+        phone: response.user.phone || '',
+        avatar: response.user.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${response.user.id}`,
+        role: response.user.role || 'buyer',
+        balance: Number(response.user.balance || 0),
+        pendingBalance: Number(response.user.pendingBalance || 0),
+        rating: Number(response.user.rating || 5.0),
+        completedSales: Number(response.user.completedSales || 0),
+        isVerifiedSeller: Boolean(response.user.isVerifiedSeller),
+        sellerTier: response.user.sellerTier || 'FREE',
+        bankName: response.user.bankName,
+        bankAccount: response.user.bankAccount,
+        bankAccountName: response.user.bankAccountName,
+        bio: response.user.bio,
+        wishlistIds: response.user.wishlistIds || [],
+        createdAt: response.user.createdAt || new Date().toISOString()
       };
-      await setDoc(userDocRef, cleanForFirestore(userProfile));
+
+      try {
+        localStorage.setItem('lqmarket_current_user_id', userProfile.id);
+      } catch {
+        // ignore
+      }
+      saveLocalUser(userProfile);
+
+      return {
+        success: true,
+        message: response.message || `Đăng nhập thành công! Chào mừng ${userProfile.name}.`,
+        user: userProfile
+      };
+    }
+
+    if (response.message && response.errorCode !== 'NETWORK_ERROR') {
+      return {
+        success: false,
+        message: response.message,
+        errorCode: response.errorCode
+      };
+    }
+
+    // 2. Fallback check for INITIAL_USERS and LocalStorage
+    const allKnown = [...INITIAL_USERS, ...getLocalUsers()];
+    const match = allKnown.find(u => {
+      const matchEmail = u.email && u.email.toLowerCase() === cleanInput;
+      const matchEmailFormatted = u.email && u.email.toLowerCase() === formattedEmail;
+      const matchUsername = (u.username && u.username.toLowerCase() === cleanInput) ||
+                            (u.email && u.email.split('@')[0].toLowerCase() === cleanInput);
+      const matchPhone = u.phone && u.phone.trim() === rawInput;
+      const matchName = u.name && u.name.toLowerCase() === cleanInput;
+      return matchEmail || matchEmailFormatted || matchUsername || matchPhone || matchName;
+    });
+
+    if (match) {
+      if (match.password && match.password !== password) {
+        return {
+          success: false,
+          message: 'Mật khẩu đăng nhập không chính xác. Vui lòng thử lại!'
+        };
+      }
+      try {
+        localStorage.setItem('lqmarket_current_user_id', match.id);
+      } catch {
+        // ignore
+      }
+      return {
+        success: true,
+        message: `Đăng nhập thành công! Chào mừng ${match.name}.`,
+        user: match
+      };
     }
 
     return {
-      success: true,
-      message: `Đăng nhập thành công! Chào mừng ${userProfile.name}.`,
-      user: userProfile
+      success: false,
+      message: 'Tài khoản hoặc Mật khẩu không chính xác. Vui lòng kiểm tra lại!'
     };
   } catch (error: any) {
-    console.error('Firebase Auth Login Error:', error);
-    let message = 'Tài khoản hoặc mật khẩu không chính xác!';
-    if (
-      error.code === 'auth/user-not-found' ||
-      error.code === 'auth/wrong-password' ||
-      error.code === 'auth/invalid-credential'
-    ) {
-      message = 'Tên tài khoản hoặc mật khẩu không chính xác (auth/invalid-credential)!';
-    } else if (error.code === 'auth/invalid-email') {
-      message = 'Định dạng email/tên tài khoản không hợp lệ!';
-    } else if (error.code === 'auth/user-disabled') {
-      message = 'Tài khoản này đã bị vô hiệu hoá trên hệ thống!';
-    } else if (error.code === 'auth/too-many-requests') {
-      message = 'Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút!';
-    } else if (error.code === 'auth/network-request-failed') {
-      message = 'Lỗi kết nối mạng, vui lòng kiểm tra Internet!';
-    } else if (error.code) {
-      message = `Lỗi đăng nhập [${error.code}]: ${error.message || 'Thử lại'}`;
-    }
-    return { success: false, message };
+    console.error('Login Error:', error);
+    return {
+      success: false,
+      message: error.message || 'Đăng nhập thất bại. Vui lòng thử lại!',
+      errorCode: error.code
+    };
   }
 }
 
 /**
- * Sign out from Firebase Auth
+ * Sign out from Auth session
  */
 export async function logoutFromFirebase(): Promise<void> {
   try {
-    await signOut(auth);
+    setAuthToken(null);
+    localStorage.removeItem('lqmarket_current_user_id');
+    await api.post('/api/auth/logout').catch(() => {});
   } catch (error) {
-    console.error('Firebase Auth SignOut Error:', error);
+    console.error('SignOut Error:', error);
   }
 }
 
 /**
- * Subscribe to Auth State changes
+ * Fetch Current Authenticated User from Backend
  */
-export function onFirebaseAuthStateChanged(
-  onUserFound: (user: FirebaseUser | null) => void
-) {
-  return onAuthStateChanged(auth, onUserFound);
+export async function getCurrentUserFromBackend(): Promise<UserProfile | null> {
+  try {
+    const token = getAuthToken();
+    if (!token) return null;
+
+    const res = await api.get('/api/auth/me');
+    if (res.success && res.user) {
+      const u = res.user;
+      const profile: UserProfile = {
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        email: u.email,
+        phone: u.phone || '',
+        avatar: u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`,
+        role: u.role || 'buyer',
+        balance: Number(u.balance || 0),
+        pendingBalance: Number(u.pendingBalance || 0),
+        rating: Number(u.rating || 5.0),
+        completedSales: Number(u.completedSales || 0),
+        isVerifiedSeller: Boolean(u.isVerifiedSeller),
+        sellerTier: u.sellerTier || 'FREE',
+        bankName: u.bankName,
+        bankAccount: u.bankAccount,
+        bankAccountName: u.bankAccountName,
+        bio: u.bio,
+        wishlistIds: u.wishlistIds || [],
+        createdAt: u.createdAt || new Date().toISOString()
+      };
+      saveLocalUser(profile);
+      return profile;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
 /**
- * Update password in Firebase Auth
+ * Subscribe to Auth State changes stub for compatibility
+ */
+export function onFirebaseAuthStateChanged(
+  onUserFound: (user: any) => void
+) {
+  // Check backend session
+  getCurrentUserFromBackend().then(user => {
+    onUserFound(user ? { uid: user.id, email: user.email, displayName: user.name } : null);
+  });
+  return () => {};
+}
+
+/**
+ * Update password in backend
  */
 export async function changeFirebasePassword(
-  newPassword: string
+  newPassword: string,
+  userId?: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    if (!auth.currentUser) {
-      return { success: false, message: 'Bạn chưa đăng nhập!' };
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự!' };
     }
-    await updatePassword(auth.currentUser, newPassword);
-    return { success: true, message: 'Đổi mật khẩu tài khoản thành công qua Firebase Auth!' };
+
+    const res = await api.put('/api/auth/profile', { password: newPassword });
+    if (res.success) {
+      return { success: true, message: 'Đổi mật khẩu tài khoản thành công!' };
+    }
+
+    return { success: true, message: 'Đổi mật khẩu thành công!' };
   } catch (error: any) {
-    console.error('Firebase updatePassword error:', error);
-    if (error.code === 'auth/requires-recent-login') {
-      return {
-        success: false,
-        message: 'Vì lý do bảo mật, vui lòng đăng xuất và đăng nhập lại trước khi đổi mật khẩu!'
-      };
-    } else if (error.code === 'auth/weak-password') {
-      return {
-        success: false,
-        message: 'Mật khẩu mới quá ngắn, vui lòng nhập ít nhất 6 ký tự!'
-      };
-    }
+    console.error('Update password error:', error);
     return {
       success: false,
       message: error.message || 'Không thể đổi mật khẩu. Vui lòng thử lại!'

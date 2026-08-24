@@ -5,6 +5,7 @@ import { UserProfile, UserRole } from '../../types';
 import confetti from '../../utils/confetti';
 import { AdminPayoutManagement } from './AdminPayoutManagement';
 import { AdminMysteryBoxManagement } from './AdminMysteryBoxManagement';
+import { migrateFirestoreToSupabase, MigrationSummary } from '../../lib/migrationService';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -38,7 +39,9 @@ import {
   X,
   Key,
   BadgeCheck,
-  PackageOpen
+  PackageOpen,
+  Database,
+  UploadCloud
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -72,6 +75,8 @@ export const AdminDashboardView: React.FC = () => {
   const [isWipingData, setIsWipingData] = useState(false);
   const [isSeedingData, setIsSeedingData] = useState(false);
   const [showWipeConfirmModal, setShowWipeConfirmModal] = useState(false);
+  const [isMigratingToSupabase, setIsMigratingToSupabase] = useState(false);
+  const [migrationSummaries, setMigrationSummaries] = useState<MigrationSummary[] | null>(null);
 
   // User Management State
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -1092,6 +1097,59 @@ export const AdminDashboardView: React.FC = () => {
           </div>
 
           <div className="pt-4 border-t border-slate-800 space-y-4">
+            {/* Supabase Cloud Status & Migration */}
+            <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                    <Database size={15} className="text-emerald-400" />
+                    <span>Supabase Cloud PostgreSQL & Storage:</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      🟢 SUPABASE CONNECTED
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Project Ref: <code className="text-emerald-400 font-mono">pbyynherzipobltfejhj</code> (PostgreSQL 15 + RLS + Storage)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isMigratingToSupabase}
+                  onClick={async () => {
+                    setIsMigratingToSupabase(true);
+                    try {
+                      const res = await migrateFirestoreToSupabase();
+                      setMigrationSummaries(res.summaries);
+                      showNotification(res.message);
+                    } catch (e: any) {
+                      showNotification(`Lỗi chuyển đổi: ${e.message}`);
+                    } finally {
+                      setIsMigratingToSupabase(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <UploadCloud size={14} className={isMigratingToSupabase ? 'animate-bounce' : ''} />
+                  <span>{isMigratingToSupabase ? 'Đang chuyển dữ liệu...' : 'Đồng Bộ 1-Click: Firestore -> Supabase'}</span>
+                </button>
+              </div>
+
+              {migrationSummaries && (
+                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px] space-y-1.5 animate-in fade-in">
+                  <div className="font-bold text-emerald-400">Kết quả chuyển đổi dữ liệu:</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {migrationSummaries.map((s, idx) => (
+                      <div key={idx} className="p-2 bg-slate-900 rounded-lg border border-slate-800">
+                        <div className="text-slate-400 text-[10px] truncate">{s.collection}</div>
+                        <div className="font-bold text-white text-xs">{s.migrated} / {s.totalSource} thành công</div>
+                        {s.failed > 0 && <div className="text-rose-400 text-[10px]">{s.failed} lỗi</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-xs font-bold text-white flex items-center gap-2">

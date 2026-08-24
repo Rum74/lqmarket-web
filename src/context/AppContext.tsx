@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   AccountItem,
   UserProfile,
@@ -20,6 +20,24 @@ import {
   DEFAULT_MYSTERY_BOX_REWARDS,
   DEFAULT_MYSTERY_BOX_HISTORY
 } from '../data/mysteryBoxData';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  registerWithSupabase,
+  loginWithSupabase,
+  logoutFromSupabase
+} from '../lib/supabaseAuth';
+import {
+  saveSupabaseAccount,
+  saveSupabaseOrder,
+  saveSupabaseTransaction,
+  openMysteryBoxViaSupabaseRPC,
+  getSupabaseAccounts,
+  getSupabaseMysteryBoxes,
+  getSupabaseMysteryRewards,
+  getSupabaseOrders,
+  getSupabaseProfiles,
+  saveSupabaseProfile
+} from '../lib/supabaseDb';
 import { db, auth } from '../lib/firebase';
 import {
   registerWithFirebase,
@@ -240,10 +258,39 @@ export const GUEST_USER: UserProfile = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Pure State synchronized directly with Firestore (No localStorage dependency)
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  // Reliable State synchronized with Supabase, Firestore and Local storage
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
+    try {
+      const rawLocal = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_local_users') : null;
+      const localUsers: UserProfile[] = rawLocal ? JSON.parse(rawLocal) : [];
+      const savedProfile = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
+      const activeUser = savedProfile ? [JSON.parse(savedProfile)] : [];
+      const combined = [...activeUser, ...localUsers, ...INITIAL_USERS];
+      const map = new Map<string, UserProfile>();
+      combined.forEach(u => {
+        if (u && u.id) map.set(u.id, u);
+      });
+      return Array.from(map.values());
+    } catch {
+      return INITIAL_USERS;
+    }
+  });
+
+  const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    try {
+      return (typeof window !== 'undefined' && localStorage.getItem('lqmarket_current_user_id')) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return Boolean(typeof window !== 'undefined' && localStorage.getItem('lqmarket_current_user_id'));
+    } catch {
+      return false;
+    }
+  });
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
@@ -280,34 +327,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Filters
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(DEFAULT_FILTERS);
 
-  // Listen to Firebase Auth state - STRICTLY NO AUTO-LOGIN
+  // Listen to Firebase Auth state & restore saved user session
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         setCurrentUserId(fbUser.uid);
         setIsLoggedIn(true);
+        try {
+          localStorage.setItem('lqmarket_current_user_id', fbUser.uid);
+        } catch {
+          // ignore
+        }
         // Sync user document from Firestore
         try {
           const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
           if (userDoc.exists()) {
             const data = userDoc.data() as UserProfile;
+            data.id = fbUser.uid;
             setAllUsers(prev => {
               const filtered = prev.filter(u => u.id !== fbUser.uid);
               return [data, ...filtered];
             });
+            try {
+              localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(data));
+            } catch {
+              // ignore
+            }
           }
         } catch (e) {
           console.warn('Error fetching auth user profile:', e);
         }
       } else {
-        // Visitor / Guest: Always unauthenticated
-        setCurrentUserId('');
-        setIsLoggedIn(false);
+        // Check if there is an active saved user session in localStorage
+        const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_id') : null;
+        if (savedUserId) {
+          setCurrentUserId(savedUserId);
+          setIsLoggedIn(true);
+        }
       }
     });
 
     return () => unsubscribeAuth();
   }, []);
+
+  // Handle PayOS Payment Redirect URL on App Startup (?payment=success&code=... or &orderCode=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    const orderCode = params.get('orderCode') || params.get('code');
+
+    if (paymentStatus === 'success' && orderCode) {
+      const numCode = Number(orderCode);
+      if (numCode) {
+        fetch(`/api/payos/check-payment/${numCode}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && (data.status === 'PAID' || data.isPaid)) {
+              depositBalance(
+                data.amount || 50000,
+                'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
+                `Khách chuyển khoản PayOS đơn #${numCode}`
+              );
+            }
+          })
+          .catch(e => console.warn('PayOS URL check notice:', e))
+          .finally(() => {
+            try {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            } catch {}
+          });
+      }
+    }
+  }, [currentUserId]);
 
   // Firestore Sync Mechanism (Real-time Cloud Database Integration for all collections)
   useEffect(() => {
@@ -414,7 +506,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 });
               }
             });
-            setAllUsers(cloudUsers);
+            if (cloudUsers.length > 0) {
+              setAllUsers(prev => {
+                const map = new Map<string, UserProfile>();
+                INITIAL_USERS.forEach(u => map.set(u.id, u));
+                prev.forEach(u => map.set(u.id, u));
+                cloudUsers.forEach(u => map.set(u.id, u));
+                return Array.from(map.values());
+              });
+            }
           },
           err => console.warn('Firestore users listener notice:', err)
         );
@@ -594,10 +694,93 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  const currentUser =
-    isLoggedIn && currentUserId
-      ? (allUsers && allUsers.find(u => u && u.id === currentUserId)) || GUEST_USER
-      : GUEST_USER;
+  // Supabase PostgreSQL Real-time & Initial Fetch
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const fetchSupabaseData = async () => {
+      try {
+        const [supaAccs, supaBoxes, supaRewards, supaOrders, supaProfiles] = await Promise.allSettled([
+          getSupabaseAccounts(),
+          getSupabaseMysteryBoxes(),
+          getSupabaseMysteryRewards(),
+          getSupabaseOrders(),
+          getSupabaseProfiles()
+        ]);
+
+        if (supaAccs.status === 'fulfilled' && supaAccs.value.length > 0) {
+          setAccounts(supaAccs.value);
+        }
+        if (supaBoxes.status === 'fulfilled' && supaBoxes.value.length > 0) {
+          setMysteryBoxes(supaBoxes.value);
+        }
+        if (supaRewards.status === 'fulfilled' && supaRewards.value.length > 0) {
+          setMysteryRewards(supaRewards.value);
+        }
+        if (supaOrders.status === 'fulfilled' && supaOrders.value.length > 0) {
+          setOrders(supaOrders.value);
+        }
+        if (supaProfiles.status === 'fulfilled' && supaProfiles.value.length > 0) {
+          setAllUsers(prev => {
+            const map = new Map<string, UserProfile>();
+            INITIAL_USERS.forEach(u => map.set(u.id, u));
+            prev.forEach(u => map.set(u.id, u));
+            supaProfiles.value.forEach(u => map.set(u.id, u));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase data load notice:', err);
+      }
+    };
+
+    fetchSupabaseData();
+  }, []);
+
+  const currentUser = useMemo(() => {
+    if (!isLoggedIn || !currentUserId) return GUEST_USER;
+
+    // 1. Check allUsers state
+    const matchInAll = allUsers.find(
+      u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
+    );
+    if (matchInAll) return matchInAll;
+
+    // 2. Check INITIAL_USERS (Super Admin, default accounts)
+    const matchInInit = INITIAL_USERS.find(
+      u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
+    );
+    if (matchInInit) return matchInInit;
+
+    // 3. Check localStorage saved user profile
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.id === currentUserId || parsed.email?.toLowerCase() === currentUserId.toLowerCase())) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 4. Check localStorage local users
+    try {
+      const rawLocal = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_local_users') : null;
+      if (rawLocal) {
+        const list = JSON.parse(rawLocal) as UserProfile[];
+        const localMatch = list.find(
+          u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
+        );
+        if (localMatch) return localMatch;
+      }
+    } catch {
+      // ignore
+    }
+
+    return GUEST_USER;
+  }, [isLoggedIn, currentUserId, allUsers]);
 
   // Sync wishlist to current user's profile
   useEffect(() => {
@@ -623,10 +806,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!password) {
       return { success: false, message: 'Vui lòng nhập mật khẩu đăng nhập!' };
     }
+    // 1. Try Supabase Auth first if configured
+    if (isSupabaseConfigured) {
+      const supaRes = await loginWithSupabase(identifier, password);
+      if (supaRes.success && supaRes.user) {
+        const loggedUser = supaRes.user;
+        setCurrentUserId(loggedUser.id);
+        setIsLoggedIn(true);
+        setAllUsers(prev => [loggedUser, ...prev.filter(u => u && u.id !== loggedUser.id)]);
+        try {
+          localStorage.setItem('lqmarket_current_user_id', loggedUser.id);
+          localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(loggedUser));
+        } catch {
+          // ignore
+        }
+        setIsAuthModalOpen(false);
+        return { success: true, message: supaRes.message };
+      }
+    }
+    // 2. Fallback to Firebase Auth / Local Auth
     const res = await loginWithFirebase(identifier, password);
     if (res.success && res.user) {
-      setCurrentUserId(res.user.id);
+      const loggedUser = res.user;
+      setCurrentUserId(loggedUser.id);
       setIsLoggedIn(true);
+      setAllUsers(prev => [loggedUser, ...prev.filter(u => u && u.id !== loggedUser.id)]);
+      try {
+        localStorage.setItem('lqmarket_current_user_id', loggedUser.id);
+        localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(loggedUser));
+      } catch {
+        // ignore
+      }
+      if (isSupabaseConfigured) {
+        saveSupabaseProfile(loggedUser).catch(() => {});
+      }
       setIsAuthModalOpen(false);
       return { success: true, message: res.message };
     }
@@ -640,18 +853,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole,
     phone: string = ''
   ): Promise<{ success: boolean; message: string }> => {
+    // 1. Try Supabase Auth first if configured
+    if (isSupabaseConfigured) {
+      const supaRes = await registerWithSupabase(name, usernameOrEmail, password, role, phone);
+      if (supaRes.success && supaRes.user) {
+        const regUser = supaRes.user;
+        setCurrentUserId(regUser.id);
+        setIsLoggedIn(true);
+        setAllUsers(prev => [regUser, ...prev.filter(u => u && u.id !== regUser.id)]);
+        try {
+          localStorage.setItem('lqmarket_current_user_id', regUser.id);
+          localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(regUser));
+        } catch {
+          // ignore
+        }
+        setIsAuthModalOpen(false);
+        return { success: true, message: supaRes.message };
+      }
+    }
+
+    // 2. Fallback to Firebase Auth
     const res = await registerWithFirebase(name, usernameOrEmail, password, role, phone);
     if (res.success && res.user) {
-      setCurrentUserId(res.user.id);
+      const regUser = res.user;
+      setCurrentUserId(regUser.id);
       setIsLoggedIn(true);
+      setAllUsers(prev => [regUser, ...prev.filter(u => u && u.id !== regUser.id)]);
+      try {
+        localStorage.setItem('lqmarket_current_user_id', regUser.id);
+        localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(regUser));
+      } catch {
+        // ignore
+      }
+      if (isSupabaseConfigured) {
+        saveSupabaseProfile(regUser).catch(() => {});
+      }
       setIsAuthModalOpen(false);
 
       // Create welcome notification
       const welcomeNotif: AppNotification = {
         id: `notif_${Date.now()}`,
-        userId: res.user.id,
+        userId: regUser.id,
         title: 'Đăng ký tài khoản thành công',
-        message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được đồng bộ trực tiếp trên Cloud Firestore.`,
+        message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được đồng bộ trực tiếp trên Supabase và Cloud Firestore.`,
         type: 'system',
         read: false,
         createdAt: new Date().toISOString()
@@ -669,7 +913,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logoutUser = async () => {
+    if (isSupabaseConfigured) {
+      await logoutFromSupabase();
+    }
     await logoutFromFirebase();
+    try {
+      localStorage.removeItem('lqmarket_current_user_id');
+      localStorage.removeItem('lqmarket_saved_user_profile');
+    } catch {
+      // ignore
+    }
     setIsLoggedIn(false);
     setCurrentUserId('');
     setCurrentView('home');
@@ -691,6 +944,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAllUsers(prev =>
       prev.map(u => (u.id === currentUserId ? { ...u, ...data } : u))
     );
+
+    const updatedUser = { ...currentUser, ...data };
+    try {
+      localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(updatedUser));
+    } catch {
+      // ignore
+    }
+
+    if (isSupabaseConfigured) {
+      saveSupabaseProfile(updatedUser).catch(() => {});
+    }
 
     try {
       await setDoc(doc(db, 'users', currentUserId), cleanForFirestore(data), { merge: true });
@@ -782,8 +1046,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setAccounts(prev => [newAccount, ...prev]);
 
-    // Save to Firestore accounts collection
+    // Save to Firestore & Supabase accounts collection
     try {
+      if (isSupabaseConfigured) {
+        saveSupabaseAccount(newAccount).catch(err => console.warn('Supabase account save:', err));
+      }
       await setDoc(doc(db, 'accounts', newId), cleanForFirestore(newAccount));
     } catch (e) {
       console.warn('Firestore write notice:', e);
@@ -951,8 +1218,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + sellerNetPending } : u))
     );
 
-    // Sync to Firestore
+    // Sync to Firestore & Supabase
     try {
+      if (isSupabaseConfigured) {
+        saveSupabaseOrder(newOrder).catch(err => console.warn('Supabase order save:', err));
+        saveSupabaseTransaction(buyerTx).catch(err => console.warn('Supabase tx save:', err));
+      }
       setDoc(doc(db, 'orders', orderId), cleanForFirestore(newOrder));
       setDoc(doc(db, 'transactions', buyerTx.id), cleanForFirestore(buyerTx));
       updateDoc(doc(db, 'accounts', acc.id), { status: 'sold' });
@@ -1197,15 +1468,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Wallet & Payment Gateway API
   const depositBalance = (amount: number, method: string, note: string = 'Nạp tiền vào ví LQMarket Pay') => {
+    const numAmount = Math.max(0, Number(amount) || 0);
+    if (!numAmount) return;
+
+    const targetUserId = currentUser.id || currentUserId;
+    const newBal = (currentUser.balance || 0) + numAmount;
+
+    // 1. Update state
     setAllUsers(prev =>
-      prev.map(u => (u.id === currentUser.id ? { ...u, balance: u.balance + amount } : u))
+      prev.map(u => {
+        if (!u) return u;
+        if (
+          (targetUserId && u.id === targetUserId) ||
+          (currentUser.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase())
+        ) {
+          return { ...u, balance: (u.balance || 0) + numAmount };
+        }
+        return u;
+      })
     );
+
+    // 2. Persist to localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const savedRaw = localStorage.getItem('lqmarket_saved_user_profile');
+        if (savedRaw) {
+          const profile = JSON.parse(savedRaw);
+          profile.balance = (profile.balance || 0) + numAmount;
+          localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(profile));
+        }
+        const localUsersRaw = localStorage.getItem('lqmarket_local_users');
+        if (localUsersRaw) {
+          const list = JSON.parse(localUsersRaw) as UserProfile[];
+          const updated = list.map(u =>
+            u.id === targetUserId || (currentUser.email && u.email?.toLowerCase() === currentUser.email.toLowerCase())
+              ? { ...u, balance: (u.balance || 0) + numAmount }
+              : u
+          );
+          localStorage.setItem('lqmarket_local_users', JSON.stringify(updated));
+        }
+      }
+    } catch (e) {
+      console.warn('LocalStorage save notice:', e);
+    }
 
     const newTx: WalletTransaction = {
       id: `tx_${Date.now()}`,
-      userId: currentUser.id,
+      userId: targetUserId || 'user_guest',
+      userName: currentUser.name,
+      userEmail: currentUser.email,
       type: 'deposit',
-      amount: amount,
+      amount: numAmount,
       status: 'success',
       note: `${note} (${method.toUpperCase()})`,
       createdAt: new Date().toISOString()
@@ -1214,16 +1527,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
-      updateDoc(doc(db, 'users', currentUser.id), { balance: currentUser.balance + amount });
+      if (targetUserId) {
+        updateDoc(doc(db, 'users', targetUserId), { balance: newBal });
+      }
     } catch (e) {
       console.warn('Firestore deposit notice:', e);
     }
 
     const notif: AppNotification = {
       id: `notif_${Date.now()}`,
-      userId: currentUser.id,
+      userId: targetUserId || 'user_guest',
       title: 'Nạp tiền thành công',
-      message: `Ví của bạn vừa được cộng +${amount.toLocaleString('vi-VN')}đ qua ${method.toUpperCase()}.`,
+      message: `Ví của bạn vừa được cộng +${numAmount.toLocaleString('vi-VN')}đ qua ${method.toUpperCase()}.`,
       type: 'wallet',
       read: false,
       createdAt: new Date().toISOString()

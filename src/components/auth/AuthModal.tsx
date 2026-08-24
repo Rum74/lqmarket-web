@@ -176,9 +176,12 @@ export const AuthModal: React.FC = () => {
 
         {/* Error / Success Feedback Banner */}
         {errorMessage && (
-          <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
-            <AlertCircle size={16} className="text-rose-400 shrink-0" />
-            <span>{errorMessage}</span>
+          <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs text-rose-300 flex items-start gap-2">
+            <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <span className="font-semibold block text-rose-200">Thông báo:</span>
+              <span>{errorMessage}</span>
+            </div>
           </div>
         )}
 
@@ -373,3 +376,4 @@ export const AuthModal: React.FC = () => {
     </div>
   );
 };
+

@@ -4,6 +4,7 @@ import { RankTier, RareSkin, AccountItem } from '../../types';
 import { RankBadge } from '../common/RankBadge';
 import { compressImage } from '../../utils/imageCompressor';
 import { getDynamicSellerInfo } from '../../utils/sellerHelper';
+import { uploadImageToSupabaseStorage } from '../../lib/supabaseStorage';
 import { uploadImageToStorage } from '../../lib/storageService';
 import {
   PlusCircle,
@@ -131,8 +132,14 @@ export const SellAccountView: React.FC = () => {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.type.startsWith('image/')) {
-          // Upload to Firebase Storage or compress with high fidelity fallback
-          const uploadedUrl = await uploadImageToStorage(file, 'accounts');
+          // Upload to Supabase Storage with graceful fallback
+          let uploadedUrl = '';
+          try {
+            uploadedUrl = await uploadImageToSupabaseStorage(file, 'accounts');
+          } catch {
+            const fbRes = await uploadImageToStorage(file, 'accounts');
+            uploadedUrl = fbRes.url;
+          }
           setSelectedImages(prev => [...prev, uploadedUrl]);
         }
       }

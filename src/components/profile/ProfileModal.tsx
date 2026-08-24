@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { compressAvatar } from '../../utils/imageCompressor';
+import { changeSupabasePassword } from '../../lib/supabaseAuth';
 import { changeFirebasePassword } from '../../lib/authService';
 import {
   User,
@@ -233,7 +234,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
     setIsSaving(true);
     try {
-      const res = await changeFirebasePassword(newPassword);
+      let res = await changeSupabasePassword(newPassword);
+      if (!res.success) {
+        res = await changeFirebasePassword(newPassword, currentUser.id);
+      }
       if (res.success) {
         setCurrentPassword('');
         setNewPassword('');
@@ -243,7 +247,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         showToast('error', res.message);
       }
     } catch {
-      showToast('error', 'Không thể đổi mật khẩu qua Firebase Auth');
+      showToast('error', 'Không thể đổi mật khẩu. Vui lòng thử lại sau.');
     } finally {
       setIsSaving(false);
     }
