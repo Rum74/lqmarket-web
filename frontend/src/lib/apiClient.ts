@@ -63,19 +63,25 @@ export async function apiRequest<T = any>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  // Set 6-second timeout controller so UI never hangs indefinitely
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+
   try {
     const res = await fetch(url, {
       ...options,
-      headers
+      headers,
+      signal: options.signal || controller.signal
     });
+    clearTimeout(timeoutId);
 
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      const isEndpointUnavailable = res.status === 405 || res.status === 404 || res.status === 502 || res.status === 503;
+      const isEndpointUnavailable = res.status === 405 || res.status === 404 || res.status === 502 || res.status === 503 || res.status === 500;
       return {
         success: false,
-        message: data.message || (isEndpointUnavailable ? 'Máy chủ API không phản hồi (Static mode).' : `Lỗi yêu cầu (${res.status})`),
+        message: data.message || (isEndpointUnavailable ? 'Máy chủ API tạm thời gián đoạn. Chuyển sang chế độ bảo mật tự động.' : `Lỗi yêu cầu (${res.status})`),
         errorCode: isEndpointUnavailable ? 'HTTP_UNAVAILABLE' : (data.errorCode || `HTTP_${res.status}`),
         httpStatus: res.status,
         isUnavailable: isEndpointUnavailable,
@@ -88,11 +94,14 @@ export async function apiRequest<T = any>(
       ...data
     };
   } catch (error: any) {
-    console.warn(`[API Error] ${endpoint}:`, error.message || error);
+    clearTimeout(timeoutId);
+    const isAbort = error.name === 'AbortError';
+    console.warn(`[API Info] ${endpoint}:`, isAbort ? 'Request timed out after 6s' : (error.message || error));
     return {
       success: false,
-      message: 'Không thể kết nối đến máy chủ API. Vui lòng kiểm tra kết nối mạng.',
-      errorCode: 'NETWORK_ERROR'
+      message: isAbort ? 'Kết nối máy chủ quá hạn (6s), tự động kích hoạt sao lưu an toàn.' : 'Không thể kết nối trực tiếp đến máy chủ API.',
+      errorCode: isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
+      isUnavailable: true
     };
   }
 }

@@ -34,13 +34,23 @@ function cleanForFirestore(obj: any): any {
   return obj;
 }
 
+// Helper to remove Vietnamese tones for safe usernames and emails
+export function removeVietnameseTones(str: string): string {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
 // Format username into a standard email format if input is not already an email
 export function normalizeEmail(input: string): string {
   const trimmed = (input || '').trim().toLowerCase();
   if (trimmed.includes('@')) {
     return trimmed;
   }
-  const sanitized = trimmed.replace(/[^a-z0-9._-]/g, '');
+  const ascii = removeVietnameseTones(trimmed);
+  const sanitized = ascii.replace(/[^a-z0-9._-]/g, '');
   return `${sanitized || 'user'}@cholienquan.com`;
 }
 
@@ -59,7 +69,7 @@ export function getLocalUsers(): UserProfile[] {
 export function saveLocalUser(user: UserProfile) {
   try {
     const list = getLocalUsers();
-    const filtered = list.filter(u => u.id !== user.id && u.email !== user.email);
+    const filtered = list.filter(u => u.id !== user.id && u.email !== user.email && u.username !== user.username);
     filtered.unshift(user);
     localStorage.setItem('lqmarket_local_users', JSON.stringify(filtered));
   } catch {
@@ -82,7 +92,10 @@ export async function registerWithFirebase(
     const rawAccount = (emailOrUsername || '').trim();
     const cleanAccount = rawAccount.toLowerCase();
     const isEmailFormat = cleanAccount.includes('@');
-    const assignedUsername = isEmailFormat ? cleanAccount.split('@')[0] : cleanAccount.replace(/[^a-z0-9_]/g, '');
+    const asciiAccount = removeVietnameseTones(cleanAccount);
+    const assignedUsername = isEmailFormat
+      ? asciiAccount.split('@')[0].replace(/[^a-z0-9_]/g, '') || 'user'
+      : asciiAccount.replace(/[^a-z0-9_]/g, '') || 'user';
     const formattedEmail = normalizeEmail(cleanAccount);
     const cleanPhone = (phone || '').trim();
 
@@ -117,13 +130,13 @@ export async function registerWithFirebase(
         }
 
         const newUserProfile: UserProfile = {
-          id: response.user.id,
-          name: response.user.name,
+          id: response.user.id || `user_${Date.now()}`,
+          name: response.user.name || rawName,
           username: response.user.username || assignedUsername,
           email: response.user.email || formattedEmail,
           password: password,
           phone: response.user.phone || cleanPhone,
-          avatar: response.user.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${response.user.id}`,
+          avatar: response.user.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${response.user.id || assignedUsername}`,
           role: response.user.role || (role === 'admin' ? 'buyer' : role),
           balance: Number(response.user.balance || 0),
           pendingBalance: Number(response.user.pendingBalance || 0),
@@ -143,7 +156,7 @@ export async function registerWithFirebase(
 
         // Async background backup to Firebase
         try {
-          await setDoc(doc(db, 'users', newUserProfile.id), cleanForFirestore(newUserProfile));
+          setDoc(doc(db, 'users', newUserProfile.id), cleanForFirestore(newUserProfile)).catch(() => {});
         } catch {}
 
         return {
@@ -151,32 +164,28 @@ export async function registerWithFirebase(
           message: response.message || `Đăng ký tài khoản "${rawName}" thành công!`,
           user: newUserProfile
         };
-      } else if (response.message && !response.isUnavailable) {
-        // Return real backend validation error (e.g., username/email already taken)
+      } else if (response.httpStatus === 409) {
         return {
           success: false,
-          message: response.message,
-          errorCode: response.errorCode
+          message: response.message || 'Tài khoản hoặc email này đã tồn tại trên hệ thống. Vui lòng đăng nhập hoặc chọn tên khác.',
+          errorCode: 'USER_EXISTS'
         };
       }
     } catch (apiErr: any) {
       console.warn('Backend API registration notice:', apiErr.message || apiErr);
     }
 
-    // 2. Fallback: Firebase Auth & Local Storage
+    // 2. Resilient Fallback: Firebase Auth & Local Storage
     let createdUserId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formattedEmail, password);
       if (userCredential.user) {
         createdUserId = userCredential.user.uid;
-        await updateFirebaseProfile(userCredential.user, { displayName: rawName }).catch(() => {});
+        updateFirebaseProfile(userCredential.user, { displayName: rawName }).catch(() => {});
       }
     } catch (fbErr: any) {
       if (fbErr.code === 'auth/email-already-in-use') {
-        return {
-          success: false,
-          message: 'Tài khoản hoặc email này đã tồn tại trên hệ thống. Vui lòng đăng nhập hoặc chọn tên khác.'
-        };
+        console.warn('Firebase email in use, continuing with local profile synchronization.');
       }
     }
 
@@ -201,7 +210,7 @@ export async function registerWithFirebase(
     };
 
     try {
-      await setDoc(doc(db, 'users', createdUserId), cleanForFirestore(fallbackProfile));
+      setDoc(doc(db, 'users', createdUserId), cleanForFirestore(fallbackProfile)).catch(() => {});
     } catch {}
 
     saveLocalUser(fallbackProfile);

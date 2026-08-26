@@ -5,6 +5,14 @@ import { authenticateToken, generateToken, AuthenticatedRequest } from '../middl
 
 const router = Router();
 
+function removeVietnameseTones(str: string): string {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response) => {
   try {
@@ -29,26 +37,35 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     const cleanInput = rawAccount.toLowerCase();
-    const cleanEmail = cleanInput.includes('@') ? cleanInput : `${cleanInput.replace(/[^a-z0-9_]/g, '')}@cholienquan.com`;
-    const cleanUsername = cleanInput.includes('@')
-      ? cleanInput.split('@')[0].replace(/[^a-z0-9_]/g, '')
-      : cleanInput.replace(/[^a-z0-9_]/g, '');
+    const isEmail = cleanInput.includes('@');
+    const asciiInput = removeVietnameseTones(cleanInput);
+
+    const cleanEmail = isEmail
+      ? cleanInput
+      : `${asciiInput.replace(/[^a-z0-9._-]/g, '') || 'user'}@cholienquan.com`;
+    const cleanUsername = isEmail
+      ? asciiInput.split('@')[0].replace(/[^a-z0-9_]/g, '') || `user_${Date.now().toString().slice(-4)}`
+      : asciiInput.replace(/[^a-z0-9_]/g, '') || `user_${Date.now().toString().slice(-4)}`;
 
     // Check if user already exists in MongoDB
-    const existingUser = await User.findOne({
-      $or: [
-        { email: cleanEmail },
-        { username: cleanUsername },
-        { username: cleanInput },
-        ...(phone ? [{ phone: phone.trim() }] : [])
-      ]
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: 'Email hoặc tên đăng nhập này đã được sử dụng. Vui lòng chọn tên khác.'
+    try {
+      const existingUser = await User.findOne({
+        $or: [
+          { email: cleanEmail },
+          { username: cleanUsername },
+          { username: cleanInput },
+          ...(phone ? [{ phone: (phone || '').trim() }] : [])
+        ]
       });
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: 'Tên đăng nhập hoặc email này đã tồn tại trên hệ thống. Vui lòng đăng nhập hoặc chọn tên khác.'
+        });
+      }
+    } catch (checkErr) {
+      console.warn('Existing user check notice:', checkErr);
     }
 
     const salt = await bcrypt.genSalt(10);

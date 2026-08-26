@@ -64,16 +64,20 @@ export const AuthModal: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const res = await loginUser(accountInput, password);
-    setIsSubmitting(false);
-
-    if (res.success) {
-      setSuccessMessage(res.message);
-      setTimeout(() => {
-        setIsAuthModalOpen(false);
-      }, 800);
-    } else {
-      setErrorMessage(res.message);
+    try {
+      const res = await loginUser(accountInput, password);
+      if (res.success) {
+        setSuccessMessage(res.message);
+        setTimeout(() => {
+          setIsAuthModalOpen(false);
+        }, 800);
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Đăng nhập không thành công. Vui lòng thử lại.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -98,16 +102,20 @@ export const AuthModal: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const res = await registerUser(name, accountInput, password, selectedRole, phone);
-    setIsSubmitting(false);
-
-    if (res.success) {
-      setSuccessMessage(res.message);
-      setTimeout(() => {
-        setIsAuthModalOpen(false);
-      }, 1000);
-    } else {
-      setErrorMessage(res.message);
+    try {
+      const res = await registerUser(name, accountInput, password, selectedRole, phone);
+      if (res.success) {
+        setSuccessMessage(res.message);
+        setTimeout(() => {
+          setIsAuthModalOpen(false);
+        }, 1000);
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Đăng ký không thành công. Vui lòng thử lại.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
