@@ -5,6 +5,7 @@ import { WithdrawalRequest } from '../models/WithdrawalRequest';
 import { Notification } from '../models/Notification';
 import {
   authenticateToken,
+  optionalAuth,
   requireAdmin,
   AuthenticatedRequest
 } from '../middleware/auth';
