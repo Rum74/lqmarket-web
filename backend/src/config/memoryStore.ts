@@ -287,112 +287,35 @@ export const memoryStore = {
  * or safely falls back to the in-memory collection when in standby/offline mode.
  */
 export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection: MemoryCollection<any>): any {
-  function ModelConstructor(this: any, data: any) {
-    if (getDBConnectionStatus()) {
-      return new mongooseModel(data);
-    }
-    return memoryCollection.newInstance(data);
-  }
-
-  // Bind static methods with fallback
-  ModelConstructor.findOne = async (query: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).findOne(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
+  const handler: ProxyHandler<any> = {
+    get(target, prop, receiver) {
+      if (getDBConnectionStatus()) {
+        const val = Reflect.get(mongooseModel, prop, mongooseModel);
+        if (typeof val === 'function') {
+          return val.bind(mongooseModel);
+        }
+        return val;
       }
+      const memVal = (memoryCollection as any)[prop];
+      if (typeof memVal === 'function') {
+        return memVal.bind(memoryCollection);
+      }
+      return memVal;
+    },
+    construct(target, args) {
+      if (getDBConnectionStatus()) {
+        return new (mongooseModel as any)(...args);
+      }
+      return memoryCollection.newInstance(args[0]);
+    },
+    apply(target, thisArg, args) {
+      if (getDBConnectionStatus()) {
+        return (mongooseModel as any).apply(thisArg, args);
+      }
+      return memoryCollection.newInstance(args[0]);
     }
-    return memoryCollection.findOne(query);
   };
 
-  ModelConstructor.find = async (query: any = {}, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).find(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.find(query);
-  };
-
-  ModelConstructor.findById = async (id: string, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).findById(id, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.findById(id);
-  };
-
-  ModelConstructor.create = async (data: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).create(data, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.create(data);
-  };
-
-  ModelConstructor.insertMany = async (docs: any[], ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).insertMany(docs, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.insertMany(docs);
-  };
-
-  ModelConstructor.findOneAndUpdate = async (query: any, update: any, options?: any) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).findOneAndUpdate(query, update, options);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.findOneAndUpdate(query, update, options);
-  };
-
-  ModelConstructor.updateMany = async (query: any, update: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).updateMany(query, update, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.updateMany(query, update);
-  };
-
-  ModelConstructor.findOneAndDelete = async (query: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).findOneAndDelete(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.findOneAndDelete(query);
-  };
-
-  ModelConstructor.countDocuments = async (query: any = {}, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).countDocuments(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
-    }
-    return memoryCollection.countDocuments(query);
-  };
-
-  return ModelConstructor as any;
+  return new Proxy(mongooseModel, handler);
 }
+

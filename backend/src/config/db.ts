@@ -1,14 +1,11 @@
 import mongoose from 'mongoose';
 
-// Disable command buffering so queries don't hang if disconnected
-mongoose.set('bufferCommands', false);
-
 let isConnected = false;
 
 export async function connectDB(): Promise<boolean> {
   const MONGODB_URI = process.env.MONGODB_URI || '';
 
-  if (isConnected || mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === 1) {
     isConnected = true;
     return true;
   }
@@ -22,7 +19,7 @@ export async function connectDB(): Promise<boolean> {
 
   try {
     const opts: mongoose.ConnectOptions = {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 8000,
       autoIndex: true
     };
 
@@ -56,5 +53,5 @@ mongoose.connection.on('disconnected', () => {
 });
 
 export function getDBConnectionStatus(): boolean {
-  return isConnected && mongoose.connection.readyState === 1;
+  return mongoose.connection.readyState === 1;
 }
