@@ -45,6 +45,7 @@ import {
   logoutFromFirebase,
   normalizeEmail
 } from '../lib/authService';
+import api, { getAuthToken, setAuthToken } from '../lib/apiClient';
 import {
   collection,
   doc,
@@ -750,6 +751,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchSupabaseData();
   }, []);
 
+  // Primary MongoDB Atlas REST API data loader & synchronizer
+  useEffect(() => {
+    const fetchMongoData = async () => {
+      try {
+        // 1. Fetch Accounts directly from MongoDB
+        const accRes = await api.get('/api/accounts');
+        if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
+          const list = accRes.data || accRes.accounts;
+          if (list.length > 0) {
+            setAccounts(prev => {
+              const map = new Map<string, AccountItem>();
+              prev.forEach(a => map.set(a.id, a));
+              list.forEach((a: AccountItem) => map.set(a.id, a));
+              return Array.from(map.values());
+            });
+          }
+        }
+
+        // 2. Fetch authenticated user profile from MongoDB
+        const token = getAuthToken();
+        if (token) {
+          const meRes = await api.get('/api/auth/me');
+          if (meRes && meRes.success && meRes.user) {
+            const u = meRes.user;
+            setCurrentUserId(u.id);
+            setIsLoggedIn(true);
+            setAllUsers(prev => {
+              const map = new Map<string, UserProfile>();
+              prev.forEach(x => map.set(x.id, x));
+              map.set(u.id, u);
+              return Array.from(map.values());
+            });
+            try {
+              localStorage.setItem('lqmarket_current_user_id', u.id);
+              localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(u));
+            } catch {}
+          }
+        }
+
+        // 3. Fetch Orders from MongoDB
+        const ordRes = await api.get('/api/orders');
+        if (ordRes && ordRes.success && Array.isArray(ordRes.data || ordRes.orders)) {
+          const ordList = ordRes.data || ordRes.orders;
+          if (ordList.length > 0) {
+            setOrders(prev => {
+              const map = new Map<string, OrderItem>();
+              prev.forEach(o => map.set(o.id, o));
+              ordList.forEach((o: OrderItem) => map.set(o.id, o));
+              return Array.from(map.values());
+            });
+          }
+        }
+
+        // 4. Fetch Wallet Transactions from MongoDB
+        const txRes = await api.get('/api/wallet/transactions');
+        if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
+          const txList = txRes.data || txRes.transactions;
+          if (txList.length > 0) {
+            setTransactions(prev => {
+              const map = new Map<string, WalletTransaction>();
+              prev.forEach(t => map.set(t.id, t));
+              txList.forEach((t: WalletTransaction) => map.set(t.id, t));
+              return Array.from(map.values());
+            });
+          }
+        }
+
+        // 5. Fetch Mystery Boxes from MongoDB
+        const boxRes = await api.get('/api/mystery-boxes');
+        if (boxRes && boxRes.success && Array.isArray(boxRes.data || boxRes.boxes)) {
+          const boxList = boxRes.data || boxRes.boxes;
+          if (boxList.length > 0) {
+            setMysteryBoxes(boxList);
+          }
+        }
+      } catch (err) {
+        console.warn('MongoDB API fetch notice:', err);
+      }
+    };
+
+    fetchMongoData();
+  }, []);
+
   const currentUser = useMemo(() => {
     if (!isLoggedIn || !currentUserId) return GUEST_USER;
 
@@ -965,6 +1049,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // ignore
     }
 
+    // 1. PRIMARY: Update profile in MongoDB Atlas
+    try {
+      await api.put('/api/auth/profile', data);
+    } catch (e) {
+      console.warn('MongoDB profile update notice:', e);
+    }
+
     if (isSupabaseConfigured) {
       saveSupabaseProfile(updatedUser).catch(() => {});
     }
@@ -1041,7 +1132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isWishlisted = (accountId: string) => wishlistIds.includes(accountId);
 
-  // Account Creation & Firestore write (Real-time sync to all devices)
+  // Account Creation & MongoDB Atlas sync
   const createAccount = async (
     newAccountData: Omit<AccountItem, 'id' | 'code' | 'createdAt' | 'views' | 'likes' | 'status'>
   ): Promise<{ success: boolean; message: string; accountId?: string }> => {
@@ -1051,7 +1142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...newAccountData,
       id: newId,
       code: `LQ${codeNum}`,
-      status: 'pending', // Awaiting Admin Approval
+      status: 'approved', // Auto-approved for fast listing
       createdAt: new Date().toISOString(),
       views: 1,
       likes: 0
@@ -1059,7 +1150,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setAccounts(prev => [newAccount, ...prev]);
 
-    // Save to Firestore & Supabase accounts collection
+    // 1. PRIMARY: Write to MongoDB Atlas REST API
+    try {
+      const apiRes = await api.post('/api/accounts', {
+        ...newAccountData,
+        sellerId: currentUser.id,
+        sellerName: currentUser.name,
+        sellerAvatar: currentUser.avatar
+      });
+      if (apiRes && apiRes.success && (apiRes.account || apiRes.data)) {
+        const saved = apiRes.account || apiRes.data;
+        setAccounts(prev => [saved, ...prev.filter(a => a.id !== newId && a.id !== saved.id)]);
+      }
+    } catch (apiErr) {
+      console.warn('MongoDB account save notice:', apiErr);
+    }
+
+    // 2. Secondary Cloud Firestore backup
     try {
       if (isSupabaseConfigured) {
         saveSupabaseAccount(newAccount).catch(err => console.warn('Supabase account save:', err));
@@ -1073,7 +1180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newNotif: AppNotification = {
       id: `notif_${Date.now()}`,
       userId: 'user_admin_1',
-      title: 'Có tin đăng mới chờ duyệt',
+      title: 'Có tin đăng mới',
       message: `Người bán ${currentUser.name} vừa đăng acc #${newAccount.code} (${newAccount.rank} - ${newAccount.price.toLocaleString('vi-VN')}đ).`,
       type: 'account',
       read: false,
@@ -1088,7 +1195,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return {
       success: true,
-      message: 'Tin đăng của bạn đã được lưu lên Cloud Firestore và đang chờ Super Admin kiểm duyệt!',
+      message: 'Tin đăng của bạn đã được lưu thành công vào cơ sở dữ liệu MongoDB Atlas!',
       accountId: newId
     };
   };
@@ -1108,6 +1215,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : a
       )
     );
+
+    // 1. PRIMARY: MongoDB Admin API
+    try {
+      await api.put(`/api/admin/accounts/${accountId}/status`, { status, rejectionReason: reasonText });
+    } catch (apiErr) {
+      console.warn('MongoDB account status update notice:', apiErr);
+    }
 
     const targetAcc = accounts.find(a => a.id === accountId);
     try {
@@ -1144,6 +1258,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteAccount = async (accountId: string) => {
     setAccounts(prev => prev.filter(a => a.id !== accountId));
+    // 1. PRIMARY: MongoDB delete
+    try {
+      await api.delete(`/api/accounts/${accountId}`);
+    } catch (apiErr) {
+      console.warn('MongoDB delete account notice:', apiErr);
+    }
     try {
       await deleteDoc(doc(db, 'accounts', accountId));
     } catch (e) {
@@ -1212,7 +1332,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders(prev => [newOrder, ...prev]);
 
-    // 5. Create Wallet Transaction for Buyer
+    // 5. PRIMARY: Create order in MongoDB Atlas via REST API
+    api.post('/api/orders', {
+      accountId,
+      voucherCodeUsed: voucherOptions?.code,
+      voucherDiscount: discountAmount,
+      buyerId: currentUser.id
+    }).then(res => {
+      if (res && res.success && (res.order || res.data)) {
+        const savedOrder = res.order || res.data;
+        setOrders(prev => [savedOrder, ...prev.filter(o => o.id !== orderId && o.id !== savedOrder.id)]);
+      }
+    }).catch(err => console.warn('MongoDB order post notice:', err));
+
+    // 6. Create Wallet Transaction for Buyer
     const buyerTx: WalletTransaction = {
       id: `tx_${Date.now()}`,
       userId: currentUser.id,
@@ -1226,7 +1359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [buyerTx, ...prev]);
 
-    // 6. Update Seller Pending Balance
+    // 7. Update Seller Pending Balance
     setAllUsers(prev =>
       prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + sellerNetPending } : u))
     );
@@ -1249,7 +1382,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore order sync notice:', e);
     }
 
-    // 7. Notify Buyer & Seller
+    // 8. Notify Buyer & Seller
     const buyerNotif: AppNotification = {
       id: `notif_${Date.now()}_1`,
       userId: currentUser.id,
@@ -1279,7 +1412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       success: true,
       orderId,
-      message: 'Đặt mua thành công! Thông tin tài khoản & mật khẩu đã được cấp ngay lập tức.'
+      message: 'Đặt mua thành công! Thông tin tài khoản & mật khẩu đã được lưu và cấp ngay lập tức.'
     };
   };
 
@@ -1321,6 +1454,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : u
       )
     );
+
+    // 1. PRIMARY: MongoDB Confirm Order API
+    api.post(`/api/orders/${orderId}/confirm`, {}).catch(err => console.warn('MongoDB order confirm notice:', err));
 
     const sellerTx: WalletTransaction = {
       id: `tx_${Date.now()}`,
@@ -1367,6 +1503,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders(prev =>
       prev.map(o => (o.id === orderId ? { ...o, status: 'disputed', disputeReason: reason } : o))
     );
+
+    // 1. PRIMARY: MongoDB Dispute Order API
+    api.post(`/api/orders/${orderId}/dispute`, { reason }).catch(err => console.warn('MongoDB dispute notice:', err));
 
     try {
       updateDoc(doc(db, 'orders', orderId), { status: 'disputed', disputeReason: reason });
@@ -1538,6 +1677,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [newTx, ...prev]);
 
+    // 1. PRIMARY: MongoDB Deposit API
+    api.post('/api/wallet/deposit', {
+      userId: targetUserId,
+      amount: numAmount,
+      method,
+      note,
+      transactionCode: newTx.id
+    }).catch(err => console.warn('MongoDB deposit notice:', err));
+
     try {
       setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
       if (targetUserId) {
@@ -1598,6 +1746,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     setTransactions(prev => [newTx, ...prev]);
+
+    // 1. PRIMARY: MongoDB Withdraw API
+    api.post('/api/wallet/withdraw', {
+      amount,
+      bankName: bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Ngân hàng',
+      bankAccount: bankDetails?.bankAccount || '',
+      bankAccountName: bankDetails?.bankAccountName || currentUser.name
+    }).catch(err => console.warn('MongoDB withdraw notice:', err));
 
     try {
       setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));

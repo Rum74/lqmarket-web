@@ -199,17 +199,10 @@ router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response
 });
 
 // POST /api/accounts (Create listing)
-router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userPayload = req.user;
-    if (!userPayload) {
-      return res.status(401).json({ success: false, message: 'Vui lòng đăng nhập để đăng bán.' });
-    }
-
-    const seller = await User.findOne({ id: userPayload.userId });
-    if (!seller) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản người bán.' });
-    }
+    const sellerId = req.user?.userId || req.body.sellerId;
+    let seller = sellerId ? await User.findOne({ $or: [{ id: sellerId }, { email: sellerId }] }) : null;
 
     const {
       title,
@@ -227,7 +220,9 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       images = [],
       videoUrl,
       description = '',
-      credentials
+      credentials,
+      sellerName,
+      sellerAvatar
     } = req.body;
 
     if (!title || !price || !rank || !credentials?.username || !credentials?.password) {
@@ -236,6 +231,10 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
         message: 'Vui lòng nhập đầy đủ tiêu đề, giá tiền, rank và thông tin đăng nhập tài khoản.'
       });
     }
+
+    const sellerNameFinal = seller ? seller.name : (sellerName || 'Người bán');
+    const sellerIdFinal = seller ? seller.id : (sellerId || `user_${Date.now()}`);
+    const sellerAvatarFinal = seller?.avatar || sellerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${sellerIdFinal}`;
 
     const accountId = `acc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const randomCodeNum = Math.floor(10000 + Math.random() * 90000);
@@ -259,13 +258,13 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800'],
       videoUrl,
       description,
-      sellerId: seller.id,
-      sellerName: seller.name,
-      sellerAvatar: seller.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${seller.username}`,
-      sellerRating: seller.rating || 5.0,
-      sellerCompletedSales: seller.completedSales || 0,
+      sellerId: sellerIdFinal,
+      sellerName: sellerNameFinal,
+      sellerAvatar: sellerAvatarFinal,
+      sellerRating: seller?.rating || 5.0,
+      sellerCompletedSales: seller?.completedSales || 0,
       sellerResponseTime: '< 15 phút',
-      sellerVerified: seller.isVerifiedSeller || false,
+      sellerVerified: seller?.isVerifiedSeller || false,
       status: 'approved', // Auto-approved for verified or standard listings
       credentials: {
         username: credentials.username.trim(),

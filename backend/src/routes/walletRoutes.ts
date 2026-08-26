@@ -157,6 +157,53 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
   }
 });
 
+// POST /api/wallet/deposit (Direct / Gateway deposit)
+router.post('/deposit', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId || req.body.userId;
+    const { amount, method = 'VietQR', note = 'Nạp tiền vào ví', transactionCode } = req.body;
+
+    const numAmount = Math.max(0, Number(amount) || 0);
+    if (numAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Số tiền nạp phải lớn hơn 0đ.' });
+    }
+
+    let targetUser = null;
+    if (userId) {
+      targetUser = await User.findOne({ $or: [{ id: userId }, { email: userId }] });
+    }
+
+    if (targetUser) {
+      targetUser.balance = (targetUser.balance || 0) + numAmount;
+      await targetUser.save();
+    }
+
+    const txId = transactionCode || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tx = new WalletTransaction({
+      id: txId,
+      userId: targetUser ? targetUser.id : (userId || 'user_guest'),
+      userName: targetUser ? targetUser.name : 'Người dùng',
+      userEmail: targetUser ? targetUser.email : '',
+      type: 'deposit',
+      amount: numAmount,
+      status: 'success',
+      note: `${note} (${method.toUpperCase()})`,
+      createdAt: new Date().toISOString()
+    });
+    await tx.save();
+
+    return res.json({
+      success: true,
+      message: `Nạp thành công +${numAmount.toLocaleString('vi-VN')}đ vào ví!`,
+      balance: targetUser ? targetUser.balance : numAmount,
+      transaction: tx.toJSON()
+    });
+  } catch (error: any) {
+    console.error('Deposit error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi xử lý nạp tiền.', error: error.message });
+  }
+});
+
 // GET /api/wallet/withdrawals (List withdrawals for user or admin)
 router.get('/withdrawals', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

@@ -14,16 +14,16 @@ import {
 const router = Router();
 
 // POST /api/orders (Create escrow purchase)
-router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const buyerId = req.user?.userId;
+    const buyerId = req.user?.userId || req.body.buyerId;
     if (!buyerId) {
       return res.status(401).json({ success: false, message: 'Vui lòng đăng nhập để mua tài khoản.' });
     }
 
     const { accountId, voucherCodeUsed, voucherDiscount = 0 } = req.body;
 
-    const buyer = await User.findOne({ id: buyerId });
+    const buyer = await User.findOne({ $or: [{ id: buyerId }, { email: buyerId }] });
     if (!buyer) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin người mua.' });
     }

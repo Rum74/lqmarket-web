@@ -3,22 +3,48 @@
  * Connects Frontend directly to Node.js/Express + MongoDB Atlas Backend
  */
 
-// Normalize API_BASE: prioritize VITE_API_URL, with automatic production fallback to https://api.cholienquan.com
-let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+export function getApiBaseUrl(): string {
+  try {
+    const custom = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_api_url') : null;
+    if (custom && custom.trim()) {
+      return custom.trim().replace(/\/+$/, '').replace(/\/api$/, '');
+    }
+  } catch {
+    // ignore
+  }
 
-if (!rawApiUrl && typeof window !== 'undefined' && window.location) {
-  const host = window.location.hostname;
-  // If running on production domain, Vercel, or custom domain
-  if (host.includes('cholienquan.com') || host.includes('vercel.app')) {
-    rawApiUrl = 'https://api.cholienquan.com';
+  let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+
+  if (!rawApiUrl && typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    // If running on production domain, Vercel, or custom domain
+    if (host.includes('cholienquan.com') || host.includes('vercel.app')) {
+      rawApiUrl = 'https://api.cholienquan.com';
+    } else if (host === 'localhost' || host === '127.0.0.1') {
+      rawApiUrl = 'http://localhost:3000';
+    } else {
+      rawApiUrl = '';
+    }
+  }
+
+  rawApiUrl = rawApiUrl.replace(/\/+$/, '');
+  if (rawApiUrl.endsWith('/api')) {
+    rawApiUrl = rawApiUrl.slice(0, -4);
+  }
+  return rawApiUrl;
+}
+
+export function setCustomApiUrl(url: string | null): void {
+  try {
+    if (url && url.trim()) {
+      localStorage.setItem('lqmarket_api_url', url.trim());
+    } else {
+      localStorage.removeItem('lqmarket_api_url');
+    }
+  } catch {
+    // ignore
   }
 }
-
-rawApiUrl = rawApiUrl.replace(/\/+$/, '');
-if (rawApiUrl.endsWith('/api')) {
-  rawApiUrl = rawApiUrl.slice(0, -4);
-}
-const API_BASE = rawApiUrl;
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -51,7 +77,9 @@ export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${cleanEndpoint}`;
   
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -63,9 +91,9 @@ export async function apiRequest<T = any>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  // Set 6-second timeout controller so UI never hangs indefinitely
+  // Set 8-second timeout controller so UI never hangs indefinitely
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
     const res = await fetch(url, {
@@ -96,10 +124,31 @@ export async function apiRequest<T = any>(
   } catch (error: any) {
     clearTimeout(timeoutId);
     const isAbort = error.name === 'AbortError';
-    console.warn(`[API Info] ${endpoint}:`, isAbort ? 'Request timed out after 6s' : (error.message || error));
+
+    // If first target (e.g. https://api.cholienquan.com) had a network error and we are on production, try direct VPS IP as backup
+    if (!isAbort && baseUrl.includes('api.cholienquan.com') && !endpoint.startsWith('http')) {
+      try {
+        const vpsBackupUrl = `http://221.121.1.220:3000${cleanEndpoint}`;
+        const backupRes = await fetch(vpsBackupUrl, {
+          ...options,
+          headers
+        });
+        const backupData = await backupRes.json().catch(() => ({}));
+        if (backupRes.ok) {
+          return {
+            success: backupData.success !== false,
+            ...backupData
+          };
+        }
+      } catch {
+        // continue to normal fallback
+      }
+    }
+
+    console.warn(`[API Info] ${endpoint}:`, isAbort ? 'Request timed out after 8s' : (error.message || error));
     return {
       success: false,
-      message: isAbort ? 'Kết nối máy chủ quá hạn (6s), tự động kích hoạt sao lưu an toàn.' : 'Không thể kết nối trực tiếp đến máy chủ API.',
+      message: isAbort ? 'Kết nối máy chủ quá hạn (8s), tự động kích hoạt sao lưu an toàn.' : 'Không thể kết nối trực tiếp đến máy chủ API.',
       errorCode: isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
       isUnavailable: true
     };
