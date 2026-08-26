@@ -3,7 +3,22 @@
  * Connects Frontend directly to Node.js/Express + MongoDB Atlas Backend
  */
 
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') || '';
+// Normalize API_BASE: prioritize VITE_API_URL, with automatic production fallback to https://api.cholienquan.com
+let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+
+if (!rawApiUrl && typeof window !== 'undefined' && window.location) {
+  const host = window.location.hostname;
+  // If running on production domain, Vercel, or custom domain
+  if (host.includes('cholienquan.com') || host.includes('vercel.app')) {
+    rawApiUrl = 'https://api.cholienquan.com';
+  }
+}
+
+rawApiUrl = rawApiUrl.replace(/\/+$/, '');
+if (rawApiUrl.endsWith('/api')) {
+  rawApiUrl = rawApiUrl.slice(0, -4);
+}
+const API_BASE = rawApiUrl;
 
 export interface ApiResponse<T = any> {
   success: boolean;
