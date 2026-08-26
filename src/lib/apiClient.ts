@@ -15,16 +15,9 @@ export function getApiBaseUrl(): string {
 
   let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
 
-  if (!rawApiUrl && typeof window !== 'undefined' && window.location) {
-    const host = window.location.hostname;
-    // If running on production domain, Vercel, or custom domain
-    if (host.includes('cholienquan.com') || host.includes('vercel.app')) {
-      rawApiUrl = 'https://api.cholienquan.com';
-    } else if (host === 'localhost' || host === '127.0.0.1') {
-      rawApiUrl = 'http://localhost:3000';
-    } else {
-      rawApiUrl = '';
-    }
+  // If no explicit VITE_API_URL, use relative path '' so Vercel rewrites or local proxy handles /api
+  if (!rawApiUrl) {
+    rawApiUrl = '';
   }
 
   rawApiUrl = rawApiUrl.replace(/\/+$/, '');

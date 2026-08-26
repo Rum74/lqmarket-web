@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../lib/apiClient';
 import confetti from '../../utils/confetti';
 import { LQMARKET_LOGO } from '../../assets/logo';
 import {
@@ -153,27 +154,18 @@ export const WalletModal: React.FC = () => {
   const createPayOsLink = async (amountToDeposit: number, memoCode: string) => {
     setIsCreatingPayOsLink(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch('/api/payos/create-payment-link', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          amount: amountToDeposit,
-          description: `NAP ${memoCode}`,
-          userId: currentUser?.id,
-          userName: currentUser?.name,
-          userEmail: currentUser?.email,
-          memoCode: memoCode,
-          returnUrl: `${window.location.origin}/?payment=success&orderCode=${memoCode}`,
-          cancelUrl: `${window.location.origin}/?payment=cancelled&orderCode=${memoCode}`
-        })
+      const data = await api.post('/api/payos/create-payment-link', {
+        amount: amountToDeposit,
+        description: `NAP ${memoCode}`,
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        userEmail: currentUser?.email,
+        memoCode: memoCode,
+        returnUrl: `${window.location.origin}/?payment=success&orderCode=${memoCode}`,
+        cancelUrl: `${window.location.origin}/?payment=cancelled&orderCode=${memoCode}`
       });
 
-      const data = await res.json();
-      if (data.success) {
+      if (data && data.success) {
         setPayOsOrderCode(data.orderCode);
         setPayOsCheckoutUrl(data.checkoutUrl);
         if (data.accountNumber) setPayOsAccountNo(data.accountNumber);
@@ -199,19 +191,14 @@ export const WalletModal: React.FC = () => {
 
     try {
       // 1. Try manual-sync endpoint (which triggers creditUserDeposit on backend)
-      const syncRes = await fetch('/api/payos/manual-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderCode: Number(targetCode),
-          userId: currentUser?.id,
-          userEmail: currentUser?.email,
-          userName: currentUser?.name
-        })
+      const syncData = await api.post('/api/payos/manual-sync', {
+        orderCode: Number(targetCode),
+        userId: currentUser?.id,
+        userEmail: currentUser?.email,
+        userName: currentUser?.name
       });
-      const syncData = await syncRes.json();
 
-      if (syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
         const creditedAmount = syncData.amount || depositAmount || 50000;
         depositBalance(
           creditedAmount,
@@ -229,10 +216,9 @@ export const WalletModal: React.FC = () => {
       }
 
       // 2. Fallback to check-payment endpoint
-      const checkRes = await fetch(`/api/payos/check-payment/${targetCode}`);
-      const checkData = await checkRes.json();
+      const checkData = await api.get(`/api/payos/check-payment/${targetCode}`);
 
-      if (checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
+      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
         const creditedAmount = checkData.amount || depositAmount || 50000;
         depositBalance(
           creditedAmount,
@@ -249,7 +235,7 @@ export const WalletModal: React.FC = () => {
       } else {
         setManualSyncFeedback({
           type: 'error',
-          msg: `Đơn hàng #${targetCode} chưa ghi nhận thanh toán PAID trên PayOS (Trạng thái: ${checkData.status || 'PENDING'}).`
+          msg: `Đơn hàng #${targetCode} chưa ghi nhận thanh toán PAID trên PayOS (Trạng thái: ${checkData?.status || 'PENDING'}).`
         });
       }
     } catch (e: any) {
@@ -298,9 +284,8 @@ export const WalletModal: React.FC = () => {
     const checkStatus = async () => {
       if (!payOsOrderCode) return;
       try {
-        const res = await fetch(`/api/payos/check-payment/${payOsOrderCode}`);
-        const data = await res.json();
-        if (data.success && (data.status === 'PAID' || data.isPaid)) {
+        const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
+        if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
           // Real transaction verified by PayOS
           depositBalance(
             depositAmount,
@@ -342,9 +327,8 @@ export const WalletModal: React.FC = () => {
 
     if (payOsOrderCode) {
       try {
-        const res = await fetch(`/api/payos/check-payment/${payOsOrderCode}`);
-        const data = await res.json();
-        if (data.success && (data.status === 'PAID' || data.isPaid)) {
+        const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
+        if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
           depositBalance(
             depositAmount,
             'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
@@ -382,9 +366,8 @@ export const WalletModal: React.FC = () => {
     setIsCheckingResult(true);
     setCheckPaymentMessage('Đang truy vấn trạng thái đơn hàng từ PayOS...');
     try {
-      const res = await fetch(`/api/payos/check-payment/${payOsOrderCode}`);
-      const data = await res.json();
-      if (data.success && (data.status === 'PAID' || data.isPaid)) {
+      const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
+      if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
         depositBalance(
           depositAmount,
           'Cổng PayOS Tự Động (VietQR/Napas 24/7)',

@@ -9,7 +9,8 @@
     "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "typecheck": "tsc --noEmit",
-    "create-admin": "tsx src/scripts/createAdmin.ts"
+    "create-admin": "tsx src/scripts/createAdmin.ts",
+    "create-admin:node": "node scripts/createAdmin.js"
   },
   "dependencies": {
     "@payos/node": "^2.0.5",

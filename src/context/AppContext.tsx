@@ -903,25 +903,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!password) {
       return { success: false, message: 'Vui lòng nhập mật khẩu đăng nhập!' };
     }
-    // 1. Try Supabase Auth first if configured
-    if (isSupabaseConfigured) {
-      const supaRes = await loginWithSupabase(identifier, password);
-      if (supaRes.success && supaRes.user) {
-        const loggedUser = supaRes.user;
-        setCurrentUserId(loggedUser.id);
-        setIsLoggedIn(true);
-        setAllUsers(prev => [loggedUser, ...prev.filter(u => u && u.id !== loggedUser.id)]);
-        try {
-          localStorage.setItem('lqmarket_current_user_id', loggedUser.id);
-          localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(loggedUser));
-        } catch {
-          // ignore
-        }
-        setIsAuthModalOpen(false);
-        return { success: true, message: supaRes.message };
-      }
-    }
-    // 2. Fallback to Firebase Auth / Local Auth
     const res = await loginWithFirebase(identifier, password);
     if (res.success && res.user) {
       const loggedUser = res.user;
@@ -934,13 +915,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {
         // ignore
       }
-      if (isSupabaseConfigured) {
-        saveSupabaseProfile(loggedUser).catch(() => {});
-      }
       setIsAuthModalOpen(false);
       return { success: true, message: res.message };
     }
-    return { success: false, message: res.message };
+    return { success: false, message: res.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!' };
   };
 
   const registerUser = async (
@@ -950,26 +928,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole,
     phone: string = ''
   ): Promise<{ success: boolean; message: string }> => {
-    // 1. Try Supabase Auth first if configured
-    if (isSupabaseConfigured) {
-      const supaRes = await registerWithSupabase(name, usernameOrEmail, password, role, phone);
-      if (supaRes.success && supaRes.user) {
-        const regUser = supaRes.user;
-        setCurrentUserId(regUser.id);
-        setIsLoggedIn(true);
-        setAllUsers(prev => [regUser, ...prev.filter(u => u && u.id !== regUser.id)]);
-        try {
-          localStorage.setItem('lqmarket_current_user_id', regUser.id);
-          localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(regUser));
-        } catch {
-          // ignore
-        }
-        setIsAuthModalOpen(false);
-        return { success: true, message: supaRes.message };
-      }
-    }
-
-    // 2. Fallback to Firebase Auth
     const res = await registerWithFirebase(name, usernameOrEmail, password, role, phone);
     if (res.success && res.user) {
       const regUser = res.user;
@@ -982,9 +940,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {
         // ignore
       }
-      if (isSupabaseConfigured) {
-        saveSupabaseProfile(regUser).catch(() => {});
-      }
       setIsAuthModalOpen(false);
 
       // Create welcome notification
@@ -992,27 +947,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `notif_${Date.now()}`,
         userId: regUser.id,
         title: 'Đăng ký tài khoản thành công',
-        message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được đồng bộ trực tiếp trên Supabase và Cloud Firestore.`,
+        message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được lưu an toàn trên MongoDB Atlas.`,
         type: 'system',
         read: false,
         createdAt: new Date().toISOString()
       };
       setNotifications(prev => [welcomeNotif, ...prev]);
-      try {
-        await setDoc(doc(db, 'notifications', welcomeNotif.id), cleanForFirestore(welcomeNotif));
-      } catch (e) {
-        console.warn('Firestore notif save notice:', e);
-      }
 
       return { success: true, message: res.message };
     }
-    return { success: false, message: res.message };
+    return { success: false, message: res.message || 'Đăng ký thất bại. Vui lòng thử lại!' };
   };
 
   const logoutUser = async () => {
-    if (isSupabaseConfigured) {
-      await logoutFromSupabase();
-    }
     await logoutFromFirebase();
     try {
       localStorage.removeItem('lqmarket_current_user_id');
