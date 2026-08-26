@@ -7,6 +7,7 @@ import { Notification } from '../models/Notification';
 import { Review } from '../models/Review';
 import {
   authenticateToken,
+  optionalAuth,
   requireAdmin,
   AuthenticatedRequest
 } from '../middleware/auth';
