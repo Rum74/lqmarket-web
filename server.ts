@@ -1,9 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
 import { connectDB, getDBConnectionStatus } from './server/config/db';
-import { seedDatabase } from './server/config/seed';
 
 // Modular Route Handlers
 import authRoutes from './server/routes/authRoutes';
@@ -23,26 +23,56 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // Global Middleware
-  app.use(cors());
+  // CORS Configuration with CLIENT_URL support
+  const allowedOrigins = (process.env.CLIENT_URL || '')
+    .split(',')
+    .map(url => url.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or same-origin)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('cholienquan.com')) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Fallback allow in dev/staging
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+  }));
+  app.options('*', cors());
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Connect Database & Seed Data
+  // Connect Database (MongoDB Atlas) - No auto-seeding
   await connectDB();
-  await seedDatabase();
 
   // ==========================================
   // SYSTEM HEALTH & DIAGNOSTICS
   // ==========================================
   app.get('/api/health', (req, res) => {
     res.json({
+      success: true,
+      message: 'LQMarket API is running',
       status: 'ok',
       service: 'LQMarket Full-Stack API Gateway',
       runtime: 'Node.js Express + TypeScript + MongoDB Atlas',
       database: getDBConnectionStatus() ? 'connected' : 'standby',
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor(process.uptime())
+    });
+  });
+
+  app.get('/api/health/db', (req, res) => {
+    const isConnected = getDBConnectionStatus();
+    res.json({
+      success: true,
+      database: isConnected ? 'connected' : 'disconnected',
+      message: isConnected
+        ? 'Kết nối MongoDB Atlas đang hoạt động bình thường.'
+        : 'Chưa kết nối đến MongoDB Atlas. Vui lòng kiểm tra MONGODB_URI hoặc IP Access List trên MongoDB Atlas.'
     });
   });
 
