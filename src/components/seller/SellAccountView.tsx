@@ -4,7 +4,6 @@ import { RankTier, RareSkin, AccountItem } from '../../types';
 import { RankBadge } from '../common/RankBadge';
 import { compressImage } from '../../utils/imageCompressor';
 import { getDynamicSellerInfo } from '../../utils/sellerHelper';
-import { uploadImageToSupabaseStorage } from '../../lib/supabaseStorage';
 import { uploadImageToStorage } from '../../lib/storageService';
 import {
   PlusCircle,
@@ -132,19 +131,14 @@ export const SellAccountView: React.FC = () => {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.type.startsWith('image/')) {
-          // Upload to Supabase Storage with graceful fallback
-          let uploadedUrl = '';
-          try {
-            uploadedUrl = await uploadImageToSupabaseStorage(file, 'accounts');
-          } catch {
-            const fbRes = await uploadImageToStorage(file, 'accounts');
-            uploadedUrl = fbRes.url;
+          const res = await uploadImageToStorage(file, 'accounts');
+          if (res.url) {
+            setSelectedImages(prev => [...prev, res.url]);
           }
-          setSelectedImages(prev => [...prev, uploadedUrl]);
         }
       }
     } catch (err) {
-      console.error('Error uploading screenshot to Firebase Storage:', err);
+      console.error('Error uploading screenshot:', err);
       alert('Không thể tải hình ảnh lên. Vui lòng thử lại với định dạng JPEG hoặc PNG.');
     } finally {
       setIsCompressingImage(false);

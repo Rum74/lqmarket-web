@@ -79,22 +79,151 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// POST /api/admin/users (Admin creates a new user)
+router.post('/users', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { name, email, username, password, role = 'buyer', balance = 0, phone = '', status = 'active' } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'Họ tên và email là bắt buộc.' });
+    }
+
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${username || email || userId}`;
+    
+    const newUser = new User({
+      id: userId,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      username: (username || email.split('@')[0] || userId).trim().toLowerCase(),
+      password: password || '123456',
+      phone: phone ? phone.trim() : '',
+      avatar,
+      role,
+      balance: Math.max(0, Number(balance) || 0),
+      pendingBalance: 0,
+      rating: 5.0,
+      completedSales: 0,
+      isVerifiedSeller: role === 'seller',
+      sellerTier: role === 'seller' ? 'BASIC' : 'FREE',
+      status,
+      wishlistIds: [],
+      createdAt: new Date().toISOString()
+    });
+
+    await newUser.save();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Tạo tài khoản thành công!',
+      user: newUser.toJSON()
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi tạo người dùng: ' + error.message });
+  }
+});
+
+// POST /api/admin/users/:id/balance (Admin adjusts user balance: add or deduct money)
+router.post('/users/:id/balance', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { amount, isAdding = true, reason = 'Admin điều chỉnh số dư' } = req.body;
+
+    const numAmount = Math.max(0, Number(amount) || 0);
+    if (numAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Số tiền điều chỉnh phải lớn hơn 0đ.' });
+    }
+
+    const user = await User.findOne({ id });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
+    }
+
+    const previousBalance = user.balance || 0;
+    if (isAdding) {
+      user.balance = previousBalance + numAmount;
+    } else {
+      user.balance = Math.max(0, previousBalance - numAmount);
+    }
+    user.updatedAt = new Date().toISOString();
+    await user.save();
+
+    // Record wallet transaction
+    const tx = new WalletTransaction({
+      id: `tx_admin_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      type: isAdding ? 'deposit' : 'purchase',
+      amount: isAdding ? numAmount : -numAmount,
+      status: 'success',
+      note: `Admin ${isAdding ? 'cộng' : 'trừ'} tiền: ${reason} (Số dư mới: ${user.balance.toLocaleString('vi-VN')}đ)`,
+      createdAt: new Date().toISOString()
+    });
+    await tx.save();
+
+    // Send user notification
+    const notif = new Notification({
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId: user.id,
+      title: isAdding ? 'Biến động số dư: + Tiền vào ví' : 'Biến động số dư: - Tiền trong ví',
+      message: `Tài khoản của bạn vừa được Admin ${isAdding ? 'cộng' : 'trừ'} ${numAmount.toLocaleString('vi-VN')}đ. Lý do: ${reason}. Số dư hiện tại: ${user.balance.toLocaleString('vi-VN')}đ.`,
+      type: 'wallet',
+      createdAt: new Date().toISOString()
+    });
+    await notif.save();
+
+    return res.json({
+      success: true,
+      message: `Đã ${isAdding ? 'cộng' : 'trừ'} ${numAmount.toLocaleString('vi-VN')}đ cho ${user.name}!`,
+      user: user.toJSON(),
+      transaction: tx.toJSON()
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi điều chỉnh số dư: ' + error.message });
+  }
+});
+
+// DELETE /api/admin/users/:id
+router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.userId;
+
+    if (id === adminId) {
+      return res.status(400).json({ success: false, message: 'Không thể tự xóa tài khoản của chính mình.' });
+    }
+
+    const user = await User.findOne({ id });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
+    }
+
+    await User.deleteOne({ id });
+    return res.json({ success: true, message: `Đã xóa người dùng ${user.name} khỏi hệ thống.` });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi xóa người dùng: ' + error.message });
+  }
+});
+
 // PUT /api/admin/users/:id
 router.put('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { role, status, balance, isVerifiedSeller, sellerTier } = req.body;
+    const { role, status, balance, isVerifiedSeller, sellerTier, name, phone } = req.body;
 
     const user = await User.findOne({ id });
     if (!user) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
     }
 
+    if (name !== undefined) user.name = name.trim();
+    if (phone !== undefined) user.phone = phone.trim();
     if (role !== undefined) user.role = role;
     if (status !== undefined) user.status = status;
     if (balance !== undefined) user.balance = Number(balance);
     if (isVerifiedSeller !== undefined) user.isVerifiedSeller = Boolean(isVerifiedSeller);
     if (sellerTier !== undefined) user.sellerTier = sellerTier;
+    user.updatedAt = new Date().toISOString();
 
     await user.save();
 

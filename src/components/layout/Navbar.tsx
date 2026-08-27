@@ -109,12 +109,12 @@ export const Navbar: React.FC = () => {
                   <span className="text-base sm:text-xl font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">
                     LQ<span className="text-amber-400">MARKET</span>
                   </span>
-                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded border border-amber-500/30">
-                    VIP v2.5
+                  <span className="text-[9px] sm:text-[10px] font-bold tracking-wider bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded border border-amber-500/30">
+                    cholienquan.com
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 font-medium hidden sm:block">
-                  Sàn Mua Bán Acc Liên Quân Uy Tín
+                  Sàn Mua Bán Acc Liên Quân Uy Tín • Chợ Liên Quân
                 </p>
               </div>
             </button>

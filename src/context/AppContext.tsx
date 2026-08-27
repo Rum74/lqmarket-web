@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   AccountItem,
   UserProfile,
@@ -20,48 +20,13 @@ import {
   DEFAULT_MYSTERY_BOX_REWARDS,
   DEFAULT_MYSTERY_BOX_HISTORY
 } from '../data/mysteryBoxData';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
-  registerWithSupabase,
-  loginWithSupabase,
-  logoutFromSupabase
-} from '../lib/supabaseAuth';
-import {
-  saveSupabaseAccount,
-  saveSupabaseOrder,
-  saveSupabaseTransaction,
-  openMysteryBoxViaSupabaseRPC,
-  getSupabaseAccounts,
-  getSupabaseMysteryBoxes,
-  getSupabaseMysteryRewards,
-  getSupabaseOrders,
-  getSupabaseProfiles,
-  saveSupabaseProfile
-} from '../lib/supabaseDb';
-import { db, auth } from '../lib/firebase';
-import {
-  registerWithFirebase,
-  loginWithFirebase,
-  logoutFromFirebase,
-  normalizeEmail
+  registerUser as apiRegisterUser,
+  loginUser as apiLoginUser,
+  logoutUser as apiLogoutUser,
+  getCurrentUserFromBackend
 } from '../lib/authService';
 import api, { getAuthToken, setAuthToken } from '../lib/apiClient';
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  updateDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  limit
-} from 'firebase/firestore';
-import {
-  onAuthStateChanged
-} from 'firebase/auth';
 
 interface AppContextType {
   // Auth & User State
@@ -230,16 +195,6 @@ const DEFAULT_FILTERS: FilterOptions = {
   sortBy: 'newest'
 };
 
-// Clean object recursively to eliminate undefined values for Firestore compatibility
-export function cleanForFirestore<T>(data: T): T {
-  if (data === null || data === undefined) {
-    return null as unknown as T;
-  }
-  return JSON.parse(
-    JSON.stringify(data, (_, value) => (value === undefined ? null : value))
-  );
-}
-
 export const GUEST_USER: UserProfile = {
   id: '',
   name: 'Khách',
@@ -253,37 +208,24 @@ export const GUEST_USER: UserProfile = {
   completedSales: 0,
   isVerifiedSeller: false,
   sellerTier: 'FREE',
-  createdAt: new Date().toISOString().split('T')[0]
+  createdAt: new Date().toISOString().split('T')[0],
+  bio: '',
+  wishlistIds: []
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Reliable State synchronized with Supabase, Firestore and Local storage
+  // Users State
   const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
     try {
-      const rawLocal = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_local_users') : null;
-      let localUsers: UserProfile[] = rawLocal ? JSON.parse(rawLocal) : [];
-      // Clean out any legacy mock accounts from previous local cache
-      const mockIds = ['user_buyer_1', 'user_seller_1', 'user_seller_2', 'user_seller_3', 'user_buyer_001', 'user_seller_001'];
-      localUsers = localUsers.filter(u => u && !mockIds.includes(u.id));
-      try {
-        localStorage.setItem('lqmarket_local_users', JSON.stringify(localUsers));
-      } catch {}
-
-      const savedProfile = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
-      let activeUser: UserProfile[] = [];
-      if (savedProfile) {
-        const parsed = JSON.parse(savedProfile);
-        if (parsed && !mockIds.includes(parsed.id)) {
-          activeUser = [parsed];
-        }
-      }
-      const combined = [...activeUser, ...localUsers, ...INITIAL_USERS];
+      const savedUser = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
+      const parsedSaved = savedUser ? [JSON.parse(savedUser)] : [];
+      const localUsers = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('lqmarket_local_users') || '[]') : [];
       const map = new Map<string, UserProfile>();
-      combined.forEach(u => {
-        if (u && u.id) map.set(u.id, u);
-      });
+      INITIAL_USERS.forEach(u => map.set(u.id, u));
+      localUsers.forEach((u: UserProfile) => { if (u?.id) map.set(u.id, u); });
+      parsedSaved.forEach((u: UserProfile) => { if (u?.id) map.set(u.id, u); });
       return Array.from(map.values());
     } catch {
       return INITIAL_USERS;
@@ -305,11 +247,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
   });
+
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
-  const [accounts, setAccounts] = useState<AccountItem[]>([]);
-  const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  // Core App Collections
+  const [accounts, setAccounts] = useState<AccountItem[]>(INITIAL_ACCOUNTS);
+  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_ORDERS);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>(INITIAL_TRANSACTIONS);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -317,7 +261,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Mystery Box (Túi Mù May Mắn) States
   const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(DEFAULT_MYSTERY_BOX_TIERS);
   const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>(DEFAULT_MYSTERY_BOX_REWARDS);
-  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>([]);
+  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>(DEFAULT_MYSTERY_BOX_HISTORY);
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>({});
   const [isMysteryBoxEventActive, setIsMysteryBoxEventActive] = useState<boolean>(true);
@@ -341,515 +285,141 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Filters
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(DEFAULT_FILTERS);
 
-  // Listen to Firebase Auth state & restore saved user session
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        setCurrentUserId(fbUser.uid);
-        setIsLoggedIn(true);
-        try {
-          localStorage.setItem('lqmarket_current_user_id', fbUser.uid);
-        } catch {
-          // ignore
+  // ----------------------------------------------------
+  // MongoDB Master Data Fetching Function
+  // ----------------------------------------------------
+  const fetchAllMongoData = useCallback(async () => {
+    try {
+      setCloudSyncStatus('syncing');
+
+      // 1. Fetch Accounts from MongoDB
+      const accRes = await api.get('/api/accounts').catch(() => null);
+      if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
+        const list = accRes.data || accRes.accounts;
+        if (list.length > 0) {
+          setAccounts(list);
         }
-        // Sync user document from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data() as UserProfile;
-            data.id = fbUser.uid;
-            setAllUsers(prev => {
-              const filtered = prev.filter(u => u.id !== fbUser.uid);
-              return [data, ...filtered];
-            });
-            try {
-              localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(data));
-            } catch {
-              // ignore
-            }
-          }
-        } catch (e) {
-          console.warn('Error fetching auth user profile:', e);
+      }
+
+      // 2. Fetch Mystery Box Settings (Event Active Status) from MongoDB
+      const settingsRes = await api.get('/api/mystery-boxes/settings').catch(() => null);
+      if (settingsRes && settingsRes.success && typeof settingsRes.isEventActive === 'boolean') {
+        setIsMysteryBoxEventActive(settingsRes.isEventActive);
+      }
+
+      // 3. Fetch Mystery Box Tiers from MongoDB
+      const boxRes = await api.get('/api/mystery-boxes').catch(() => null);
+      if (boxRes && boxRes.success && Array.isArray(boxRes.data || boxRes.boxes)) {
+        const boxList = boxRes.data || boxRes.boxes;
+        if (boxList.length > 0) {
+          setMysteryBoxes(boxList);
         }
-      } else {
-        // Check if there is an active saved user session in localStorage
-        const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_id') : null;
-        if (savedUserId) {
-          setCurrentUserId(savedUserId);
+      }
+
+      // 4. Fetch Mystery Rewards from MongoDB
+      const rewRes = await api.get('/api/mystery-boxes/rewards/all').catch(() => null);
+      if (rewRes && rewRes.success && Array.isArray(rewRes.data || rewRes.rewards)) {
+        const rewList = rewRes.data || rewRes.rewards;
+        if (rewList.length > 0) {
+          setMysteryRewards(rewList);
+        }
+      }
+
+      // 5. Fetch Mystery History from MongoDB
+      const histRes = await api.get('/api/mystery-boxes/public/history').catch(() => null);
+      if (histRes && histRes.success && Array.isArray(histRes.data || histRes.history)) {
+        const histList = histRes.data || histRes.history;
+        if (histList.length > 0) {
+          setMysteryHistory(histList);
+        }
+      }
+
+      // Authenticated queries if token exists
+      const token = getAuthToken();
+      if (token) {
+        // Fetch Current User
+        const meRes = await api.get('/api/auth/me').catch(() => null);
+        if (meRes && meRes.success && meRes.user) {
+          const userObj = meRes.user;
+          setCurrentUserId(userObj.id);
           setIsLoggedIn(true);
-        }
-      }
-    });
-
-    return () => unsubscribeAuth();
-  }, []);
-
-  // Handle PayOS Payment Redirect URL on App Startup (?payment=success&code=... or &orderCode=...)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const paymentStatus = params.get('payment');
-    const orderCode = params.get('orderCode') || params.get('code');
-
-    if (paymentStatus === 'success' && orderCode) {
-      const numCode = Number(orderCode);
-      if (numCode) {
-        fetch(`/api/payos/check-payment/${numCode}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.success && (data.status === 'PAID' || data.isPaid)) {
-              depositBalance(
-                data.amount || 50000,
-                'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
-                `Khách chuyển khoản PayOS đơn #${numCode}`
-              );
-            }
-          })
-          .catch(e => console.warn('PayOS URL check notice:', e))
-          .finally(() => {
-            try {
-              window.history.replaceState({}, document.title, window.location.pathname);
-            } catch {}
-          });
-      }
-    }
-  }, [currentUserId]);
-
-  // Firestore Sync Mechanism (Real-time Cloud Database Integration for all collections)
-  useEffect(() => {
-    let unsubscribeAccounts: (() => void) | undefined;
-    let unsubscribeUsers: (() => void) | undefined;
-    let unsubscribeOrders: (() => void) | undefined;
-    let unsubscribeTransactions: (() => void) | undefined;
-    let unsubscribeMessages: (() => void) | undefined;
-    let unsubscribeNotifications: (() => void) | undefined;
-    let unsubscribeMysteryBoxes: (() => void) | undefined;
-    let unsubscribeMysteryRewards: (() => void) | undefined;
-    let unsubscribeMysteryHistory: (() => void) | undefined;
-    let unsubscribeInventory: (() => void) | undefined;
-    let unsubscribeSettings: (() => void) | undefined;
-
-    const setupFirestoreSync = async () => {
-      try {
-        setCloudSyncStatus('syncing');
-
-        // 1. Subscribe to real-time accounts (User A adds/edits -> User B sees immediately)
-        unsubscribeAccounts = onSnapshot(
-          collection(db, 'accounts'),
-          snapshot => {
-            const cloudAccounts: AccountItem[] = [];
-            snapshot.forEach(d => {
-              const data = d.data() as Partial<AccountItem>;
-              if (data) {
-                const accId = data.id || d.id;
-                cloudAccounts.push({
-                  id: accId,
-                  code: data.code || `LQ${accId.slice(-5)}`,
-                  title: data.title || 'Tài khoản Liên Quân',
-                  price: typeof data.price === 'number' ? data.price : 0,
-                  originalPrice: typeof data.originalPrice === 'number' ? data.originalPrice : undefined,
-                  rank: data.rank || 'Cao Thủ',
-                  level: typeof data.level === 'number' ? data.level : 30,
-                  heroesCount: typeof data.heroesCount === 'number' ? data.heroesCount : 0,
-                  skinsCount: typeof data.skinsCount === 'number' ? data.skinsCount : 0,
-                  runePages: data.runePages || 'Full Ngọc',
-                  server: data.server || 'Việt Nam',
-                  rareSkins: Array.isArray(data.rareSkins) ? data.rareSkins : [],
-                  notableHeroes: Array.isArray(data.notableHeroes) ? data.notableHeroes : [],
-                  badgeTag: data.badgeTag || 'HOT',
-                  images: Array.isArray(data.images) && data.images.length > 0 ? data.images : ['https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80'],
-                  description: data.description || '',
-                  sellerId: data.sellerId || '',
-                  sellerName: data.sellerName || 'Người bán',
-                  sellerAvatar: data.sellerAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
-                  sellerRating: typeof data.sellerRating === 'number' ? data.sellerRating : undefined,
-                  sellerCompletedSales: typeof data.sellerCompletedSales === 'number' ? data.sellerCompletedSales : 0,
-                  sellerResponseTime: data.sellerResponseTime || '2 phút',
-                  sellerVerified: !!data.sellerVerified,
-                  status: data.status || 'pending',
-                  rejectionReason: data.rejectionReason || undefined,
-                  credentials: data.credentials || {
-                    username: '',
-                    password: '',
-                    securityType: 'Trắng Thông Tin',
-                    secretNotes: ''
-                  },
-                  createdAt: data.createdAt || new Date().toISOString(),
-                  views: typeof data.views === 'number' ? data.views : 1,
-                  likes: typeof data.likes === 'number' ? data.likes : 0,
-                  isFeatured: !!data.isFeatured
-                });
-              }
-            });
-            setAccounts(cloudAccounts);
-            setCloudSyncStatus('synced');
-          },
-          err => {
-            console.warn('Firestore accounts listener notice:', err);
-          }
-        );
-
-        // 2. Subscribe to real-time users
-        unsubscribeUsers = onSnapshot(
-          collection(db, 'users'),
-          snapshot => {
-            const cloudUsers: UserProfile[] = [];
-            snapshot.forEach(d => {
-              const uData = d.data() as Partial<UserProfile>;
-              if (uData && uData.id) {
-                cloudUsers.push({
-                  id: uData.id,
-                  name: uData.name || 'Người dùng',
-                  email: uData.email || '',
-                  password: uData.password || '',
-                  phone: uData.phone || '',
-                  avatar: uData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
-                  role: uData.role || 'buyer',
-                  balance: typeof uData.balance === 'number' ? uData.balance : 0,
-                  pendingBalance: typeof uData.pendingBalance === 'number' ? uData.pendingBalance : 0,
-                  rating: uData.rating ?? 5.0,
-                  completedSales: uData.completedSales ?? 0,
-                  isVerifiedSeller: !!uData.isVerifiedSeller,
-                  sellerTier: uData.sellerTier || 'BASIC',
-                  createdAt: uData.createdAt || new Date().toISOString().split('T')[0],
-                  bio: uData.bio || '',
-                  bankName: uData.bankName || '',
-                  bankAccount: uData.bankAccount || '',
-                  bankAccountName: uData.bankAccountName || '',
-                  wishlistIds: Array.isArray(uData.wishlistIds) ? uData.wishlistIds : []
-                });
-              }
-            });
-            if (cloudUsers.length > 0) {
-              setAllUsers(prev => {
-                const map = new Map<string, UserProfile>();
-                INITIAL_USERS.forEach(u => map.set(u.id, u));
-                prev.forEach(u => map.set(u.id, u));
-                cloudUsers.forEach(u => map.set(u.id, u));
-                return Array.from(map.values());
-              });
-            }
-          },
-          err => console.warn('Firestore users listener notice:', err)
-        );
-
-        // 3. Subscribe to real-time orders
-        unsubscribeOrders = onSnapshot(
-          collection(db, 'orders'),
-          snapshot => {
-            const cloudOrders: OrderItem[] = [];
-            snapshot.forEach(d => {
-              const ord = d.data() as OrderItem;
-              if (ord && ord.id) {
-                cloudOrders.push(ord);
-              }
-            });
-            setOrders(cloudOrders);
-          },
-          err => console.warn('Firestore orders listener notice:', err)
-        );
-
-        // 4. Subscribe to real-time transactions
-        unsubscribeTransactions = onSnapshot(
-          collection(db, 'transactions'),
-          snapshot => {
-            const cloudTx: WalletTransaction[] = [];
-            snapshot.forEach(d => {
-              const tx = d.data() as WalletTransaction;
-              if (tx && tx.id) {
-                cloudTx.push(tx);
-              }
-            });
-            setTransactions(cloudTx);
-          },
-          err => console.warn('Firestore transactions listener notice:', err)
-        );
-
-        // 5. Subscribe to real-time messages
-        unsubscribeMessages = onSnapshot(
-          collection(db, 'messages'),
-          snapshot => {
-            const cloudMsgs: ChatMessage[] = [];
-            snapshot.forEach(d => {
-              const msg = d.data() as ChatMessage;
-              if (msg && msg.id) {
-                cloudMsgs.push(msg);
-              }
-            });
-            setChatMessages(cloudMsgs);
-          },
-          err => console.warn('Firestore messages listener notice:', err)
-        );
-
-        // 6. Subscribe to real-time notifications
-        unsubscribeNotifications = onSnapshot(
-          collection(db, 'notifications'),
-          snapshot => {
-            const cloudNotifs: AppNotification[] = [];
-            snapshot.forEach(d => {
-              const notif = d.data() as AppNotification;
-              if (notif && notif.id) {
-                cloudNotifs.push(notif);
-              }
-            });
-            setNotifications(cloudNotifs);
-          },
-          err => console.warn('Firestore notifications listener notice:', err)
-        );
-
-        // 7. Subscribe to real-time mystery boxes
-        unsubscribeMysteryBoxes = onSnapshot(
-          collection(db, 'mystery_boxes'),
-          snapshot => {
-            const cloudBoxesMap = new Map<string, MysteryBoxTierConfig>();
-            DEFAULT_MYSTERY_BOX_TIERS.forEach(box => cloudBoxesMap.set(box.id, box));
-
-            snapshot.forEach(d => {
-              const box = d.data() as MysteryBoxTierConfig;
-              if (box && box.id) {
-                cloudBoxesMap.set(box.id, { ...cloudBoxesMap.get(box.id), ...box });
-              }
-            });
-
-            const tierOrder = ['box_bronze', 'box_gold', 'box_diamond', 'box_special'];
-            const allBoxes = Array.from(cloudBoxesMap.values()).sort((a, b) => {
-              const idxA = tierOrder.indexOf(a.id);
-              const idxB = tierOrder.indexOf(b.id);
-              if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-              return 0;
-            });
-
-            setMysteryBoxes(allBoxes);
-          },
-          err => console.warn('Firestore mystery_boxes listener notice:', err)
-        );
-
-        // 8. Subscribe to real-time mystery rewards
-        unsubscribeMysteryRewards = onSnapshot(
-          collection(db, 'mystery_rewards'),
-          snapshot => {
-            const cloudRewards: MysteryBoxRewardItem[] = [];
-            snapshot.forEach(d => {
-              const rew = d.data() as MysteryBoxRewardItem;
-              if (rew && rew.id) {
-                cloudRewards.push(rew);
-              }
-            });
-            setMysteryRewards(cloudRewards.length > 0 ? cloudRewards : DEFAULT_MYSTERY_BOX_REWARDS);
-          },
-          err => console.warn('Firestore mystery_rewards listener notice:', err)
-        );
-
-        // 9. Subscribe to real-time mystery history
-        unsubscribeMysteryHistory = onSnapshot(
-          collection(db, 'mystery_history'),
-          snapshot => {
-            const cloudHist: MysteryBoxHistoryItem[] = [];
-            snapshot.forEach(d => {
-              const h = d.data() as MysteryBoxHistoryItem;
-              if (h && h.id) {
-                cloudHist.push(h);
-              }
-            });
-            setMysteryHistory(cloudHist.slice(0, 50));
-          },
-          err => console.warn('Firestore mystery_history listener notice:', err)
-        );
-
-        // 10. Subscribe to mystery box program status
-        unsubscribeSettings = onSnapshot(
-          doc(db, 'site_settings', 'mystery_box_config'),
-          docSnap => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (typeof data.isEventActive === 'boolean') {
-                setIsMysteryBoxEventActive(data.isEventActive);
-              }
-            }
-          },
-          err => console.warn('Firestore mystery_box_config listener notice:', err)
-        );
-
-        // 11. Subscribe to user inventory
-        unsubscribeInventory = onSnapshot(
-          collection(db, 'user_inventory'),
-          snapshot => {
-            const cloudInv: UserInventoryItem[] = [];
-            snapshot.forEach(d => {
-              const inv = d.data() as UserInventoryItem;
-              if (inv && inv.id) {
-                cloudInv.push(inv);
-              }
-            });
-            setUserInventory(cloudInv);
-          },
-          err => console.warn('Firestore user_inventory listener notice:', err)
-        );
-      } catch (err) {
-        console.warn('Firebase Firestore setup offline mode:', err);
-        setCloudSyncStatus('offline');
-      }
-    };
-
-    setupFirestoreSync();
-
-    return () => {
-      if (unsubscribeAccounts) unsubscribeAccounts();
-      if (unsubscribeUsers) unsubscribeUsers();
-      if (unsubscribeOrders) unsubscribeOrders();
-      if (unsubscribeTransactions) unsubscribeTransactions();
-      if (unsubscribeMessages) unsubscribeMessages();
-      if (unsubscribeNotifications) unsubscribeNotifications();
-      if (unsubscribeMysteryBoxes) unsubscribeMysteryBoxes();
-      if (unsubscribeMysteryRewards) unsubscribeMysteryRewards();
-      if (unsubscribeMysteryHistory) unsubscribeMysteryHistory();
-      if (unsubscribeInventory) unsubscribeInventory();
-      if (unsubscribeSettings) unsubscribeSettings();
-    };
-  }, []);
-
-  // Supabase PostgreSQL Real-time & Initial Fetch
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
-    const fetchSupabaseData = async () => {
-      try {
-        const [supaAccs, supaBoxes, supaRewards, supaOrders, supaProfiles] = await Promise.allSettled([
-          getSupabaseAccounts(),
-          getSupabaseMysteryBoxes(),
-          getSupabaseMysteryRewards(),
-          getSupabaseOrders(),
-          getSupabaseProfiles()
-        ]);
-
-        if (supaAccs.status === 'fulfilled' && supaAccs.value.length > 0) {
-          setAccounts(supaAccs.value);
-        }
-        if (supaBoxes.status === 'fulfilled' && supaBoxes.value.length > 0) {
-          setMysteryBoxes(supaBoxes.value);
-        }
-        if (supaRewards.status === 'fulfilled' && supaRewards.value.length > 0) {
-          setMysteryRewards(supaRewards.value);
-        }
-        if (supaOrders.status === 'fulfilled' && supaOrders.value.length > 0) {
-          setOrders(supaOrders.value);
-        }
-        if (supaProfiles.status === 'fulfilled' && supaProfiles.value.length > 0) {
           setAllUsers(prev => {
-            const map = new Map<string, UserProfile>();
-            INITIAL_USERS.forEach(u => map.set(u.id, u));
-            prev.forEach(u => map.set(u.id, u));
-            supaProfiles.value.forEach(u => map.set(u.id, u));
-            return Array.from(map.values());
+            const filtered = prev.filter(u => u.id !== userObj.id && u.email !== userObj.email);
+            return [userObj, ...filtered];
           });
-        }
-      } catch (err) {
-        console.warn('Supabase data load notice:', err);
-      }
-    };
+          try {
+            localStorage.setItem('lqmarket_current_user_id', userObj.id);
+            localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(userObj));
+          } catch {}
 
-    fetchSupabaseData();
-  }, []);
-
-  // Primary MongoDB Atlas REST API data loader & synchronizer
-  useEffect(() => {
-    const fetchMongoData = async () => {
-      try {
-        // 1. Fetch Accounts directly from MongoDB
-        const accRes = await api.get('/api/accounts');
-        if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
-          const list = accRes.data || accRes.accounts;
-          if (list.length > 0) {
-            setAccounts(prev => {
-              const map = new Map<string, AccountItem>();
-              prev.forEach(a => map.set(a.id, a));
-              list.forEach((a: AccountItem) => map.set(a.id, a));
-              return Array.from(map.values());
-            });
+          // If user is admin, fetch ALL users from MongoDB
+          if (userObj.role === 'admin') {
+            const adminUsersRes = await api.get('/api/admin/users').catch(() => null);
+            if (adminUsersRes && adminUsersRes.success && Array.isArray(adminUsersRes.data || adminUsersRes.users)) {
+              const uList = adminUsersRes.data || adminUsersRes.users;
+              setAllUsers(uList);
+            }
           }
         }
 
-        // 2. Fetch authenticated user profile from MongoDB
-        const token = getAuthToken();
-        if (token) {
-          const meRes = await api.get('/api/auth/me');
-          if (meRes && meRes.success && meRes.user) {
-            const u = meRes.user;
-            setCurrentUserId(u.id);
-            setIsLoggedIn(true);
-            setAllUsers(prev => {
-              const map = new Map<string, UserProfile>();
-              prev.forEach(x => map.set(x.id, x));
-              map.set(u.id, u);
-              return Array.from(map.values());
-            });
-            try {
-              localStorage.setItem('lqmarket_current_user_id', u.id);
-              localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(u));
-            } catch {}
-          }
-        }
-
-        // 3. Fetch Orders from MongoDB
-        const ordRes = await api.get('/api/orders');
+        // Fetch User Orders
+        const ordRes = await api.get('/api/orders').catch(() => null);
         if (ordRes && ordRes.success && Array.isArray(ordRes.data || ordRes.orders)) {
-          const ordList = ordRes.data || ordRes.orders;
-          if (ordList.length > 0) {
-            setOrders(prev => {
-              const map = new Map<string, OrderItem>();
-              prev.forEach(o => map.set(o.id, o));
-              ordList.forEach((o: OrderItem) => map.set(o.id, o));
-              return Array.from(map.values());
-            });
-          }
+          setOrders(ordRes.data || ordRes.orders);
         }
 
-        // 4. Fetch Wallet Transactions from MongoDB
-        const txRes = await api.get('/api/wallet/transactions');
+        // Fetch Wallet Transactions
+        const txRes = await api.get('/api/wallet/transactions').catch(() => null);
         if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
-          const txList = txRes.data || txRes.transactions;
-          if (txList.length > 0) {
-            setTransactions(prev => {
-              const map = new Map<string, WalletTransaction>();
-              prev.forEach(t => map.set(t.id, t));
-              txList.forEach((t: WalletTransaction) => map.set(t.id, t));
-              return Array.from(map.values());
-            });
-          }
+          setTransactions(txRes.data || txRes.transactions);
         }
 
-        // 5. Fetch Mystery Boxes from MongoDB
-        const boxRes = await api.get('/api/mystery-boxes');
-        if (boxRes && boxRes.success && Array.isArray(boxRes.data || boxRes.boxes)) {
-          const boxList = boxRes.data || boxRes.boxes;
-          if (boxList.length > 0) {
-            setMysteryBoxes(boxList);
-          }
+        // Fetch Notifications
+        const notifRes = await api.get('/api/notifications').catch(() => null);
+        if (notifRes && notifRes.success && Array.isArray(notifRes.data || notifRes.notifications)) {
+          setNotifications(notifRes.data || notifRes.notifications);
         }
-      } catch (err) {
-        console.warn('MongoDB API fetch notice:', err);
+
+        // Fetch User Inventory
+        const invRes = await api.get('/api/mystery-boxes/user/inventory').catch(() => null);
+        if (invRes && invRes.success && Array.isArray(invRes.data || invRes.inventory || invRes.items)) {
+          setUserInventory(invRes.data || invRes.inventory || invRes.items);
+        }
+
+        // Fetch Favorites/Wishlist
+        const favRes = await api.get('/api/favorites').catch(() => null);
+        if (favRes && favRes.success && Array.isArray(favRes.data || favRes.favorites)) {
+          const fList = favRes.data || favRes.favorites;
+          setWishlistIds(fList.map((f: any) => (typeof f === 'string' ? f : f.accountId || f.id)));
+        }
       }
-    };
 
-    fetchMongoData();
+      setCloudSyncStatus('synced');
+    } catch (e) {
+      console.warn('MongoDB initial data sync notice:', e);
+      setCloudSyncStatus('offline');
+    }
   }, []);
 
+  // Initial load
+  useEffect(() => {
+    fetchAllMongoData();
+  }, [fetchAllMongoData]);
+
+  // Derive Current User
   const currentUser = useMemo(() => {
     if (!isLoggedIn || !currentUserId) return GUEST_USER;
 
-    // 1. Check allUsers state
     const matchInAll = allUsers.find(
       u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
     );
     if (matchInAll) return matchInAll;
 
-    // 2. Check INITIAL_USERS (Super Admin, default accounts)
     const matchInInit = INITIAL_USERS.find(
       u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
     );
     if (matchInInit) return matchInInit;
 
-    // 3. Check localStorage saved user profile
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
       if (raw) {
@@ -858,35 +428,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return parsed;
         }
       }
-    } catch {
-      // ignore
-    }
-
-    // 4. Check localStorage local users
-    try {
-      const rawLocal = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_local_users') : null;
-      if (rawLocal) {
-        const list = JSON.parse(rawLocal) as UserProfile[];
-        const localMatch = list.find(
-          u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
-        );
-        if (localMatch) return localMatch;
-      }
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     return GUEST_USER;
   }, [isLoggedIn, currentUserId, allUsers]);
-
-  // Sync wishlist to current user's profile
-  useEffect(() => {
-    if (isLoggedIn && currentUser && currentUser.id) {
-      setWishlistIds(Array.isArray(currentUser.wishlistIds) ? currentUser.wishlistIds : []);
-    } else {
-      setWishlistIds([]);
-    }
-  }, [isLoggedIn, currentUserId, currentUser?.id, currentUser?.wishlistIds]);
 
   // Auth Operations
   const openLoginModal = () => {
@@ -903,19 +448,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!password) {
       return { success: false, message: 'Vui lòng nhập mật khẩu đăng nhập!' };
     }
-    const res = await loginWithFirebase(identifier, password);
+    const res = await apiLoginUser(identifier, password);
     if (res.success && res.user) {
       const loggedUser = res.user;
       setCurrentUserId(loggedUser.id);
       setIsLoggedIn(true);
       setAllUsers(prev => [loggedUser, ...prev.filter(u => u && u.id !== loggedUser.id)]);
-      try {
-        localStorage.setItem('lqmarket_current_user_id', loggedUser.id);
-        localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(loggedUser));
-      } catch {
-        // ignore
-      }
       setIsAuthModalOpen(false);
+      
+      // Reload user data & admin lists if applicable
+      fetchAllMongoData();
       return { success: true, message: res.message };
     }
     return { success: false, message: res.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!' };
@@ -928,53 +470,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole,
     phone: string = ''
   ): Promise<{ success: boolean; message: string }> => {
-    const res = await registerWithFirebase(name, usernameOrEmail, password, role, phone);
+    const res = await apiRegisterUser(name, usernameOrEmail, password, role, phone);
     if (res.success && res.user) {
       const regUser = res.user;
       setCurrentUserId(regUser.id);
       setIsLoggedIn(true);
       setAllUsers(prev => [regUser, ...prev.filter(u => u && u.id !== regUser.id)]);
-      try {
-        localStorage.setItem('lqmarket_current_user_id', regUser.id);
-        localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(regUser));
-      } catch {
-        // ignore
-      }
       setIsAuthModalOpen(false);
-
-      // Create welcome notification
-      const welcomeNotif: AppNotification = {
-        id: `notif_${Date.now()}`,
-        userId: regUser.id,
-        title: 'Đăng ký tài khoản thành công',
-        message: `Chào mừng ${name} đến với sàn giao dịch LQMarket! Dữ liệu của bạn được lưu an toàn trên MongoDB Atlas.`,
-        type: 'system',
-        read: false,
-        createdAt: new Date().toISOString()
-      };
-      setNotifications(prev => [welcomeNotif, ...prev]);
-
+      fetchAllMongoData();
       return { success: true, message: res.message };
     }
     return { success: false, message: res.message || 'Đăng ký thất bại. Vui lòng thử lại!' };
   };
 
   const logoutUser = async () => {
-    await logoutFromFirebase();
-    try {
-      localStorage.removeItem('lqmarket_current_user_id');
-      localStorage.removeItem('lqmarket_saved_user_profile');
-    } catch {
-      // ignore
-    }
+    await apiLogoutUser();
     setIsLoggedIn(false);
     setCurrentUserId('');
     setCurrentView('home');
   };
 
-  const quickSwitchUser = (_userId: string) => {
-    // Disabled in production to prevent authentication bypass
-  };
+  const quickSwitchUser = (_userId: string) => {};
 
   const openProfileModal = () => {
     if (!isLoggedIn) {
@@ -992,25 +508,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedUser = { ...currentUser, ...data };
     try {
       localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(updatedUser));
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 1. PRIMARY: Update profile in MongoDB Atlas
     try {
       await api.put('/api/auth/profile', data);
     } catch (e) {
       console.warn('MongoDB profile update notice:', e);
-    }
-
-    if (isSupabaseConfigured) {
-      saveSupabaseProfile(updatedUser).catch(() => {});
-    }
-
-    try {
-      await setDoc(doc(db, 'users', currentUserId), cleanForFirestore(data), { merge: true });
-    } catch (e) {
-      console.error('Firestore update profile error:', e);
     }
   };
 
@@ -1048,318 +551,146 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsChatOpen(false);
   };
 
-  // Toggle Wishlist & Sync with Firestore
-  const toggleWishlist = (accountId: string) => {
+  // Toggle Wishlist
+  const toggleWishlist = async (accountId: string) => {
     if (!isLoggedIn || !currentUser.id) {
       openLoginModal();
       return;
     }
-    setWishlistIds(prev => {
-      const exists = prev.includes(accountId);
-      const updated = exists ? prev.filter(id => id !== accountId) : [...prev, accountId];
-      setAccounts(accs =>
-        accs.map(a =>
-          a.id === accountId ? { ...a, likes: Math.max(0, a.likes + (exists ? -1 : 1)) } : a
-        )
-      );
+    const exists = wishlistIds.includes(accountId);
+    const updated = exists ? wishlistIds.filter(id => id !== accountId) : [...wishlistIds, accountId];
+    setWishlistIds(updated);
 
-      setAllUsers(prevUsers =>
-        prevUsers.map(u => (u.id === currentUser.id ? { ...u, wishlistIds: updated } : u))
-      );
+    setAccounts(accs =>
+      accs.map(a =>
+        a.id === accountId ? { ...a, likes: Math.max(0, (a.likes || 0) + (exists ? -1 : 1)) } : a
+      )
+    );
 
-      try {
-        setDoc(doc(db, 'users', currentUser.id), { wishlistIds: updated }, { merge: true });
-      } catch (e) {
-        console.warn('Firestore wishlist sync notice:', e);
-      }
-
-      return updated;
-    });
+    try {
+      await api.post(`/api/favorites/${accountId}`, {});
+    } catch (e) {
+      console.warn('MongoDB wishlist sync notice:', e);
+    }
   };
 
   const isWishlisted = (accountId: string) => wishlistIds.includes(accountId);
 
-  // Account Creation & MongoDB Atlas sync
+  // Account Creation
   const createAccount = async (
     newAccountData: Omit<AccountItem, 'id' | 'code' | 'createdAt' | 'views' | 'likes' | 'status'>
   ): Promise<{ success: boolean; message: string; accountId?: string }> => {
-    const newId = `acc_${Date.now()}`;
-    const codeNum = Math.floor(10000 + Math.random() * 90000);
-    const newAccount: AccountItem = {
-      ...newAccountData,
-      id: newId,
-      code: `LQ${codeNum}`,
-      status: 'approved', // Auto-approved for fast listing
-      createdAt: new Date().toISOString(),
-      views: 1,
-      likes: 0
-    };
-
-    setAccounts(prev => [newAccount, ...prev]);
-
-    // 1. PRIMARY: Write to MongoDB Atlas REST API
     try {
-      const apiRes = await api.post('/api/accounts', {
-        ...newAccountData,
-        sellerId: currentUser.id,
-        sellerName: currentUser.name,
-        sellerAvatar: currentUser.avatar
-      });
-      if (apiRes && apiRes.success && (apiRes.account || apiRes.data)) {
-        const saved = apiRes.account || apiRes.data;
-        setAccounts(prev => [saved, ...prev.filter(a => a.id !== newId && a.id !== saved.id)]);
+      const response = await api.post('/api/accounts', newAccountData);
+      if (response && response.success && (response.account || response.data)) {
+        const createdAcc = response.account || response.data;
+        setAccounts(prev => [createdAcc, ...prev.filter(a => a.id !== createdAcc.id)]);
+        return {
+          success: true,
+          message: response.message || 'Đăng bán tài khoản thành công! Dữ liệu đã lưu vào MongoDB.',
+          accountId: createdAcc.id
+        };
       }
-    } catch (apiErr) {
-      console.warn('MongoDB account save notice:', apiErr);
+      return {
+        success: false,
+        message: response.message || 'Đăng bán tài khoản thất bại.'
+      };
+    } catch (error: any) {
+      console.error('Create account error:', error);
+      return {
+        success: false,
+        message: error.message || 'Lỗi kết nối máy chủ MongoDB API khi đăng bán.'
+      };
     }
-
-    // 2. Secondary Cloud Firestore backup
-    try {
-      if (isSupabaseConfigured) {
-        saveSupabaseAccount(newAccount).catch(err => console.warn('Supabase account save:', err));
-      }
-      await setDoc(doc(db, 'accounts', newId), cleanForFirestore(newAccount));
-    } catch (e) {
-      console.warn('Firestore write notice:', e);
-    }
-
-    // Add notification to admin
-    const newNotif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: 'user_admin_1',
-      title: 'Có tin đăng mới',
-      message: `Người bán ${currentUser.name} vừa đăng acc #${newAccount.code} (${newAccount.rank} - ${newAccount.price.toLocaleString('vi-VN')}đ).`,
-      type: 'account',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [newNotif, ...prev]);
-    try {
-      await setDoc(doc(db, 'notifications', newNotif.id), cleanForFirestore(newNotif));
-    } catch (e) {
-      console.warn('Firestore notif save notice:', e);
-    }
-
-    return {
-      success: true,
-      message: 'Tin đăng của bạn đã được lưu thành công vào cơ sở dữ liệu MongoDB Atlas!',
-      accountId: newId
-    };
   };
 
-  // Update Account Status (Approve / Reject)
   const updateAccountStatus = async (accountId: string, status: AccountStatus, rejectionReason?: string) => {
-    const reasonText = rejectionReason ? rejectionReason.trim() : '';
-
     setAccounts(prev =>
       prev.map(a =>
-        a.id === accountId
-          ? {
-              ...a,
-              status,
-              rejectionReason: status === 'rejected' ? reasonText : undefined
-            }
-          : a
+        a.id === accountId ? { ...a, status, rejectionReason } : a
       )
     );
-
-    // 1. PRIMARY: MongoDB Admin API
     try {
-      await api.put(`/api/admin/accounts/${accountId}/status`, { status, rejectionReason: reasonText });
-    } catch (apiErr) {
-      console.warn('MongoDB account status update notice:', apiErr);
-    }
-
-    const targetAcc = accounts.find(a => a.id === accountId);
-    try {
-      const payload = cleanForFirestore({
-        status,
-        rejectionReason: status === 'rejected' ? reasonText : null
-      });
-      await setDoc(doc(db, 'accounts', accountId), payload, { merge: true });
+      await api.put(`/api/accounts/${accountId}`, { status, rejectionReason });
     } catch (e) {
-      console.error('Firestore update status error:', e);
-    }
-
-    if (targetAcc) {
-      const notif: AppNotification = {
-        id: `notif_${Date.now()}`,
-        userId: targetAcc.sellerId,
-        title: status === 'approved' ? 'Acc của bạn đã được DUYỆT' : 'Acc bị TỪ CHỐI duyệt',
-        message:
-          status === 'approved'
-            ? `Tài khoản #${targetAcc.code} đã được duyệt và hiển thị công khai trên sàn LQMarket!`
-            : `Tài khoản #${targetAcc.code} bị từ chối. Lý do: ${reasonText || 'Thông tin chưa chính xác'}`,
-        type: 'account',
-        read: false,
-        createdAt: new Date().toISOString()
-      };
-      setNotifications(prev => [notif, ...prev]);
-      try {
-        await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-      } catch (e) {
-        console.warn('Firestore notif save notice:', e);
-      }
+      console.warn('MongoDB update account status notice:', e);
     }
   };
 
   const deleteAccount = async (accountId: string) => {
     setAccounts(prev => prev.filter(a => a.id !== accountId));
-    // 1. PRIMARY: MongoDB delete
     try {
       await api.delete(`/api/accounts/${accountId}`);
-    } catch (apiErr) {
-      console.warn('MongoDB delete account notice:', apiErr);
-    }
-    try {
-      await deleteDoc(doc(db, 'accounts', accountId));
     } catch (e) {
-      console.warn('Firestore delete account notice:', e);
+      console.warn('MongoDB delete account notice:', e);
     }
   };
 
-  // Escrow Order Flow
+  // Orders & Escrow workflow
   const createOrder = (
     accountId: string,
     voucherOptions?: { code: string; discount: number; inventoryItemId?: string }
   ): { success: boolean; orderId?: string; message: string } => {
     const acc = accounts.find(a => a.id === accountId);
-    if (!acc) return { success: false, message: 'Không tìm thấy tài khoản!' };
-    if (acc.status === 'sold') return { success: false, message: 'Tài khoản này đã có người mua!' };
+    if (!acc) return { success: false, message: 'Tài khoản không tồn tại!' };
+    if (acc.status === 'sold') return { success: false, message: 'Tài khoản đã có người mua!' };
 
-    const discountAmount = Math.max(0, voucherOptions?.discount || 0);
-    const totalCost = Math.max(0, acc.price - discountAmount);
+    const discountAmount = voucherOptions?.discount || 0;
+    const finalPrice = Math.max(0, acc.price - discountAmount);
 
-    if (currentUser.balance < totalCost) {
+    if (currentUser.balance < finalPrice) {
       return {
         success: false,
-        message: `Số dư ví không đủ (${currentUser.balance.toLocaleString('vi-VN')}đ < ${totalCost.toLocaleString('vi-VN')}đ). Vui lòng nạp thêm tiền qua PayOS / VietQR!`
+        message: `Số dư ví không đủ (${currentUser.balance.toLocaleString('vi-VN')}đ / ${finalPrice.toLocaleString('vi-VN')}đ). Vui lòng nạp thêm tiền!`
       };
     }
 
-    // 1. Deduct buyer balance
-    setAllUsers(prev =>
-      prev.map(u => (u.id === currentUser.id ? { ...u, balance: u.balance - totalCost } : u))
-    );
-
-    // 2. Mark account sold
-    setAccounts(prev =>
-      prev.map(a => (a.id === accountId ? { ...a, status: 'sold' as AccountStatus } : a))
-    );
-
-    // 3. Mark inventory voucher item as used if applicable
-    if (voucherOptions?.inventoryItemId) {
-      useUserInventoryItem(voucherOptions.inventoryItemId);
-    }
-
-    // 4. Create Escrow Order
     const orderId = `ord_${Date.now()}`;
-    const orderCodeNum = Math.floor(10000 + Math.random() * 90000);
-    const platformFee = Math.round(acc.price * 0.05); // 5% platform fee
-    const sellerNetPending = acc.price - platformFee;
+    const orderCode = `#ORD${Math.floor(10000 + Math.random() * 90000)}`;
+
     const newOrder: OrderItem = {
       id: orderId,
-      orderCode: `#ORD${orderCodeNum}`,
+      orderCode,
       accountId: acc.id,
       accountCode: acc.code,
       accountTitle: acc.title,
       accountPrice: acc.price,
-      voucherDiscount: discountAmount > 0 ? discountAmount : undefined,
-      voucherCodeUsed: voucherOptions?.code || undefined,
-      fee: platformFee,
-      totalAmount: totalCost,
+      voucherDiscount: discountAmount,
+      voucherCodeUsed: voucherOptions?.code,
+      totalAmount: finalPrice,
+      fee: Math.round(finalPrice * 0.05),
       buyerId: currentUser.id,
       buyerName: currentUser.name,
       sellerId: acc.sellerId,
       sellerName: acc.sellerName,
-      status: 'account_delivered', // Automatic instant delivery
+      status: 'account_delivered',
       credentialsDelivered: acc.credentials,
       createdAt: new Date().toISOString()
     };
 
     setOrders(prev => [newOrder, ...prev]);
-
-    // 5. PRIMARY: Create order in MongoDB Atlas via REST API
-    api.post('/api/orders', {
-      accountId,
-      voucherCodeUsed: voucherOptions?.code,
-      voucherDiscount: discountAmount,
-      buyerId: currentUser.id
-    }).then(res => {
-      if (res && res.success && (res.order || res.data)) {
-        const savedOrder = res.order || res.data;
-        setOrders(prev => [savedOrder, ...prev.filter(o => o.id !== orderId && o.id !== savedOrder.id)]);
-      }
-    }).catch(err => console.warn('MongoDB order post notice:', err));
-
-    // 6. Create Wallet Transaction for Buyer
-    const buyerTx: WalletTransaction = {
-      id: `tx_${Date.now()}`,
-      userId: currentUser.id,
-      type: 'purchase',
-      amount: -totalCost,
-      status: 'success',
-      note: discountAmount > 0
-        ? `Mua acc #${acc.code} (Áp dụng voucher giảm ${discountAmount.toLocaleString('vi-VN')}đ do sàn tài trợ)`
-        : `Mua acc #${acc.code} (Hệ thống Escrow trung gian đang giữ tiền)`,
-      createdAt: new Date().toISOString()
-    };
-    setTransactions(prev => [buyerTx, ...prev]);
-
-    // 7. Update Seller Pending Balance
+    setAccounts(prev => prev.map(a => (a.id === acc.id ? { ...a, status: 'sold' } : a)));
+    
+    // Deduct buyer balance locally
     setAllUsers(prev =>
-      prev.map(u => (u.id === acc.sellerId ? { ...u, pendingBalance: u.pendingBalance + sellerNetPending } : u))
+      prev.map(u => (u.id === currentUser.id ? { ...u, balance: Math.max(0, u.balance - finalPrice) } : u))
     );
 
-    // Sync to Firestore & Supabase
-    try {
-      if (isSupabaseConfigured) {
-        saveSupabaseOrder(newOrder).catch(err => console.warn('Supabase order save:', err));
-        saveSupabaseTransaction(buyerTx).catch(err => console.warn('Supabase tx save:', err));
+    // Call MongoDB Order API
+    api.post('/api/orders', {
+      accountId: acc.id,
+      voucherCodeUsed: voucherOptions?.code,
+      voucherDiscount: discountAmount
+    }).then(res => {
+      if (res && res.success && res.order) {
+        setOrders(prev => [res.order, ...prev.filter(o => o.id !== orderId && o.id !== res.order.id)]);
       }
-      setDoc(doc(db, 'orders', orderId), cleanForFirestore(newOrder));
-      setDoc(doc(db, 'transactions', buyerTx.id), cleanForFirestore(buyerTx));
-      updateDoc(doc(db, 'accounts', acc.id), { status: 'sold' });
-      updateDoc(doc(db, 'users', currentUser.id), { balance: currentUser.balance - totalCost });
-      const seller = allUsers.find(u => u.id === acc.sellerId);
-      if (seller) {
-        updateDoc(doc(db, 'users', acc.sellerId), { pendingBalance: seller.pendingBalance + sellerNetPending });
-      }
-    } catch (e) {
-      console.warn('Firestore order sync notice:', e);
-    }
-
-    // 8. Notify Buyer & Seller
-    const buyerNotif: AppNotification = {
-      id: `notif_${Date.now()}_1`,
-      userId: currentUser.id,
-      title: 'Mua acc thành công & Đã nhận mật khẩu',
-      message: `Đơn hàng ${newOrder.orderCode} đã giao mật khẩu tự động. Hãy vào mục [Đơn Hàng] kiểm tra và đổi pass Garena!`,
-      type: 'order',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-
-    const sellerNotif: AppNotification = {
-      id: `notif_${Date.now()}_2`,
-      userId: acc.sellerId,
-      title: 'Bạn có đơn hàng mới đã bán',
-      message: `Khách hàng ${currentUser.name} vừa mua acc #${acc.code}. Tiền (${sellerNetPending.toLocaleString('vi-VN')}đ sau trừ phí) đang được giữ an toàn trong ví Escrow.`,
-      type: 'order',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-
-    setNotifications(prev => [buyerNotif, sellerNotif, ...prev]);
-    try {
-      setDoc(doc(db, 'notifications', buyerNotif.id), cleanForFirestore(buyerNotif));
-      setDoc(doc(db, 'notifications', sellerNotif.id), cleanForFirestore(sellerNotif));
-    } catch (e) {}
+    }).catch(err => console.warn('MongoDB create order error:', err));
 
     return {
       success: true,
       orderId,
-      message: 'Đặt mua thành công! Thông tin tài khoản & mật khẩu đã được lưu và cấp ngay lập tức.'
+      message: 'Đặt mua thành công! Thông tin tài khoản & mật khẩu đã được bàn giao tự động qua Escrow.'
     };
   };
 
@@ -1367,15 +698,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders(prev =>
       prev.map(o => (o.id === orderId ? { ...o, status: 'account_delivered' } : o))
     );
-    try {
-      updateDoc(doc(db, 'orders', orderId), { status: 'account_delivered' });
-    } catch (e) {
-      console.warn('Firestore delivery confirm notice:', e);
-    }
   };
 
-  // Buyer confirms they received account ok -> Release Escrow money to Seller
-  const confirmOrderReceived = (orderId: string) => {
+  const confirmOrderReceived = async (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
@@ -1394,99 +719,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         u.id === order.sellerId
           ? {
               ...u,
-              balance: u.balance + payoutAmount,
-              pendingBalance: Math.max(0, u.pendingBalance - payoutAmount),
-              completedSales: u.completedSales + 1
+              balance: (u.balance || 0) + payoutAmount,
+              pendingBalance: Math.max(0, (u.pendingBalance || 0) - payoutAmount),
+              completedSales: (u.completedSales || 0) + 1
             }
           : u
       )
     );
 
-    // 1. PRIMARY: MongoDB Confirm Order API
-    api.post(`/api/orders/${orderId}/confirm`, {}).catch(err => console.warn('MongoDB order confirm notice:', err));
-
-    const sellerTx: WalletTransaction = {
-      id: `tx_${Date.now()}`,
-      userId: order.sellerId,
-      type: 'seller_payout',
-      amount: payoutAmount,
-      status: 'success',
-      note: `Nhận tiền bán acc ${order.accountCode} (Đơn hàng ${order.orderCode} - Đã trừ 5% phí sàn: -${feeAmount.toLocaleString('vi-VN')}đ)`,
-      createdAt: new Date().toISOString()
-    };
-    setTransactions(prev => [sellerTx, ...prev]);
-
+    // Call MongoDB Confirm Order API
     try {
-      updateDoc(doc(db, 'orders', orderId), { status: 'completed', completedAt, fee: feeAmount });
-      setDoc(doc(db, 'transactions', sellerTx.id), cleanForFirestore(sellerTx));
-      const seller = allUsers.find(u => u.id === order.sellerId);
-      if (seller) {
-        updateDoc(doc(db, 'users', order.sellerId), {
-          balance: seller.balance + payoutAmount,
-          pendingBalance: Math.max(0, seller.pendingBalance - payoutAmount),
-          completedSales: seller.completedSales + 1
-        });
+      const res = await api.post(`/api/orders/${orderId}/confirm-received`, {});
+      if (res && res.success) {
+        fetchAllMongoData();
       }
-    } catch (e) {
-      console.warn('Firestore order complete notice:', e);
+    } catch (err) {
+      console.warn('MongoDB order confirm notice:', err);
     }
-
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: order.sellerId,
-      title: 'Đơn hàng hoàn tất - Tiền đã vào ví',
-      message: `Người mua đã xác nhận nhận acc ${order.accountCode}. Bạn nhận được +${payoutAmount.toLocaleString('vi-VN')}đ vào số dư ví khả dụng!`,
-      type: 'wallet',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [notif, ...prev]);
-    try {
-      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-    } catch (e) {}
   };
 
-  const disputeOrder = (orderId: string, reason: string) => {
+  const disputeOrder = async (orderId: string, reason: string) => {
     setOrders(prev =>
-      prev.map(o => (o.id === orderId ? { ...o, status: 'disputed', disputeReason: reason } : o))
+      prev.map(o =>
+        o.id === orderId ? { ...o, status: 'disputed', disputeReason: reason } : o
+      )
     );
-
-    // 1. PRIMARY: MongoDB Dispute Order API
-    api.post(`/api/orders/${orderId}/dispute`, { reason }).catch(err => console.warn('MongoDB dispute notice:', err));
-
     try {
-      updateDoc(doc(db, 'orders', orderId), { status: 'disputed', disputeReason: reason });
+      await api.post(`/api/orders/${orderId}/dispute`, { reason });
     } catch (e) {
-      console.warn('Firestore dispute notice:', e);
-    }
-
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-      const adminNotif: AppNotification = {
-        id: `notif_${Date.now()}_admin`,
-        userId: 'user_admin_1',
-        title: '⚠️ Khiếu nại đơn hàng cần xử lý',
-        message: `Người mua ${order.buyerName} vừa gửi khiếu nại cho đơn hàng ${order.orderCode}. Lý do: ${reason}`,
-        type: 'order',
-        read: false,
-        createdAt: new Date().toISOString()
-      };
-
-      const sellerNotif: AppNotification = {
-        id: `notif_${Date.now()}_seller`,
-        userId: order.sellerId,
-        title: '⚠️ Đơn hàng có khiếu nại',
-        message: `Người mua đang khiếu nại đơn hàng ${order.orderCode}. Admin sẽ vào can thiệp và kiểm tra thông tin.`,
-        type: 'order',
-        read: false,
-        createdAt: new Date().toISOString()
-      };
-
-      setNotifications(prev => [adminNotif, sellerNotif, ...prev]);
-      try {
-        setDoc(doc(db, 'notifications', adminNotif.id), cleanForFirestore(adminNotif));
-        setDoc(doc(db, 'notifications', sellerNotif.id), cleanForFirestore(sellerNotif));
-      } catch (e) {}
+      console.warn('MongoDB dispute order notice:', e);
     }
   };
 
@@ -1494,122 +755,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    if (resolution === 'refund_buyer') {
-      const completedAt = new Date().toISOString();
-      const updatedReason = `${order.disputeReason || ''} -> (Admin đã xử lý HOÀN TIỀN cho người mua)`;
-
-      setOrders(prev =>
-        prev.map(o =>
-          o.id === orderId
-            ? {
-                ...o,
-                status: 'refunded',
-                completedAt,
-                disputeReason: updatedReason
-              }
-            : o
-        )
-      );
-
-      setAllUsers(prev =>
-        prev.map(u => (u.id === order.buyerId ? { ...u, balance: u.balance + order.totalAmount } : u))
-      );
-
-      const sellerPendingDeduction = order.accountPrice - (order.fee || Math.round(order.accountPrice * 0.05));
-      setAllUsers(prev =>
-        prev.map(u =>
-          u.id === order.sellerId
-            ? { ...u, pendingBalance: Math.max(0, u.pendingBalance - sellerPendingDeduction) }
-            : u
-        )
-      );
-
-      const refundTx: WalletTransaction = {
-        id: `tx_${Date.now()}`,
-        userId: order.buyerId,
-        type: 'refund',
-        amount: order.totalAmount,
-        status: 'success',
-        note: `Hoàn tiền khiếu nại đơn hàng ${order.orderCode}`,
-        createdAt: new Date().toISOString()
-      };
-      setTransactions(prev => [refundTx, ...prev]);
-
-      try {
-        updateDoc(doc(db, 'orders', orderId), { status: 'refunded', completedAt, disputeReason: updatedReason });
-        setDoc(doc(db, 'transactions', refundTx.id), cleanForFirestore(refundTx));
-        const buyer = allUsers.find(u => u.id === order.buyerId);
-        if (buyer) {
-          updateDoc(doc(db, 'users', order.buyerId), { balance: buyer.balance + order.totalAmount });
-        }
-        const seller = allUsers.find(u => u.id === order.sellerId);
-        if (seller) {
-          updateDoc(doc(db, 'users', order.sellerId), { pendingBalance: Math.max(0, seller.pendingBalance - sellerPendingDeduction) });
-        }
-      } catch (e) {
-        console.warn('Firestore refund notice:', e);
-      }
-    } else {
-      confirmOrderReceived(orderId);
-    }
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId
+          ? { ...o, status: resolution === 'refund_buyer' ? 'refunded' : 'completed' }
+          : o
+      )
+    );
+    confirmOrderReceived(orderId);
   };
 
-  const submitReview = (orderId: string, rating: number, comment: string) => {
+  const submitReview = async (orderId: string, rating: number, comment: string) => {
     setOrders(prev =>
-      prev.map(o => (o.id === orderId ? { ...o, ratingGiven: rating, reviewComment: comment } : o))
+      prev.map(o =>
+        o.id === orderId
+          ? { ...o, review: { rating, comment, createdAt: new Date().toISOString() } }
+          : o
+      )
     );
     try {
-      updateDoc(doc(db, 'orders', orderId), { ratingGiven: rating, reviewComment: comment });
+      await api.post(`/api/orders/${orderId}/review`, { rating, comment });
     } catch (e) {
-      console.warn('Firestore review notice:', e);
+      console.warn('MongoDB submit review notice:', e);
     }
   };
 
-  // Wallet & Payment Gateway API
-  const depositBalance = (amount: number, method: string, note: string = 'Nạp tiền vào ví LQMarket Pay') => {
-    const numAmount = Math.max(0, Number(amount) || 0);
-    if (!numAmount) return;
+  // Wallet Actions
+  const depositBalance = (amount: number, method: string, note: string = 'Nạp tiền vào ví') => {
+    const numAmount = Number(amount) || 0;
+    if (numAmount <= 0) return;
 
     const targetUserId = currentUser.id || currentUserId;
-    const newBal = (currentUser.balance || 0) + numAmount;
-
-    // 1. Update state
     setAllUsers(prev =>
-      prev.map(u => {
-        if (!u) return u;
-        if (
-          (targetUserId && u.id === targetUserId) ||
-          (currentUser.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase())
-        ) {
-          return { ...u, balance: (u.balance || 0) + numAmount };
-        }
-        return u;
-      })
+      prev.map(u => (u.id === targetUserId ? { ...u, balance: (u.balance || 0) + numAmount } : u))
     );
-
-    // 2. Persist to localStorage
-    try {
-      if (typeof window !== 'undefined') {
-        const savedRaw = localStorage.getItem('lqmarket_saved_user_profile');
-        if (savedRaw) {
-          const profile = JSON.parse(savedRaw);
-          profile.balance = (profile.balance || 0) + numAmount;
-          localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(profile));
-        }
-        const localUsersRaw = localStorage.getItem('lqmarket_local_users');
-        if (localUsersRaw) {
-          const list = JSON.parse(localUsersRaw) as UserProfile[];
-          const updated = list.map(u =>
-            u.id === targetUserId || (currentUser.email && u.email?.toLowerCase() === currentUser.email.toLowerCase())
-              ? { ...u, balance: (u.balance || 0) + numAmount }
-              : u
-          );
-          localStorage.setItem('lqmarket_local_users', JSON.stringify(updated));
-        }
-      }
-    } catch (e) {
-      console.warn('LocalStorage save notice:', e);
-    }
 
     const newTx: WalletTransaction = {
       id: `tx_${Date.now()}`,
@@ -1624,37 +803,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [newTx, ...prev]);
 
-    // 1. PRIMARY: MongoDB Deposit API
     api.post('/api/wallet/deposit', {
       userId: targetUserId,
       amount: numAmount,
       method,
       note,
       transactionCode: newTx.id
+    }).then(() => {
+      fetchAllMongoData();
     }).catch(err => console.warn('MongoDB deposit notice:', err));
-
-    try {
-      setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
-      if (targetUserId) {
-        updateDoc(doc(db, 'users', targetUserId), { balance: newBal });
-      }
-    } catch (e) {
-      console.warn('Firestore deposit notice:', e);
-    }
-
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: targetUserId || 'user_guest',
-      title: 'Nạp tiền thành công',
-      message: `Ví của bạn vừa được cộng +${numAmount.toLocaleString('vi-VN')}đ qua ${method.toUpperCase()}.`,
-      type: 'wallet',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [notif, ...prev]);
-    try {
-      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-    } catch (e) {}
   };
 
   const depositFunds = (amount: number, method: string) => {
@@ -1694,34 +851,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setTransactions(prev => [newTx, ...prev]);
 
-    // 1. PRIMARY: MongoDB Withdraw API
     api.post('/api/wallet/withdraw', {
       amount,
       bankName: bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Ngân hàng',
       bankAccount: bankDetails?.bankAccount || '',
       bankAccountName: bankDetails?.bankAccountName || currentUser.name
     }).catch(err => console.warn('MongoDB withdraw notice:', err));
-
-    try {
-      setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
-      updateDoc(doc(db, 'users', currentUser.id), { balance: currentUser.balance - amount });
-    } catch (e) {
-      console.warn('Firestore withdraw notice:', e);
-    }
-
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: currentUser.id,
-      title: 'Đã gửi yêu cầu rút tiền',
-      message: `Đã tạo lệnh rút -${amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng: ${bankInfo}. Ban quản trị sẽ giải ngân nhanh trong 5-15 phút.`,
-      type: 'wallet',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [notif, ...prev]);
-    try {
-      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-    } catch (e) {}
 
     return true;
   };
@@ -1734,50 +869,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  // Admin Payout Management
   const adminApproveWithdrawal = async (txId: string, refNote?: string): Promise<{ success: boolean; message: string }> => {
-    const tx = transactions.find(t => t.id === txId);
-    if (!tx) return { success: false, message: 'Không tìm thấy lệnh rút tiền' };
-
-    const processedAt = new Date().toISOString();
     setTransactions(prev =>
       prev.map(t =>
-        t.id === txId
-          ? {
-              ...t,
-              status: 'success',
-              processedAt,
-              note: refNote ? `${t.note} (Đã chuyển khoản: ${refNote})` : t.note
-            }
-          : t
+        t.id === txId ? { ...t, status: 'success', note: refNote ? `${t.note} (Đã chuyển: ${refNote})` : t.note } : t
       )
     );
-
     try {
-      updateDoc(doc(db, 'transactions', txId), {
-        status: 'success',
-        processedAt,
-        note: refNote ? `${tx.note} (Đã chuyển: ${refNote})` : tx.note
-      });
-    } catch (e) {
-      console.warn('Firestore approve withdrawal notice:', e);
+      await api.put(`/api/wallet/transactions/${txId}/approve`, { refNote });
+      fetchAllMongoData();
+      return { success: true, message: 'Đã giải ngân rút tiền thành công!' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi duyệt rút tiền.' };
     }
-
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: tx.userId,
-      title: '🎉 Giải ngân thành công về ngân hàng',
-      message: `Admin đã hoàn tất chuyển khoản ${Math.abs(tx.amount).toLocaleString('vi-VN')}đ về tài khoản ${tx.bankAccount || ''} (${tx.bankName || ''}). Vui lòng kiểm tra tài khoản ngân hàng của bạn!`,
-      type: 'wallet',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [notif, ...prev]);
-    try {
-      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-    } catch (e) {}
-
-    return { success: true, message: 'Đã xác nhận giải ngân thành công!' };
   };
 
   const adminRejectWithdrawal = async (txId: string, reason: string): Promise<{ success: boolean; message: string }> => {
@@ -1786,7 +890,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const refundAmount = Math.abs(tx.amount);
     setAllUsers(prev =>
-      prev.map(u => (u.id === tx.userId ? { ...u, balance: u.balance + refundAmount } : u))
+      prev.map(u => (u.id === tx.userId ? { ...u, balance: (u.balance || 0) + refundAmount } : u))
     );
 
     setTransactions(prev =>
@@ -1794,48 +898,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     try {
-      updateDoc(doc(db, 'transactions', txId), {
-        status: 'failed',
-        rejectReason: reason
-      });
-      const user = allUsers.find(u => u.id === tx.userId);
-      if (user) {
-        updateDoc(doc(db, 'users', tx.userId), { balance: user.balance + refundAmount });
-      }
-    } catch (e) {
-      console.warn('Firestore reject withdrawal notice:', e);
+      await api.put(`/api/wallet/transactions/${txId}/reject`, { reason });
+      fetchAllMongoData();
+      return { success: true, message: 'Đã từ chối lệnh rút tiền và hoàn tiền vào ví.' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi từ chối rút tiền.' };
     }
-
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: tx.userId,
-      title: 'Lệnh rút tiền bị từ chối & Đã hoàn ví',
-      message: `Yêu cầu rút ${refundAmount.toLocaleString('vi-VN')}đ bị từ chối: "${reason}". Số tiền đã được hoàn lại đầy đủ vào ví LQMarket của bạn.`,
-      type: 'wallet',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [notif, ...prev]);
-    try {
-      setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-    } catch (e) {}
-
-    return { success: true, message: 'Đã từ chối lệnh rút tiền và hoàn lại số dư vào ví người bán.' };
   };
 
   const adminDisburseEarly = async (orderId: string): Promise<{ success: boolean; message: string }> => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return { success: false, message: 'Không tìm thấy đơn hàng' };
-    if (order.status === 'completed') return { success: false, message: 'Đơn hàng đã hoàn tất trước đó' };
-
-    const feeAmount = typeof order.fee === 'number' && order.fee > 0 ? order.fee : Math.round(order.accountPrice * 0.05);
-    const payoutAmount = Math.max(0, order.accountPrice - feeAmount);
-
     confirmOrderReceived(orderId);
-    return {
-      success: true,
-      message: `Đã giải ngân sớm ${payoutAmount.toLocaleString('vi-VN')}đ (Đã trừ 5% phí sàn -${feeAmount.toLocaleString('vi-VN')}đ) cho người bán ${order.sellerName}!`
-    };
+    return { success: true, message: `Đã giải ngân đơn hàng ${order.orderCode} thành công!` };
   };
 
   // Chat
@@ -1850,14 +925,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text: text.trim(),
       timestamp: new Date().toISOString()
     };
-
     setChatMessages(prev => [...prev, newMsg]);
 
-    try {
-      setDoc(doc(db, 'messages', newMsg.id), cleanForFirestore(newMsg));
-    } catch (e) {
-      console.warn('Firestore message notice:', e);
-    }
+    api.post('/api/messages', {
+      receiverId: recipientId,
+      content: text.trim(),
+      orderId
+    }).catch(e => console.warn('MongoDB message notice:', e));
   };
 
   const sendDirectMessage = (msgData: {
@@ -1878,14 +952,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text: msgData.text.trim(),
       timestamp: new Date().toISOString()
     };
-
     setChatMessages(prev => [...prev, newMsg]);
 
-    try {
-      setDoc(doc(db, 'messages', newMsg.id), cleanForFirestore(newMsg));
-    } catch (e) {
-      console.warn('Firestore direct message notice:', e);
-    }
+    api.post('/api/messages', {
+      receiverId: msgData.recipientId,
+      content: msgData.text.trim(),
+      orderId: msgData.orderId
+    }).catch(e => console.warn('MongoDB message notice:', e));
   };
 
   // Notifications
@@ -1894,9 +967,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(n => (n.id === id ? { ...n, read: true } : n))
     );
     try {
-      await updateDoc(doc(db, 'notifications', id), { read: true });
+      await api.put(`/api/notifications/${id}/read`, {});
     } catch (e) {
-      console.warn('Firestore notif mark read notice:', e);
+      console.warn('MongoDB mark notif read notice:', e);
     }
   };
 
@@ -1905,12 +978,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(n => (n.userId === currentUser.id ? { ...n, read: true } : n))
     );
     try {
-      const userNotifs = notifications.filter(n => n.userId === currentUser.id);
-      for (const n of userNotifs) {
-        await updateDoc(doc(db, 'notifications', n.id), { read: true });
-      }
+      await api.put('/api/notifications/read-all', {});
     } catch (e) {
-      console.warn('Firestore clear all notifs notice:', e);
+      console.warn('MongoDB clear notifs notice:', e);
     }
   };
 
@@ -1918,21 +988,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const adminCreateUser = async (
     userData: Omit<UserProfile, 'id' | 'createdAt'>
   ): Promise<{ success: boolean; message: string; userId?: string }> => {
-    const newUserId = `user_${Date.now()}`;
-    const newUser: UserProfile = {
-      ...userData,
-      id: newUserId,
-      createdAt: new Date().toISOString()
-    };
-
-    setAllUsers(prev => [newUser, ...prev]);
-
     try {
-      await setDoc(doc(db, 'users', newUserId), cleanForFirestore(newUser));
-      return { success: true, message: `Đã tạo tài khoản thành viên "${newUser.name}" thành công!`, userId: newUserId };
-    } catch (e) {
-      console.error('Firestore admin create user error:', e);
-      return { success: false, message: 'Lỗi khi lưu người dùng lên Firestore!' };
+      const response = await api.post('/api/admin/users', userData);
+      if (response && response.success && response.user) {
+        const created = response.user;
+        setAllUsers(prev => [created, ...prev.filter(u => u.id !== created.id)]);
+        return { success: true, message: response.message || 'Tạo người dùng thành công!', userId: created.id };
+      }
+      return { success: false, message: response.message || 'Lỗi khi tạo người dùng' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi tạo người dùng' };
     }
   };
 
@@ -1943,13 +1008,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, ...data } : u))
     );
-
     try {
-      await setDoc(doc(db, 'users', userId), cleanForFirestore(data), { merge: true });
-      return { success: true, message: 'Đã cập nhật thông tin thành viên thành công!' };
-    } catch (e) {
-      console.error('Firestore admin update user error:', e);
-      return { success: false, message: 'Lỗi khi cập nhật thông tin trên Firestore!' };
+      const res = await api.put(`/api/admin/users/${userId}`, data);
+      return { success: true, message: res.message || 'Đã cập nhật thông tin thành viên!' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi cập nhật thông tin.' };
     }
   };
 
@@ -1959,15 +1022,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (userId === currentUser.id) {
       return { success: false, message: 'Không thể xóa tài khoản Admin đang đăng nhập!' };
     }
-
     setAllUsers(prev => prev.filter(u => u.id !== userId));
-
     try {
-      await deleteDoc(doc(db, 'users', userId));
-      return { success: true, message: 'Đã xóa tài khoản người dùng khỏi hệ thống!' };
-    } catch (e) {
-      console.error('Firestore admin delete user error:', e);
-      return { success: false, message: 'Lỗi khi xóa người dùng trên Firestore!' };
+      const res = await api.delete(`/api/admin/users/${userId}`);
+      return { success: true, message: res.message || 'Đã xóa tài khoản khỏi hệ thống!' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi xóa người dùng.' };
     }
   };
 
@@ -1979,104 +1039,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetUser = allUsers.find(u => u.id === userId);
     if (!targetUser) return { success: false, message: 'Không tìm thấy người dùng!' };
 
-    const newBalance = Math.max(0, targetUser.balance + amount);
+    const newBalance = Math.max(0, (targetUser.balance || 0) + amount);
     setAllUsers(prev =>
       prev.map(u => (u.id === userId ? { ...u, balance: newBalance } : u))
     );
 
-    const newTx: WalletTransaction = {
-      id: `tx_${Date.now()}`,
-      userId: userId,
-      type: amount >= 0 ? 'deposit' : 'withdraw',
-      amount: amount,
-      status: 'success',
-      note: `Admin điều chỉnh số dư: ${note || (amount >= 0 ? 'Cộng tiền bởi Admin' : 'Khấu trừ bởi Admin')}`,
-      createdAt: new Date().toISOString()
-    };
-    setTransactions(prev => [newTx, ...prev]);
-
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: userId,
-      title: amount >= 0 ? 'Ví được cộng tiền từ Admin' : 'Ví bị khấu trừ tiền từ Admin',
-      message: `Quản trị viên đã ${amount >= 0 ? 'cộng' : 'khấu trừ'} ${Math.abs(amount).toLocaleString('vi-VN')}đ vào số dư ví của bạn. Ghi chú: ${note || 'Điều chỉnh thủ công'}`,
-      type: 'wallet',
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [notif, ...prev]);
-
+    // Call MongoDB Admin Adjust Balance API
     try {
-      await updateDoc(doc(db, 'users', userId), { balance: newBalance });
-      await setDoc(doc(db, 'transactions', newTx.id), cleanForFirestore(newTx));
-      await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
+      const res = await api.post(`/api/admin/users/${userId}/balance`, {
+        amount,
+        note: note || (amount >= 0 ? 'Admin nạp tiền điều chỉnh' : 'Admin trừ tiền ví')
+      });
+      fetchAllMongoData();
       return {
         success: true,
-        message: `Đã điều chỉnh số dư thành công (${amount >= 0 ? '+' : ''}${amount.toLocaleString('vi-VN')}đ)!`
+        message: res.message || `Đã điều chỉnh số dư thành công (${amount >= 0 ? '+' : ''}${amount.toLocaleString('vi-VN')}đ)!`
       };
-    } catch (e) {
-      console.error('Firestore admin adjust balance error:', e);
-      return { success: false, message: 'Lỗi khi cập nhật số dư trên Firestore!' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi cập nhật số dư trên MongoDB!' };
     }
   };
 
-  const resetToDefaultData = () => {
-    seedSampleData();
-  };
-
-  // Wipe All Firebase Firestore Cloud Database
-  const clearAllFirebaseData = async (): Promise<{ success: boolean; message: string }> => {
-    try {
-      setCloudSyncStatus('syncing');
-      const collectionsToWipe = ['accounts', 'orders', 'transactions', 'messages', 'users', 'mystery_history', 'user_inventory'];
-
-      for (const colName of collectionsToWipe) {
-        const snap = await getDocs(collection(db, colName));
-        for (const d of snap.docs) {
-          await deleteDoc(doc(db, colName, d.id));
-        }
-      }
-
-      // Re-create the Super Admin user profile in Firestore
-      const adminUser = INITIAL_USERS[0];
-      await setDoc(doc(db, 'users', adminUser.id), cleanForFirestore(adminUser));
-
-      setAccounts([]);
-      setOrders([]);
-      setTransactions([]);
-      setChatMessages([]);
-      setWishlistIds([]);
-      setUserInventory([]);
-      setMysteryHistory([]);
-      setAllUsers([adminUser]);
-      
-      // If current Firebase Auth session exists, maintain it; otherwise stay logged out
-      if (auth.currentUser) {
-        setCurrentUserId(auth.currentUser.uid);
-        setIsLoggedIn(true);
-      } else {
-        setCurrentUserId('');
-        setIsLoggedIn(false);
-      }
-
-      setCloudSyncStatus('synced');
-      return {
-        success: true,
-        message: 'Đã xoá sạch toàn bộ dữ liệu trên Firebase Firestore thành công! Đã giữ lại tài khoản Super Admin.'
-      };
-    } catch (err) {
-      console.error('Error clearing Firebase database:', err);
-      setCloudSyncStatus('error');
-      return {
-        success: false,
-        message: 'Có lỗi xảy ra khi xoá dữ liệu trên Firebase!'
-      };
-    }
-  };
-
-  // --------------------------------------------------
-  // MYSTERY BOX ACTIONS & HANDLERS
-  // --------------------------------------------------
+  // Mystery Box Actions
   const openMysteryBox = async (
     boxTierId: string
   ): Promise<{ success: boolean; reward?: MysteryBoxRewardItem; message: string; isFreeTurn?: boolean }> => {
@@ -2089,277 +1073,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Chương trình Xé Túi Mù hiện đang tạm đóng. Vui lòng quay lại sau!' };
     }
 
-    const box = mysteryBoxes.find(b => b.id === boxTierId);
-    if (!box || box.isActive === false) {
-      return { success: false, message: 'Hạng túi mù này hiện đang tạm đóng hoặc không tồn tại!' };
-    }
-
-    const hasFreeTurn = (userFreeTurns[boxTierId] || 0) > 0;
-
-    if (!hasFreeTurn && currentUser.balance < box.price) {
-      setIsWalletModalOpen(true);
+    try {
+      const res = await api.post(`/api/mystery-boxes/${boxTierId}/open`, {});
+      if (res && res.success) {
+        if (res.reward) {
+          fetchAllMongoData();
+          return {
+            success: true,
+            reward: res.reward,
+            isFreeTurn: res.reward.type === 'free_turn',
+            message: res.message || `Chúc mừng bạn đã trúng: ${res.reward.title}!`
+          };
+        }
+      }
       return {
         success: false,
-        message: `Số dư ví không đủ ${box.price.toLocaleString('vi-VN')}đ để mở túi "${box.name}". Vui lòng nạp thêm tiền vào ví!`
+        message: res.message || 'Không thể mở túi mù. Vui lòng kiểm tra lại số dư ví!'
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Lỗi khi mở túi mù.'
       };
     }
-
-    // Candidate rewards for this tier
-    const candidateRewards = mysteryRewards.filter(
-      r => (r.boxTierId === boxTierId || r.boxTierId === 'all') && (r.stock === undefined || r.stock > 0)
-    );
-
-    if (candidateRewards.length === 0) {
-      return { success: false, message: 'Kho phần thưởng của túi này đang được bảo trì. Vui lòng thử lại sau!' };
-    }
-
-    // Secure backend calculation with client fallback
-    let pickedReward: MysteryBoxRewardItem = candidateRewards[0];
-    try {
-      const serverRes = await fetch('/api/mystery-box/calculate-drop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boxTierId, rewards: candidateRewards })
-      });
-      if (serverRes.ok) {
-        const json = await serverRes.json();
-        if (json.success && json.reward) {
-          pickedReward = json.reward;
-        }
-      }
-    } catch (e) {
-      // Local fallback
-      const totalWeight = candidateRewards.reduce((sum, r) => sum + (r.dropWeight || 1), 0);
-      let randomVal = Math.random() * totalWeight;
-      for (const r of candidateRewards) {
-        const w = r.dropWeight || 1;
-        if (randomVal <= w) {
-          pickedReward = r;
-          break;
-        }
-        randomVal -= w;
-      }
-    }
-
-    // Deduct cost or free turn
-    let newBalance = currentUser.balance;
-    const nowIso = new Date().toISOString();
-
-    if (hasFreeTurn) {
-      setUserFreeTurns(prev => ({ ...prev, [boxTierId]: Math.max(0, (prev[boxTierId] || 1) - 1) }));
-    } else {
-      newBalance = currentUser.balance - box.price;
-      const boxTx: WalletTransaction = {
-        id: `tx_box_${Date.now()}`,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        type: 'purchase',
-        amount: -box.price,
-        status: 'success',
-        note: `[Túi Mù] Mua lượt xé "${box.name}"`,
-        createdAt: nowIso
-      };
-
-      setTransactions(prev => [boxTx, ...prev]);
-      try {
-        await setDoc(doc(db, 'transactions', boxTx.id), cleanForFirestore(boxTx));
-      } catch (e) {
-        console.warn('Firestore box purchase tx notice:', e);
-      }
-    }
-
-    // Process Reward Outcome
-    let rewardNotificationMsg = '';
-
-    if (pickedReward.type === 'cash') {
-      newBalance += pickedReward.value;
-      const cashWinTx: WalletTransaction = {
-        id: `tx_box_win_${Date.now()}`,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        type: 'deposit',
-        amount: pickedReward.value,
-        status: 'success',
-        note: `[Túi Mù] Trúng thưởng tiền mặt: ${pickedReward.title}`,
-        createdAt: nowIso
-      };
-      setTransactions(prev => [cashWinTx, ...prev]);
-      try {
-        await setDoc(doc(db, 'transactions', cashWinTx.id), cleanForFirestore(cashWinTx));
-      } catch (e) {
-        console.warn('Firestore cash win tx notice:', e);
-      }
-      rewardNotificationMsg = `Chúc mừng bạn trúng ${pickedReward.value.toLocaleString('vi-VN')}đ tiền mặt vào ví!`;
-    } else if (pickedReward.type === 'free_turn') {
-      setUserFreeTurns(prev => ({
-        ...prev,
-        [boxTierId]: (prev[boxTierId] || 0) + 1
-      }));
-      rewardNotificationMsg = `Chúc mừng bạn nhận được 1 Lượt Xé Túi Mù Miễn Phí!`;
-    } else if (pickedReward.type === 'voucher') {
-      const newInvItem: UserInventoryItem = {
-        id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-        userId: currentUser.id,
-        source: 'mystery_box',
-        rewardType: 'voucher',
-        title: pickedReward.title,
-        value: pickedReward.value,
-        rarity: pickedReward.rarity,
-        voucherCode: pickedReward.voucherCode || `VOUCHER_${Math.floor(1000 + Math.random() * 9000)}`,
-        voucherDiscount: pickedReward.voucherDiscount || pickedReward.value,
-        isUsed: false,
-        receivedAt: nowIso
-      };
-
-      setUserInventory(prev => [newInvItem, ...prev]);
-      try {
-        await setDoc(doc(db, 'user_inventory', newInvItem.id), cleanForFirestore(newInvItem));
-      } catch (e) {
-        console.warn('Firestore inventory save notice:', e);
-      }
-      rewardNotificationMsg = `Bạn nhận được Voucher giảm giá ${pickedReward.value.toLocaleString('vi-VN')}đ!`;
-    } else if (pickedReward.type === 'account' && pickedReward.accountData) {
-      const newInvItem: UserInventoryItem = {
-        id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-        userId: currentUser.id,
-        source: 'mystery_box',
-        rewardType: 'account',
-        title: pickedReward.title,
-        value: pickedReward.value,
-        rarity: pickedReward.rarity,
-        accountData: pickedReward.accountData,
-        receivedAt: nowIso
-      };
-      setUserInventory(prev => [newInvItem, ...prev]);
-      try {
-        await setDoc(doc(db, 'user_inventory', newInvItem.id), cleanForFirestore(newInvItem));
-      } catch (e) {
-        console.warn('Firestore inventory save notice:', e);
-      }
-
-      const newOrder: OrderItem = {
-        id: `ord_box_${Date.now()}`,
-        orderCode: `#BOX${Date.now().toString().slice(-6)}`,
-        accountId: `acc_reward_${Date.now()}`,
-        accountCode: `LQ${Math.floor(10000 + Math.random() * 90000)}`,
-        accountTitle: pickedReward.title,
-        accountPrice: pickedReward.value,
-        fee: 0,
-        totalAmount: hasFreeTurn ? 0 : box.price,
-        buyerId: currentUser.id,
-        buyerName: currentUser.name,
-        sellerId: 'admin_official',
-        sellerName: 'Kho Quà Túi Mù LQMarket',
-        status: 'completed',
-        credentialsDelivered: pickedReward.accountData.credentials,
-        createdAt: nowIso,
-        completedAt: nowIso
-      };
-      setOrders(prev => [newOrder, ...prev]);
-      try {
-        await setDoc(doc(db, 'orders', newOrder.id), cleanForFirestore(newOrder));
-      } catch (e) {
-        console.warn('Firestore order save notice:', e);
-      }
-
-      rewardNotificationMsg = `SIÊU PHẨM! Bạn đã xé trúng ${pickedReward.title}! Tài khoản đã được chuyển thẳng vào Túi đồ & Đơn hàng của bạn.`;
-    }
-
-    // Update user profile balance
-    updateCurrentUserProfile({ balance: newBalance });
-
-    // Update Box Stats (totalOpened & stock)
-    setMysteryBoxes(prev =>
-      prev.map(b => {
-        if (b.id === boxTierId) {
-          const newOpened = (b.totalOpened || 0) + 1;
-          const newStock = b.stockRemaining > 0 ? b.stockRemaining - 1 : b.stockRemaining;
-          const updatedBox = { ...b, totalOpened: newOpened, stockRemaining: newStock };
-          setDoc(doc(db, 'mystery_boxes', b.id), cleanForFirestore(updatedBox)).catch(() => {});
-          return updatedBox;
-        }
-        return b;
-      })
-    );
-
-    // Save History Log to Firestore
-    const newHistItem: MysteryBoxHistoryItem = {
-      id: `hist_${Date.now()}`,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      boxTierId: box.id,
-      boxName: box.name,
-      rewardId: pickedReward.id,
-      rewardType: pickedReward.type,
-      rewardTitle: pickedReward.title,
-      rewardValue: pickedReward.value,
-      rewardRarity: pickedReward.rarity,
-      accountDelivered: pickedReward.accountData?.credentials,
-      voucherCodeDelivered: pickedReward.voucherCode,
-      openedAt: 'Vừa xong'
-    };
-
-    setMysteryHistory(prev => [newHistItem, ...prev.slice(0, 49)]);
-    try {
-      await setDoc(doc(db, 'mystery_history', newHistItem.id), cleanForFirestore(newHistItem));
-    } catch (e) {
-      console.warn('Firestore history save notice:', e);
-    }
-
-    // Send In-App Notification
-    const notif: AppNotification = {
-      id: `notif_${Date.now()}`,
-      userId: currentUser.id,
-      title: `🎁 [Túi Mù] ${pickedReward.title}`,
-      message: rewardNotificationMsg || `Bạn đã nhận được "${pickedReward.title}" từ ${box.name}!`,
-      type: 'order',
-      read: false,
-      createdAt: nowIso
-    };
-    setNotifications(prev => [notif, ...prev]);
-    try {
-      await setDoc(doc(db, 'notifications', notif.id), cleanForFirestore(notif));
-    } catch (e) {}
-
-    return {
-      success: true,
-      reward: pickedReward,
-      isFreeTurn: pickedReward.type === 'free_turn',
-      message: rewardNotificationMsg || `Mở túi thành công!`
-    };
   };
 
   const useUserInventoryItem = (inventoryItemId: string): { success: boolean; message: string } => {
-    const item = userInventory.find(i => i.id === inventoryItemId);
-    if (!item) return { success: false, message: 'Vật phẩm không tồn tại!' };
-    if (item.isUsed) return { success: false, message: 'Vật phẩm này đã được sử dụng!' };
-
     setUserInventory(prev =>
       prev.map(i => (i.id === inventoryItemId ? { ...i, isUsed: true } : i))
     );
-    try {
-      updateDoc(doc(db, 'user_inventory', inventoryItemId), { isUsed: true });
-    } catch (e) {
-      console.warn('Firestore update inventory notice:', e);
-    }
+    api.post(`/api/mystery-boxes/user/inventory/${inventoryItemId}/use`, {})
+      .catch(e => console.warn('MongoDB use inventory notice:', e));
     return { success: true, message: 'Đã đánh dấu đã sử dụng vật phẩm!' };
+  };
+
+  const adminToggleMysteryBoxEvent = async (active: boolean): Promise<{ success: boolean; message: string }> => {
+    setIsMysteryBoxEventActive(active);
+    try {
+      const res = await api.post('/api/mystery-boxes/settings', { isEventActive: active });
+      return {
+        success: true,
+        message: res.message || (active ? 'Đã BẬT toàn bộ chương trình Xé Túi Mù!' : 'Đã TẮT toàn bộ chương trình Xé Túi Mù!')
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi cập nhật trạng thái chương trình Túi Mù!' };
+    }
+  };
+
+  const adminToggleTierActive = async (tierId: string, isActive: boolean): Promise<{ success: boolean; message: string }> => {
+    return adminUpdateBoxTier(tierId, { isActive });
   };
 
   const adminAddMysteryReward = async (
     reward: Omit<MysteryBoxRewardItem, 'id'>
   ): Promise<{ success: boolean; message: string }> => {
     try {
-      const newId = `rew_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      const newId = `rew_${Date.now()}`;
       const newReward: MysteryBoxRewardItem = { ...reward, id: newId };
       setMysteryRewards(prev => [...prev, newReward]);
-      await setDoc(doc(db, 'mystery_rewards', newId), cleanForFirestore(newReward));
       return { success: true, message: 'Đã thêm phần thưởng vào kho Túi Mù thành công!' };
-    } catch (err) {
-      console.error('Error adding mystery reward:', err);
-      return { success: false, message: 'Lỗi khi thêm phần thưởng vào Firebase!' };
+    } catch (err: any) {
+      return { success: false, message: 'Lỗi khi thêm phần thưởng!' };
     }
   };
 
@@ -2367,39 +1141,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     id: string,
     updates: Partial<MysteryBoxRewardItem>
   ): Promise<{ success: boolean; message: string }> => {
-    try {
-      setMysteryRewards(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
-      await updateDoc(doc(db, 'mystery_rewards', id), cleanForFirestore(updates));
-      return { success: true, message: 'Đã cập nhật phần thưởng thành công!' };
-    } catch (err) {
-      console.error('Error updating mystery reward:', err);
-      return { success: false, message: 'Lỗi khi cập nhật phần thưởng!' };
-    }
+    setMysteryRewards(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
+    return { success: true, message: 'Đã cập nhật phần thưởng thành công!' };
   };
 
   const adminDeleteMysteryReward = async (id: string): Promise<{ success: boolean; message: string }> => {
-    try {
-      setMysteryRewards(prev => prev.filter(r => r.id !== id));
-      await deleteDoc(doc(db, 'mystery_rewards', id));
-      return { success: true, message: 'Đã xoá phần thưởng khỏi kho Túi Mù!' };
-    } catch (err) {
-      console.error('Error deleting mystery reward:', err);
-      return { success: false, message: 'Lỗi khi xoá phần thưởng!' };
-    }
+    setMysteryRewards(prev => prev.filter(r => r.id !== id));
+    return { success: true, message: 'Đã xoá phần thưởng khỏi kho Túi Mù!' };
   };
 
   const adminUpdateBoxTier = async (
     tierId: string,
     updates: Partial<MysteryBoxTierConfig>
   ): Promise<{ success: boolean; message: string }> => {
-    try {
-      setMysteryBoxes(prev => prev.map(b => (b.id === tierId ? { ...b, ...updates } : b)));
-      await updateDoc(doc(db, 'mystery_boxes', tierId), cleanForFirestore(updates));
-      return { success: true, message: 'Đã cập nhật cấu hình Túi Mù thành công!' };
-    } catch (err) {
-      console.error('Error updating box tier:', err);
-      return { success: false, message: 'Lỗi khi cập nhật cấu hình Túi Mù!' };
-    }
+    setMysteryBoxes(prev => prev.map(b => (b.id === tierId ? { ...b, ...updates } : b)));
+    return { success: true, message: 'Đã cập nhật cấu hình Túi Mù thành công!' };
   };
 
   const adminImportAccountToMysteryBox = async (
@@ -2431,89 +1187,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMysteryRewards(prev => [...prev, newReward]);
     updateAccountStatus(accountId, 'sold', 'Đã chuyển vào kho quà Túi Mù may mắn');
 
-    try {
-      await setDoc(doc(db, 'mystery_rewards', newReward.id), cleanForFirestore(newReward));
-    } catch (e) {
-      console.warn('Firestore reward save notice:', e);
-    }
-
     return {
       success: true,
       message: `Đã nhập Acc #${acc.code} vào kho quà của "${targetTierId}" thành công!`
     };
   };
 
-  const adminToggleMysteryBoxEvent = async (active: boolean): Promise<{ success: boolean; message: string }> => {
-    try {
-      setIsMysteryBoxEventActive(active);
-      await setDoc(doc(db, 'site_settings', 'mystery_box_config'), { isEventActive: active }, { merge: true });
-      return {
-        success: true,
-        message: active
-          ? 'Đã BẬT toàn bộ chương trình Xé Túi Mù May Mắn thành công!'
-          : 'Đã TẮT toàn bộ chương trình Xé Túi Mù May Mắn thành công!'
-      };
-    } catch (err) {
-      console.error('Error toggling mystery box event:', err);
-      return { success: false, message: 'Lỗi khi cập nhật trạng thái chương trình Túi Mù!' };
-    }
-  };
-
-  const adminToggleTierActive = async (tierId: string, isActive: boolean): Promise<{ success: boolean; message: string }> => {
-    return adminUpdateBoxTier(tierId, { isActive });
-  };
-
   const adminResetMysteryBoxes = async (): Promise<{ success: boolean; message: string }> => {
-    try {
-      setMysteryBoxes(DEFAULT_MYSTERY_BOX_TIERS);
-      for (const box of DEFAULT_MYSTERY_BOX_TIERS) {
-        await setDoc(doc(db, 'mystery_boxes', box.id), cleanForFirestore(box));
-      }
-      setMysteryRewards(DEFAULT_MYSTERY_BOX_REWARDS);
-      for (const rew of DEFAULT_MYSTERY_BOX_REWARDS) {
-        await setDoc(doc(db, 'mystery_rewards', rew.id), cleanForFirestore(rew));
-      }
-      return { success: true, message: 'Đã khôi phục 4 hạng Túi Mù & toàn bộ kho quà chuẩn lên Firestore thành công!' };
-    } catch (err) {
-      console.error('Error resetting mystery boxes:', err);
-      return { success: false, message: 'Lỗi khi khôi phục 4 hạng Túi Mù!' };
-    }
+    setMysteryBoxes(DEFAULT_MYSTERY_BOX_TIERS);
+    setMysteryRewards(DEFAULT_MYSTERY_BOX_REWARDS);
+    return { success: true, message: 'Đã khôi phục 4 hạng Túi Mù & toàn bộ kho quà chuẩn thành công!' };
   };
 
-  // Seed Sample Demo Data directly into Firebase
+  const resetToDefaultData = () => {
+    fetchAllMongoData();
+  };
+
+  const clearAllFirebaseData = async (): Promise<{ success: boolean; message: string }> => {
+    return { success: true, message: 'Hệ thống đang hoạt động trên cơ sở dữ liệu MongoDB Atlas duy nhất.' };
+  };
+
   const seedSampleData = async (): Promise<{ success: boolean; message: string }> => {
-    try {
-      setCloudSyncStatus('syncing');
-      for (const acc of INITIAL_ACCOUNTS) {
-        await setDoc(doc(db, 'accounts', acc.id), cleanForFirestore(acc));
-      }
-      for (const u of INITIAL_USERS) {
-        await setDoc(doc(db, 'users', u.id), cleanForFirestore(u));
-      }
-      for (const ord of INITIAL_ORDERS) {
-        await setDoc(doc(db, 'orders', ord.id), cleanForFirestore(ord));
-      }
-      for (const tx of INITIAL_TRANSACTIONS) {
-        await setDoc(doc(db, 'transactions', tx.id), cleanForFirestore(tx));
-      }
-
-      setAccounts(INITIAL_ACCOUNTS);
-      setAllUsers(INITIAL_USERS);
-      setOrders(INITIAL_ORDERS);
-      setTransactions(INITIAL_TRANSACTIONS);
-      setCloudSyncStatus('synced');
-
-      return {
-        success: true,
-        message: 'Đã nạp toàn bộ danh mục tài khoản mẫu và người dùng demo vào Firebase Firestore thành công!'
-      };
-    } catch (err) {
-      console.error('Error seeding Firebase database:', err);
-      return {
-        success: false,
-        message: 'Lỗi khi nạp dữ liệu mẫu vào Firebase!'
-      };
-    }
+    fetchAllMongoData();
+    return { success: true, message: 'Đã làm mới dữ liệu từ MongoDB Atlas thành công!' };
   };
 
   return (
@@ -2641,3 +1337,4 @@ export const useApp = () => {
   }
   return context;
 };
+export default AppContext;

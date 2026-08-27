@@ -16,9 +16,9 @@ export const compressImage = (
   options: CompressOptions = {}
 ): Promise<string> => {
   const {
-    maxWidth = 400,
-    maxHeight = 400,
-    quality = 0.75,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    quality = 0.82,
     mimeType = 'image/jpeg'
   } = options;
 
@@ -26,7 +26,7 @@ export const compressImage = (
     const reader = new FileReader();
 
     reader.onload = (readerEvent) => {
-      const img = document.createElement('img');
+      const img = new Image();
       img.onload = () => {
         let { width, height } = img;
 
@@ -44,16 +44,21 @@ export const compressImage = (
         }
 
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
+          // Fallback to original reader string if canvas context not ready
+          if (typeof readerEvent.target?.result === 'string') {
+            resolve(readerEvent.target.result);
+            return;
+          }
           reject(new Error('Canvas context unavailable'));
           return;
         }
 
-        // Fill background with white in case of transparent png converted to jpeg
+        // Fill background with clean dark neutral or white
         if (mimeType === 'image/jpeg') {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, width, height);
@@ -62,12 +67,25 @@ export const compressImage = (
         ctx.drawImage(img, 0, 0, width, height);
 
         // Export compressed data URL
-        const dataUrl = canvas.toDataURL(mimeType, quality);
-        resolve(dataUrl);
+        try {
+          const dataUrl = canvas.toDataURL(mimeType, quality);
+          resolve(dataUrl);
+        } catch {
+          if (typeof readerEvent.target?.result === 'string') {
+            resolve(readerEvent.target.result);
+          } else {
+            reject(new Error('Failed to encode image data'));
+          }
+        }
       };
 
       img.onerror = () => {
-        reject(new Error('Failed to load image for compression'));
+        // If image object fails to decode directly, try raw data url as fallback
+        if (typeof readerEvent.target?.result === 'string') {
+          resolve(readerEvent.target.result);
+        } else {
+          reject(new Error('Failed to load image for compression'));
+        }
       };
 
       if (typeof readerEvent.target?.result === 'string') {
@@ -86,13 +104,13 @@ export const compressImage = (
 };
 
 /**
- * Specifically tuned for avatars: 256x256 max, ~25KB max
+ * Specifically tuned for avatars: 320x320 max
  */
 export const compressAvatar = (file: File | Blob): Promise<string> => {
   return compressImage(file, {
-    maxWidth: 256,
-    maxHeight: 256,
-    quality: 0.8,
+    maxWidth: 320,
+    maxHeight: 320,
+    quality: 0.85,
     mimeType: 'image/jpeg'
   });
 };

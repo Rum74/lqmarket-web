@@ -215,7 +215,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={accountInput}
                     onChange={e => setAccountInput(e.target.value)}
-                    placeholder="Ví dụ: user1@gmail.com hoặc user1"
+                    placeholder="Nhập email hoặc tên tài khoản..."
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
                   />
                   <User size={15} className="absolute left-3 top-3 text-slate-400" />
@@ -325,7 +325,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={accountInput}
                     onChange={e => setAccountInput(e.target.value)}
-                    placeholder="Ví dụ: user1@gmail.com hoặc user1"
+                    placeholder="Nhập email hoặc tên tài khoản..."
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                   <User size={14} className="absolute left-3 top-2.5 text-slate-400" />

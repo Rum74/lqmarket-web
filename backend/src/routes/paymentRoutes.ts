@@ -37,110 +37,158 @@ if (PAYOS_CLIENT_ID && PAYOS_API_KEY && PAYOS_CHECKSUM_KEY) {
 
 // Memory ledger cache for fast lookup and pending orders registry
 const processedOrderCodes = new Set<number>();
+const inFlightDepositLocks = new Map<number, Promise<any>>();
+
 export const pendingOrdersMap = new Map<
   number,
   { userId: string; userName?: string; userEmail?: string; amount: number; description?: string; createdAt: number }
 >();
 
-// Helper to credit wallet safely and idempotently
+// Helper to credit wallet safely, atomically and idempotently
 async function creditUserDeposit(orderCode: number, amount: number, description: string = '') {
-  if (processedOrderCodes.has(orderCode)) {
-    console.log(`Order #${orderCode} already processed in ledger.`);
-    return;
+  if (!orderCode || amount <= 0) return;
+
+  // If this exact orderCode is currently being processed by another async task (e.g. concurrent webhook + polling), wait for it
+  if (inFlightDepositLocks.has(orderCode)) {
+    console.log(`⏳ Order #${orderCode} is already processing in flight, awaiting result...`);
+    return await inFlightDepositLocks.get(orderCode);
   }
 
-  // Check if transaction already exists in database as success
-  const existingTx = await WalletTransaction.findOne({
-    note: { $regex: new RegExp(String(orderCode)) },
-    type: 'deposit',
-    status: 'success'
-  });
-
-  if (existingTx) {
-    processedOrderCodes.add(orderCode);
-    console.log(`Order #${orderCode} already recorded in DB.`);
-    return;
-  }
-
-  let targetUser: any = null;
-
-  // 1. Check pending orders in memory map
-  const pendingInfo = pendingOrdersMap.get(orderCode);
-  if (pendingInfo && pendingInfo.userId) {
-    targetUser = await User.findOne({ id: pendingInfo.userId });
-  }
-
-  // 2. Check pending transactions in database
-  if (!targetUser) {
-    const pendingTx = await WalletTransaction.findOne({
-      id: `tx_pending_${orderCode}`
-    });
-    if (pendingTx && pendingTx.userId) {
-      targetUser = await User.findOne({ id: pendingTx.userId });
+  const processingPromise = (async () => {
+    if (processedOrderCodes.has(orderCode)) {
+      console.log(`Order #${orderCode} already processed in ledger.`);
+      const existingTx = await WalletTransaction.findOne({
+        $or: [
+          { id: `tx_deposit_${orderCode}` },
+          { id: `tx_pending_${orderCode}` },
+          { note: { $regex: new RegExp(String(orderCode)) }, status: 'success' }
+        ]
+      });
+      const user = existingTx ? await User.findOne({ id: existingTx.userId }) : null;
+      return { targetUser: user, tx: existingTx };
     }
-  }
 
-  // 3. Search description for user_ ID tag (e.g., "NAP 123456 user_buyer_1")
-  if (!targetUser && description) {
-    const words = description.split(/[\s_-]+/);
-    for (const w of words) {
-      if (w.startsWith('user_') || w.startsWith('usr_')) {
-        targetUser = await User.findOne({ id: w });
-        if (targetUser) break;
+    // Check if transaction already exists in database as success
+    const existingTx = await WalletTransaction.findOne({
+      $or: [
+        { id: `tx_deposit_${orderCode}` },
+        { note: { $regex: new RegExp(String(orderCode)) }, type: 'deposit', status: 'success' }
+      ]
+    });
+
+    if (existingTx && existingTx.status === 'success') {
+      processedOrderCodes.add(orderCode);
+      console.log(`Order #${orderCode} already recorded as success in DB.`);
+      const user = await User.findOne({ id: existingTx.userId });
+      return { targetUser: user, tx: existingTx };
+    }
+
+    let targetUser: any = null;
+
+    // 1. Check pending orders in memory map
+    const pendingInfo = pendingOrdersMap.get(orderCode);
+    if (pendingInfo && pendingInfo.userId) {
+      targetUser = await User.findOne({ id: pendingInfo.userId });
+    }
+
+    // 2. Check pending transactions in database
+    let pendingTx: any = null;
+    if (!targetUser) {
+      pendingTx = await WalletTransaction.findOne({
+        id: `tx_pending_${orderCode}`
+      });
+      if (pendingTx && pendingTx.userId) {
+        targetUser = await User.findOne({ id: pendingTx.userId });
       }
     }
-  }
 
-  // 4. Fallback: Search latest pending deposit transaction with matching amount
-  if (!targetUser) {
-    const pendingTx = await WalletTransaction.findOne({
-      type: 'deposit',
-      status: 'pending',
-      amount
-    }).sort({ createdAt: -1 });
-
-    if (pendingTx && pendingTx.userId) {
-      targetUser = await User.findOne({ id: pendingTx.userId });
+    // 3. Search description for user_ ID tag (e.g., "NAP 123456 user_buyer_1")
+    if (!targetUser && description) {
+      const words = description.split(/[\s_-]+/);
+      for (const w of words) {
+        if (w.startsWith('user_') || w.startsWith('usr_')) {
+          targetUser = await User.findOne({ id: w });
+          if (targetUser) break;
+        }
+      }
     }
-  }
 
-  // 5. Final fallback: Find most active non-guest user
-  if (!targetUser) {
-    targetUser = await User.findOne({ role: { $in: ['buyer', 'seller', 'admin'] } }).sort({ updatedAt: -1 });
-  }
+    // 4. Fallback: Search latest pending deposit transaction with matching amount
+    if (!targetUser) {
+      const recentPendingTx = await WalletTransaction.findOne({
+        type: 'deposit',
+        status: 'pending',
+        amount
+      }).sort({ createdAt: -1 });
 
-  if (targetUser) {
-    targetUser.balance = (targetUser.balance || 0) + amount;
-    await targetUser.save();
+      if (recentPendingTx && recentPendingTx.userId) {
+        targetUser = await User.findOne({ id: recentPendingTx.userId });
+        pendingTx = recentPendingTx;
+      }
+    }
 
-    const tx = new WalletTransaction({
-      id: `tx_payos_${orderCode}_${Date.now()}`,
-      userId: targetUser.id,
-      userName: targetUser.name,
-      userEmail: targetUser.email,
-      type: 'deposit',
-      amount,
-      status: 'success',
-      note: `Nạp tiền tự động qua PayOS VietQR - Mã GD #${orderCode} (${description || 'VietQR 24/7'})`,
-      createdAt: new Date().toISOString()
-    });
-    await tx.save();
+    // 5. Final fallback: Find most active non-guest user
+    if (!targetUser) {
+      targetUser = await User.findOne({ role: { $in: ['buyer', 'seller', 'admin'] } }).sort({ updatedAt: -1 });
+    }
 
-    const notif = new Notification({
-      id: `notif_${Date.now()}`,
-      userId: targetUser.id,
-      title: 'Nạp tiền thành công',
-      message: `Tài khoản của bạn đã được cộng +${amount.toLocaleString('vi-VN')}đ qua cổng thanh toán PayOS (Mã GD: #${orderCode}).`,
-      type: 'wallet',
-      createdAt: new Date().toISOString()
-    });
-    await notif.save();
+    if (targetUser) {
+      // Atomic increment user balance
+      const updatedUser = await User.findOneAndUpdate(
+        { id: targetUser.id },
+        { $inc: { balance: amount }, $set: { updatedAt: new Date().toISOString() } },
+        { new: true }
+      );
 
-    processedOrderCodes.add(orderCode);
-    console.log(`✅ Credited ${amount} VND to user ${targetUser.name} (${targetUser.id}) for order #${orderCode}. New Balance: ${targetUser.balance}`);
-    return { targetUser, tx };
-  } else {
-    console.warn(`⚠️ Could not resolve target user for order #${orderCode} of amount ${amount}`);
+      // Reuse and finalize pending transaction if exists, or create unique tx_deposit_${orderCode}
+      let tx: any = null;
+      if (pendingTx) {
+        pendingTx.status = 'success';
+        pendingTx.amount = amount;
+        pendingTx.note = `Nạp tiền tự động qua PayOS VietQR - Mã GD #${orderCode} (${description || 'VietQR 24/7'})`;
+        pendingTx.createdAt = new Date().toISOString();
+        await pendingTx.save();
+        tx = pendingTx;
+      } else {
+        tx = new WalletTransaction({
+          id: `tx_deposit_${orderCode}`,
+          userId: targetUser.id,
+          userName: targetUser.name,
+          userEmail: targetUser.email,
+          type: 'deposit',
+          amount,
+          status: 'success',
+          note: `Nạp tiền tự động qua PayOS VietQR - Mã GD #${orderCode} (${description || 'VietQR 24/7'})`,
+          createdAt: new Date().toISOString()
+        });
+        await tx.save();
+      }
+
+      const notif = new Notification({
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userId: targetUser.id,
+        title: 'Nạp tiền thành công',
+        message: `Tài khoản của bạn đã được cộng +${amount.toLocaleString('vi-VN')}đ qua cổng thanh toán PayOS (Mã GD: #${orderCode}).`,
+        type: 'wallet',
+        createdAt: new Date().toISOString()
+      });
+      await notif.save();
+
+      processedOrderCodes.add(orderCode);
+      console.log(`✅ Credited ${amount} VND to user ${targetUser.name} (${targetUser.id}) for order #${orderCode}. New Balance: ${updatedUser?.balance}`);
+      return { targetUser: updatedUser || targetUser, tx };
+    } else {
+      console.warn(`⚠️ Could not resolve target user for order #${orderCode} of amount ${amount}`);
+      return null;
+    }
+  })();
+
+  inFlightDepositLocks.set(orderCode, processingPromise);
+  try {
+    const result = await processingPromise;
+    return result;
+  } finally {
+    inFlightDepositLocks.delete(orderCode);
   }
 }
 

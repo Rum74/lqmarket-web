@@ -5,7 +5,6 @@ import { UserProfile, UserRole } from '../../types';
 import confetti from '../../utils/confetti';
 import { AdminPayoutManagement } from './AdminPayoutManagement';
 import { AdminMysteryBoxManagement } from './AdminMysteryBoxManagement';
-import { migrateFirestoreToSupabase, MigrationSummary } from '../../lib/migrationService';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -40,8 +39,7 @@ import {
   Key,
   BadgeCheck,
   PackageOpen,
-  Database,
-  UploadCloud
+  Database
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -75,8 +73,6 @@ export const AdminDashboardView: React.FC = () => {
   const [isWipingData, setIsWipingData] = useState(false);
   const [isSeedingData, setIsSeedingData] = useState(false);
   const [showWipeConfirmModal, setShowWipeConfirmModal] = useState(false);
-  const [isMigratingToSupabase, setIsMigratingToSupabase] = useState(false);
-  const [migrationSummaries, setMigrationSummaries] = useState<MigrationSummary[] | null>(null);
 
   // User Management State
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -1097,112 +1093,19 @@ export const AdminDashboardView: React.FC = () => {
           </div>
 
           <div className="pt-4 border-t border-slate-800 space-y-4">
-            {/* Supabase Cloud Status & Migration */}
-            <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            {/* MongoDB Database Status */}
+            <div className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h4 className="text-xs font-bold text-white flex items-center gap-2">
                     <Database size={15} className="text-emerald-400" />
-                    <span>Supabase Cloud PostgreSQL & Storage:</span>
+                    <span>Cơ Sở Dữ Liệu Chính:</span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      🟢 SUPABASE CONNECTED
+                      🟢 MONGODB ATLAS CONNECTED
                     </span>
                   </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Project Ref: <code className="text-emerald-400 font-mono">pbyynherzipobltfejhj</code> (PostgreSQL 15 + RLS + Storage)
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={isMigratingToSupabase}
-                  onClick={async () => {
-                    setIsMigratingToSupabase(true);
-                    try {
-                      const res = await migrateFirestoreToSupabase();
-                      setMigrationSummaries(res.summaries);
-                      showNotification(res.message);
-                    } catch (e: any) {
-                      showNotification(`Lỗi chuyển đổi: ${e.message}`);
-                    } finally {
-                      setIsMigratingToSupabase(false);
-                    }
-                  }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer transition-all"
-                >
-                  <UploadCloud size={14} className={isMigratingToSupabase ? 'animate-bounce' : ''} />
-                  <span>{isMigratingToSupabase ? 'Đang chuyển dữ liệu...' : 'Đồng Bộ 1-Click: Firestore -> Supabase'}</span>
-                </button>
-              </div>
-
-              {migrationSummaries && (
-                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px] space-y-1.5 animate-in fade-in">
-                  <div className="font-bold text-emerald-400">Kết quả chuyển đổi dữ liệu:</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {migrationSummaries.map((s, idx) => (
-                      <div key={idx} className="p-2 bg-slate-900 rounded-lg border border-slate-800">
-                        <div className="text-slate-400 text-[10px] truncate">{s.collection}</div>
-                        <div className="font-bold text-white text-xs">{s.migrated} / {s.totalSource} thành công</div>
-                        {s.failed > 0 && <div className="text-rose-400 text-[10px]">{s.failed} lỗi</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                  <span>Trạng Thái Đồng Bộ Firebase Firestore Cloud:</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                    cloudSyncStatus === 'synced' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                    cloudSyncStatus === 'syncing' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse' :
-                    'bg-slate-800 text-slate-400'
-                  }`}>
-                    {cloudSyncStatus === 'synced' ? '🟢 CLOUD SYNCED' : cloudSyncStatus === 'syncing' ? '🟡 SYNCING...' : '⚪ OFFLINE'}
-                  </span>
-                </h4>
-                <p className="text-[11px] text-slate-400">Database ID: <code className="text-amber-400">ai-studio-lqmarketsnmuabna-5c65ea81-a93a-42d1-adc3-f6cddc5ddc25</code></p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              {/* Wipe Cloud DB */}
-              <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-800/40 space-y-3 flex flex-col justify-between">
-                <div>
-                  <h5 className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
-                    <Trash2 size={14} />
-                    <span>Xoá Toàn Bộ Dữ Liệu Firebase</span>
-                  </h5>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Xoá vĩnh viễn toàn bộ tài khoản đăng bán, đơn hàng, giao dịch ví và tin nhắn trên Firebase Firestore (giữ lại tài khoản Super Admin).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={isWipingData}
-                  onClick={() => setShowWipeConfirmModal(true)}
-                  className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl border border-rose-500 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-rose-950/50"
-                >
-                  <Trash2 size={13} />
-                  <span>{isWipingData ? 'Đang xoá dữ liệu...' : 'Xoá Sạch Toàn Bộ Firebase'}</span>
-                </button>
-              </div>
-
-              {/* Seed Sample Demo Accounts */}
-              <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-800/40 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h5 className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-                      <Sparkles size={14} />
-                      <span>Nạp Dữ Liệu Mẫu (Seed Data)</span>
-                    </h5>
-                    <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded font-mono font-bold">
-                      DEV ONLY
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Nạp lại danh sách tài khoản demo và tài khoản test lên Firestore để phục vụ thử nghiệm tính năng (Chỉ dùng khi test).
+                    Toàn bộ tài khoản, đơn hàng, số dư ví và quà túi mù may mắn được lưu trữ bảo mật & đồng bộ tức thì trên MongoDB Atlas.
                   </p>
                 </div>
                 <button
@@ -1214,11 +1117,28 @@ export const AdminDashboardView: React.FC = () => {
                     setIsSeedingData(false);
                     showNotification(res.message);
                   }}
-                  className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl border border-cyan-500 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-cyan-950/50"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer transition-all shrink-0"
                 >
-                  <RefreshCw size={13} className={isSeedingData ? 'animate-spin' : ''} />
-                  <span>{isSeedingData ? 'Đang nạp dữ liệu...' : 'Nạp Lại Dữ Liệu Mẫu (Seed)'}</span>
+                  <RefreshCw size={14} className={isSeedingData ? 'animate-spin' : ''} />
+                  <span>{isSeedingData ? 'Đang làm mới...' : 'Đồng Bộ / Làm Mới Dữ Liệu'}</span>
                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="text-xs font-bold text-slate-200">Trạng Thái API Backend</div>
+                <div className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>https://api.cholienquan.com (Healthy)</span>
+                </div>
+                <p className="text-[11px] text-slate-500">Node.js + Express REST API Gateway</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="text-xs font-bold text-slate-200">Bảo Mật & Giao Dịch</div>
+                <div className="text-xs text-amber-400 font-mono">Escrow 100% An Toàn</div>
+                <p className="text-[11px] text-slate-500">Giữ tiền trung gian tự động, giải ngân khi buyer xác nhận</p>
               </div>
             </div>
           </div>

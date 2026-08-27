@@ -211,6 +211,77 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
   }
 });
 
+// POST /api/orders/:id/confirm (Alias for confirm-received)
+router.post('/:id/confirm', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.userId;
+    const isUserAdmin = req.user?.role === 'admin';
+
+    const order = await Order.findOne({ id });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng.' });
+    }
+
+    if (order.buyerId !== userId && !isUserAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ người mua mới có quyền xác nhận hoàn tất đơn hàng.'
+      });
+    }
+
+    if (order.status === 'completed') {
+      return res.json({ success: true, message: 'Đơn hàng đã được hoàn tất trước đó.', order: order.toJSON() });
+    }
+
+    order.status = 'completed';
+    order.completedAt = new Date().toISOString();
+    await order.save();
+
+    // Release payout to Seller
+    const sellerPayoutAmount = order.totalAmount - (order.fee || 0);
+    const seller = await User.findOne({ id: order.sellerId });
+    if (seller) {
+      seller.balance += sellerPayoutAmount;
+      seller.completedSales = (seller.completedSales || 0) + 1;
+      await seller.save();
+
+      // Record seller payout transaction
+      const sellerTx = new WalletTransaction({
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: seller.id,
+        userName: seller.name,
+        userEmail: seller.email,
+        type: 'seller_payout',
+        amount: sellerPayoutAmount,
+        status: 'success',
+        note: `Nhận tiền bán acc đơn hàng ${order.orderCode} (Đã trừ 5% phí sàn)`,
+        createdAt: new Date().toISOString()
+      });
+      await sellerTx.save();
+
+      const sellerNotif = new Notification({
+        id: `notif_${Date.now()}`,
+        userId: seller.id,
+        title: 'Thanh toán đã được giải ngân',
+        message: `Người mua đã xác nhận hài lòng với đơn hàng ${order.orderCode}. Số tiền ${sellerPayoutAmount.toLocaleString('vi-VN')}đ đã được cộng vào ví của bạn.`,
+        type: 'wallet',
+        linkTarget: order.id,
+        createdAt: new Date().toISOString()
+      });
+      await sellerNotif.save();
+    }
+
+    return res.json({
+      success: true,
+      message: 'Xác nhận hoàn tất đơn hàng và giải ngân tiền cho người bán thành công!',
+      order: order.toJSON()
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi xác nhận hoàn tất đơn hàng.' });
+  }
+});
+
 // POST /api/orders/:id/confirm-received (Buyer confirms & releases Escrow money to seller)
 router.post('/:id/confirm-received', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

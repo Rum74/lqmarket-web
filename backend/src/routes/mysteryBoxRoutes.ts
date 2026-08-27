@@ -5,20 +5,59 @@ import { MysteryReward } from '../models/MysteryReward';
 import { MysteryHistory } from '../models/MysteryHistory';
 import { UserInventory } from '../models/UserInventory';
 import { User } from '../models/User';
+import { Setting } from '../models/Setting';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
 import {
   authenticateToken,
   optionalAuth,
+  requireAdmin,
   AuthenticatedRequest
 } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/mystery-boxes
+// GET /api/mystery-boxes/settings (Public or Auth)
+router.get('/settings', async (req: Request, res: Response) => {
+  try {
+    const setting = await Setting.findOne({ key: 'mystery_box_active' });
+    const isActive = setting ? setting.value !== false : true;
+    return res.json({
+      success: true,
+      isMysteryBoxEventActive: isActive,
+      isActive
+    });
+  } catch (error: any) {
+    return res.json({ success: true, isMysteryBoxEventActive: true, isActive: true });
+  }
+});
+
+// POST /api/mystery-boxes/settings (Admin updates event active status)
+router.post('/settings', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { isActive, isMysteryBoxEventActive } = req.body;
+    const activeValue = isActive !== undefined ? Boolean(isActive) : Boolean(isMysteryBoxEventActive);
+    
+    await Setting.findOneAndUpdate(
+      { key: 'mystery_box_active' },
+      { $set: { value: activeValue, updatedAt: new Date().toISOString() } },
+      { upsert: true }
+    );
+
+    return res.json({
+      success: true,
+      message: `Đã ${activeValue ? 'bật' : 'tắt'} sự kiện Túi Mù May Mắn thành công!`,
+      isMysteryBoxEventActive: activeValue
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi cập nhật cấu hình Túi Mù' });
+  }
+});
+
+// GET /api/mystery-boxes (Get all boxes)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const boxes = await MysteryBox.find({ isActive: true }).lean();
+    const boxes = await MysteryBox.find().lean();
     return res.json({
       success: true,
       data: boxes,
@@ -26,6 +65,20 @@ router.get('/', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi tải danh sách Túi Mù' });
+  }
+});
+
+// GET /api/mystery-boxes/rewards (Get all rewards)
+router.get('/rewards/all', async (req: Request, res: Response) => {
+  try {
+    const rewards = await MysteryReward.find().lean();
+    return res.json({
+      success: true,
+      data: rewards,
+      rewards
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải danh sách phần thưởng' });
   }
 });
 
@@ -259,6 +312,51 @@ router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, re
       message: 'Lỗi hệ thống khi mở Túi Mù.',
       error: error.message
     });
+  }
+});
+
+// GET /api/mystery-boxes/inventory (User's rewards inventory)
+router.get('/user/inventory', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+    }
+
+    const items = await UserInventory.find({ userId }).sort({ receivedAt: -1 }).lean();
+    return res.json({
+      success: true,
+      data: items,
+      inventory: items,
+      items
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải kho đồ' });
+  }
+});
+
+// POST /api/mystery-boxes/inventory/:id/use
+router.post('/user/inventory/:id/use', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.userId;
+
+    const item = await UserInventory.findOne({ id, userId });
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy vật phẩm' });
+    }
+
+    item.isUsed = true;
+    item.usedAt = new Date().toISOString();
+    await item.save();
+
+    return res.json({
+      success: true,
+      message: 'Sử dụng vật phẩm thành công!',
+      item: item.toJSON()
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi dùng vật phẩm' });
   }
 });
 

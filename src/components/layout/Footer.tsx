@@ -69,10 +69,13 @@ export const Footer: React.FC = () => {
               />
               <span className="text-lg font-black tracking-tight text-white">
                 LQ<span className="text-amber-400">MARKET</span>
+                <span className="ml-1.5 text-xs text-amber-400 font-mono font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                  cholienquan.com
+                </span>
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Sàn giao dịch và marketplace tài khoản Liên Quân Mobile (Arena of Valor) hàng đầu Việt Nam. Nền tảng kết nối người mua và người bán với cơ chế trung gian an toàn tuyệt đối.
+              Sàn giao dịch và marketplace tài khoản Liên Quân Mobile (Arena of Valor) uy tín hàng đầu - Chợ Liên Quân (cholienquan.com). Nền tảng kết nối người mua và người bán với cơ chế trung gian an toàn tuyệt đối.
             </p>
             <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg w-fit">
               <Lock className="w-3.5 h-3.5" />
