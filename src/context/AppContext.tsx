@@ -303,8 +303,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 2. Fetch Mystery Box Settings (Event Active Status) from MongoDB
       const settingsRes = await api.get('/api/mystery-boxes/settings').catch(() => null);
-      if (settingsRes && settingsRes.success && typeof settingsRes.isEventActive === 'boolean') {
-        setIsMysteryBoxEventActive(settingsRes.isEventActive);
+      if (settingsRes && settingsRes.success) {
+        const active = settingsRes.isMysteryBoxEventActive ?? settingsRes.isEventActive ?? settingsRes.isActive;
+        if (typeof active === 'boolean') {
+          setIsMysteryBoxEventActive(active);
+        }
       }
 
       // 3. Fetch Mystery Box Tiers from MongoDB
@@ -386,6 +389,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUserInventory(invRes.data || invRes.inventory || invRes.items);
         }
 
+        // Fetch Chat Messages from MongoDB
+        const chatRes = await api.get('/api/conversations/messages').catch(() => null);
+        if (chatRes && chatRes.success && Array.isArray(chatRes.data || chatRes.messages)) {
+          const fetchedMsgs = chatRes.data || chatRes.messages;
+          if (fetchedMsgs.length > 0) {
+            setChatMessages(fetchedMsgs);
+          }
+        }
+
         // Fetch Favorites/Wishlist
         const favRes = await api.get('/api/favorites').catch(() => null);
         if (favRes && favRes.success && Array.isArray(favRes.data || favRes.favorites)) {
@@ -401,9 +413,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Initial load
+  // Initial load & periodic polling for multi-browser real-time synchronization
   useEffect(() => {
     fetchAllMongoData();
+
+    const interval = setInterval(() => {
+      const token = getAuthToken();
+      if (token) {
+        // Poll latest messages & notifications in background
+        api.get('/api/conversations/messages')
+          .then(res => {
+            if (res && res.success && Array.isArray(res.data || res.messages)) {
+              setChatMessages(res.data || res.messages);
+            }
+          })
+          .catch(() => {});
+
+        api.get('/api/notifications')
+          .then(res => {
+            if (res && res.success && Array.isArray(res.data || res.notifications)) {
+              setNotifications(res.data || res.notifications);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, [fetchAllMongoData]);
 
   // Derive Current User
@@ -927,10 +963,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setChatMessages(prev => [...prev, newMsg]);
 
-    api.post('/api/messages', {
-      receiverId: recipientId,
-      content: text.trim(),
+    api.post('/api/conversations/messages', {
+      recipientId,
+      text: text.trim(),
       orderId
+    }).then(res => {
+      if (res && res.message) {
+        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? res.message : m));
+      }
     }).catch(e => console.warn('MongoDB message notice:', e));
   };
 
@@ -954,10 +994,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setChatMessages(prev => [...prev, newMsg]);
 
-    api.post('/api/messages', {
-      receiverId: msgData.recipientId,
-      content: msgData.text.trim(),
+    api.post('/api/conversations/messages', {
+      senderId: msgData.senderId,
+      senderName: msgData.senderName,
+      senderAvatar: msgData.senderAvatar,
+      recipientId: msgData.recipientId,
+      text: msgData.text.trim(),
       orderId: msgData.orderId
+    }).then(res => {
+      if (res && res.message) {
+        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? res.message : m));
+      }
     }).catch(e => console.warn('MongoDB message notice:', e));
   };
 
@@ -1110,7 +1157,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const adminToggleMysteryBoxEvent = async (active: boolean): Promise<{ success: boolean; message: string }> => {
     setIsMysteryBoxEventActive(active);
     try {
-      const res = await api.post('/api/mystery-boxes/settings', { isEventActive: active });
+      const res = await api.post('/api/mystery-boxes/settings', { isMysteryBoxEventActive: active, isEventActive: active, isActive: active });
+      fetchAllMongoData();
       return {
         success: true,
         message: res.message || (active ? 'Đã BẬT toàn bộ chương trình Xé Túi Mù!' : 'Đã TẮT toàn bộ chương trình Xé Túi Mù!')
@@ -1128,12 +1176,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     reward: Omit<MysteryBoxRewardItem, 'id'>
   ): Promise<{ success: boolean; message: string }> => {
     try {
-      const newId = `rew_${Date.now()}`;
-      const newReward: MysteryBoxRewardItem = { ...reward, id: newId };
-      setMysteryRewards(prev => [...prev, newReward]);
-      return { success: true, message: 'Đã thêm phần thưởng vào kho Túi Mù thành công!' };
+      const res = await api.post('/api/mystery-boxes/rewards', reward);
+      fetchAllMongoData();
+      return { success: true, message: res.message || 'Đã thêm phần thưởng vào kho Túi Mù thành công!' };
     } catch (err: any) {
-      return { success: false, message: 'Lỗi khi thêm phần thưởng!' };
+      return { success: false, message: err.message || 'Lỗi khi thêm phần thưởng!' };
     }
   };
 
@@ -1141,21 +1188,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     id: string,
     updates: Partial<MysteryBoxRewardItem>
   ): Promise<{ success: boolean; message: string }> => {
-    setMysteryRewards(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
-    return { success: true, message: 'Đã cập nhật phần thưởng thành công!' };
+    try {
+      const res = await api.put(`/api/mystery-boxes/rewards/${id}`, updates);
+      fetchAllMongoData();
+      return { success: true, message: res.message || 'Đã cập nhật phần thưởng thành công!' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi cập nhật phần thưởng!' };
+    }
   };
 
   const adminDeleteMysteryReward = async (id: string): Promise<{ success: boolean; message: string }> => {
-    setMysteryRewards(prev => prev.filter(r => r.id !== id));
-    return { success: true, message: 'Đã xoá phần thưởng khỏi kho Túi Mù!' };
+    try {
+      const res = await api.delete(`/api/mystery-boxes/rewards/${id}`);
+      fetchAllMongoData();
+      return { success: true, message: res.message || 'Đã xoá phần thưởng khỏi kho Túi Mù!' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi xoá phần thưởng!' };
+    }
   };
 
   const adminUpdateBoxTier = async (
     tierId: string,
     updates: Partial<MysteryBoxTierConfig>
   ): Promise<{ success: boolean; message: string }> => {
-    setMysteryBoxes(prev => prev.map(b => (b.id === tierId ? { ...b, ...updates } : b)));
-    return { success: true, message: 'Đã cập nhật cấu hình Túi Mù thành công!' };
+    try {
+      const res = await api.put(`/api/mystery-boxes/${tierId}`, updates);
+      fetchAllMongoData();
+      return { success: true, message: res.message || 'Đã cập nhật cấu hình Túi Mù thành công!' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi cập nhật cấu hình Túi Mù!' };
+    }
   };
 
   const adminImportAccountToMysteryBox = async (
@@ -1165,38 +1227,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const acc = accounts.find(a => a.id === accountId);
     if (!acc) return { success: false, message: 'Tài khoản không tồn tại trên sàn!' };
 
-    const newReward: MysteryBoxRewardItem = {
-      id: `rew_import_${Date.now()}`,
-      boxTierId: targetTierId,
-      type: 'account',
-      title: `Acc ${acc.rank} ${acc.heroesCount}T ${acc.skinsCount}S - ${acc.title}`,
-      subtitle: `${acc.credentials.securityType} - Đổi thông tin ngay`,
-      value: acc.price,
-      rarity: acc.price >= 500000 ? 'legendary' : acc.price >= 150000 ? 'epic' : 'rare',
-      dropWeight: targetTierId === 'box_diamond' || targetTierId === 'box_special' ? 18 : 12,
-      accountData: {
-        rank: acc.rank,
-        heroesCount: acc.heroesCount,
-        skinsCount: acc.skinsCount,
-        rareSkinName: acc.rareSkins?.[0]?.name,
-        credentials: acc.credentials,
-        description: acc.description
-      }
-    };
-
-    setMysteryRewards(prev => [...prev, newReward]);
-    updateAccountStatus(accountId, 'sold', 'Đã chuyển vào kho quà Túi Mù may mắn');
-
-    return {
-      success: true,
-      message: `Đã nhập Acc #${acc.code} vào kho quà của "${targetTierId}" thành công!`
-    };
+    try {
+      const res = await api.post('/api/mystery-boxes/import-account', {
+        accountId,
+        targetTierId
+      });
+      updateAccountStatus(accountId, 'sold', 'Đã chuyển vào kho quà Túi Mù may mắn');
+      fetchAllMongoData();
+      return {
+        success: true,
+        message: res.message || `Đã nhập Acc #${acc.code} vào kho quà của "${targetTierId}" thành công!`
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi nhập tài khoản vào Túi Mù!' };
+    }
   };
 
   const adminResetMysteryBoxes = async (): Promise<{ success: boolean; message: string }> => {
-    setMysteryBoxes(DEFAULT_MYSTERY_BOX_TIERS);
-    setMysteryRewards(DEFAULT_MYSTERY_BOX_REWARDS);
-    return { success: true, message: 'Đã khôi phục 4 hạng Túi Mù & toàn bộ kho quà chuẩn thành công!' };
+    fetchAllMongoData();
+    return { success: true, message: 'Đã đồng bộ lại 4 hạng Túi Mù & toàn bộ kho quà từ MongoDB thành công!' };
   };
 
   const resetToDefaultData = () => {

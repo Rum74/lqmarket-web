@@ -6,6 +6,7 @@ export interface IMysteryBox {
   tier: string;
   name: string;
   tagline: string;
+  description?: string;
   price: number;
   badge: string;
   color: string;
@@ -23,6 +24,7 @@ const MysteryBoxSchema = new Schema<IMysteryBox>(
     tier: { type: String, required: true, index: true },
     name: { type: String, required: true },
     tagline: { type: String, default: '' },
+    description: { type: String, default: '' },
     price: { type: Number, required: true },
     badge: { type: String, default: 'HOT' },
     color: { type: String, default: 'from-amber-500 to-yellow-600' },

@@ -107,6 +107,7 @@ async function startServer() {
   app.use('/api/favorites', favoriteRoutes);
   app.use('/api/conversations', chatRoutes);
   app.use('/api/chat', chatRoutes); // Alias
+  app.use('/api/messages', chatRoutes); // Alias
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
