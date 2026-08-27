@@ -29,11 +29,13 @@ import {
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
-  const { accounts, orders, allUsers, setCurrentView, setFilterOptions, openSellerProfile, openChatWith, mysteryBoxes } = useApp();
+  const { accounts, orders, allUsers, setCurrentView, setFilterOptions, openSellerProfile, openChatWith, mysteryBoxes, totalSystemCompletedSales } = useApp();
 
   const approvedAccounts = accounts.filter(a => a.status === 'approved');
 
   // Real-time dynamic counts per rank calculated directly from database
+  const thachDauCount = approvedAccounts.filter(a => a.rank === 'Thách Đấu').length;
+  const chienThanCount = approvedAccounts.filter(a => a.rank === 'Chiến Thần').length;
   const chienTuongCount = approvedAccounts.filter(a => a.rank === 'Chiến Tướng').length;
   const caoThuCount = approvedAccounts.filter(a => a.rank === 'Cao Thủ').length;
   const tinhAnhCount = approvedAccounts.filter(a => a.rank === 'Tinh Anh').length;
@@ -43,7 +45,7 @@ export const HomeView: React.FC = () => {
   const dongBacCount = approvedAccounts.filter(a => a.rank === 'Đồng' || a.rank === 'Bạc').length;
 
   const totalAvailableCount = approvedAccounts.length;
-  const totalCompletedSales = orders.filter(o => o.status === 'completed').length;
+  const totalCompletedSales = totalSystemCompletedSales > 0 ? totalSystemCompletedSales : (orders.filter(o => o.status === 'completed').length || accounts.filter(a => a.status === 'sold').length);
 
   // Prominent Sellers List from Database (Dynamic sync)
   const prominentSellers = allUsers
@@ -178,8 +180,10 @@ export const HomeView: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2 sm:gap-2.5">
           {[
+            { rank: 'Thách Đấu', count: `${thachDauCount} acc`, filterVal: 'Thách Đấu', color: 'border-rose-500/50 text-rose-300 hover:bg-rose-950/40 shadow-sm shadow-rose-950/30' },
+            { rank: 'Chiến Thần', count: `${chienThanCount} acc`, filterVal: 'Chiến Thần', color: 'border-fuchsia-500/50 text-fuchsia-300 hover:bg-fuchsia-950/40 shadow-sm shadow-fuchsia-950/30' },
             { rank: 'Chiến Tướng', count: `${chienTuongCount} acc`, filterVal: 'Chiến Tướng', color: 'border-red-500/40 text-amber-300 hover:bg-red-950/40' },
             { rank: 'Cao Thủ', count: `${caoThuCount} acc`, filterVal: 'Cao Thủ', color: 'border-amber-500/40 text-amber-400 hover:bg-amber-950/40' },
             { rank: 'Tinh Anh', count: `${tinhAnhCount} acc`, filterVal: 'Tinh Anh', color: 'border-purple-500/40 text-purple-300 hover:bg-purple-950/40' },

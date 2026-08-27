@@ -7,6 +7,7 @@ export type RankTier =
   | 'Tinh Anh'
   | 'Cao Thủ'
   | 'Chiến Tướng'
+  | 'Chiến Thần'
   | 'Thách Đấu';
 
 export type AccountStatus = 'pending' | 'approved' | 'rejected' | 'sold' | 'hidden';

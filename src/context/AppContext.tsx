@@ -176,6 +176,9 @@ interface AppContextType {
   adminAdjustUserBalance: (userId: string, amount: number, note: string) => Promise<{ success: boolean; message: string }>;
 
   // System & Database Management
+  totalSystemCompletedSales: number;
+  isAutoApproveAccounts: boolean;
+  adminToggleAutoApproveAccounts: (enabled: boolean) => Promise<{ success: boolean; message: string }>;
   resetToDefaultData: () => void;
   clearAllFirebaseData: () => Promise<{ success: boolean; message: string }>;
   seedSampleData: () => Promise<{ success: boolean; message: string }>;
@@ -285,6 +288,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Filters
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(DEFAULT_FILTERS);
 
+  // System Stats & Config State
+  const [totalSystemCompletedSales, setTotalSystemCompletedSales] = useState<number>(0);
+  const [isAutoApproveAccounts, setIsAutoApproveAccounts] = useState<boolean>(false);
+
   // ----------------------------------------------------
   // MongoDB Master Data Fetching Function
   // ----------------------------------------------------
@@ -298,6 +305,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const list = accRes.data || accRes.accounts;
         if (list.length > 0) {
           setAccounts(list);
+        }
+      }
+
+      // 1b. Fetch Public System Stats (Total completed transactions & auto-approve setting from Database)
+      const statsRes = await api.get('/api/accounts/public-stats').catch(() => null);
+      if (statsRes && statsRes.success) {
+        if (typeof statsRes.totalCompletedTransactions === 'number') {
+          setTotalSystemCompletedSales(statsRes.totalCompletedTransactions);
+        }
+        if (typeof statsRes.isAutoApprove === 'boolean') {
+          setIsAutoApproveAccounts(statsRes.isAutoApprove);
         }
       }
 
@@ -1248,6 +1266,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Đã đồng bộ lại 4 hạng Túi Mù & toàn bộ kho quà từ MongoDB thành công!' };
   };
 
+  const adminToggleAutoApproveAccounts = async (enabled: boolean): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsAutoApproveAccounts(enabled);
+      const res = await api.post('/api/admin/settings', {
+        settings: {
+          auto_approve_accounts: enabled
+        }
+      });
+      if (res && res.success) {
+        return { success: true, message: `Đã ${enabled ? 'BẬT' : 'TẮT'} chế độ tự động duyệt tài khoản đăng bán.` };
+      }
+      return { success: true, message: `Đã cập nhật chế độ duyệt tài khoản: ${enabled ? 'Tự động duyệt ON' : 'Duyệt thủ công OFF'}` };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || 'Không thể lưu cài đặt duyệt tài khoản vào Database.' };
+    }
+  };
+
   const resetToDefaultData = () => {
     fetchAllMongoData();
   };
@@ -1283,6 +1318,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsProfileModalOpen,
         openProfileModal,
         cloudSyncStatus,
+
+        totalSystemCompletedSales,
+        isAutoApproveAccounts,
+        adminToggleAutoApproveAccounts,
 
         currentView,
         setCurrentView,

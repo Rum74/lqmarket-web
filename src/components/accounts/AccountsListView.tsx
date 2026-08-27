@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 
 const RANKS_LIST: RankTier[] = [
+  'Thách Đấu',
+  'Chiến Thần',
   'Chiến Tướng',
   'Cao Thủ',
   'Tinh Anh',

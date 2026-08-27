@@ -11,6 +11,18 @@ interface RankBadgeProps {
 export const RankBadge: React.FC<RankBadgeProps> = ({ rank, size = 'md', showIcon = true }) => {
   const getRankConfig = (r: RankTier) => {
     switch (r) {
+      case 'Thách Đấu':
+        return {
+          bg: 'bg-gradient-to-r from-red-600/30 via-purple-600/30 to-amber-500/30 text-amber-200 border-amber-400/50 shadow-md shadow-red-500/20 font-black',
+          icon: Crown,
+          iconColor: 'text-amber-300 animate-pulse'
+        };
+      case 'Chiến Thần':
+        return {
+          bg: 'bg-gradient-to-r from-rose-600/30 via-red-600/30 to-orange-500/30 text-rose-200 border-rose-500/40 shadow-sm shadow-rose-500/20 font-extrabold',
+          icon: Flame,
+          iconColor: 'text-rose-400 animate-bounce'
+        };
       case 'Chiến Tướng':
         return {
           bg: 'bg-gradient-to-r from-red-600/20 via-orange-600/20 to-amber-600/20 text-amber-300 border-amber-500/40 shadow-red-500/10',

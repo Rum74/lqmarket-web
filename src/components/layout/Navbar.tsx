@@ -120,16 +120,16 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
 
-          {/* Search Bar (Desktop) */}
-          <div className="hidden xl:flex flex-1 max-w-sm 2xl:max-w-md mx-2 shrink-0">
+          {/* Search Bar (Desktop / Tablet Landscape) */}
+          <div className="hidden md:flex flex-1 min-w-[180px] max-w-xs lg:max-w-sm xl:max-w-md mx-2 shrink-0">
             <form onSubmit={handleSearchSubmit} className="relative w-full">
               <input
                 id="navbar-search-input"
                 type="text"
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
-                placeholder="Tìm acc theo tướng, rank, skin hiếm..."
-                className="w-full bg-slate-950/80 border border-slate-700/80 text-slate-100 placeholder-slate-500 text-xs rounded-xl pl-9 pr-14 py-2 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                placeholder="Tìm acc theo tướng, rank, skin..."
+                className="w-full bg-slate-950/90 border border-slate-700 hover:border-slate-600 text-slate-100 placeholder-slate-400 text-xs rounded-xl pl-9 pr-14 py-2 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-medium"
               />
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
               <button

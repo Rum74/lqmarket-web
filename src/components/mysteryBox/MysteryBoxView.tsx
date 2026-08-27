@@ -204,27 +204,29 @@ export const MysteryBoxView: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. REAL-TIME WINNERS TICKER */}
-      <div className="bg-slate-900 border-b border-slate-800/80 py-2.5 px-4 overflow-hidden">
-        <div className="max-w-6xl mx-auto flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider shrink-0 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-            <Trophy size={13} className="animate-bounce" />
-            <span className="hidden sm:inline">Vừa Trúng Thưởng:</span>
-            <span className="sm:hidden">Trúng:</span>
-          </div>
+      {/* 2. REAL-TIME WINNERS TICKER (Hides if empty) */}
+      {mysteryHistory && mysteryHistory.length > 0 && (
+        <div className="bg-slate-900 border-b border-slate-800/80 py-2.5 px-4 overflow-hidden">
+          <div className="max-w-6xl mx-auto flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider shrink-0 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+              <Trophy size={13} className="animate-bounce" />
+              <span className="hidden sm:inline">Vừa Trúng Thưởng:</span>
+              <span className="sm:hidden">Trúng:</span>
+            </div>
 
-          <div className="flex-1 overflow-x-auto no-scrollbar flex items-center gap-4 text-xs whitespace-nowrap">
-            {mysteryHistory.slice(0, 10).map((h, idx) => (
-              <div key={h.id || idx} className="inline-flex items-center gap-2 bg-slate-950/80 px-3 py-1 rounded-full border border-slate-800">
-                <span className="font-bold text-slate-200">{h.userName}</span>
-                <span className="text-slate-500">vừa xé trúng</span>
-                <span className="font-black text-amber-300">{h.rewardTitle}</span>
-                <span className="text-[10px] text-slate-400">({h.openedAt})</span>
-              </div>
-            ))}
+            <div className="flex-1 overflow-x-auto no-scrollbar flex items-center gap-4 text-xs whitespace-nowrap">
+              {mysteryHistory.slice(0, 10).map((h, idx) => (
+                <div key={h.id || idx} className="inline-flex items-center gap-2 bg-slate-950/80 px-3 py-1 rounded-full border border-slate-800">
+                  <span className="font-bold text-slate-200">{h.userName}</span>
+                  <span className="text-slate-500">vừa xé trúng</span>
+                  <span className="font-black text-amber-300">{h.rewardTitle}</span>
+                  <span className="text-[10px] text-slate-400">({h.openedAt})</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 3. MAIN NAVIGATION TABS */}
       <div className="max-w-6xl mx-auto px-4 pt-6">

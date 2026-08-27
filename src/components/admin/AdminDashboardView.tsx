@@ -63,7 +63,9 @@ export const AdminDashboardView: React.FC = () => {
     resetToDefaultData,
     clearAllFirebaseData,
     seedSampleData,
-    cloudSyncStatus
+    cloudSyncStatus,
+    isAutoApproveAccounts,
+    adminToggleAutoApproveAccounts
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'accounts' | 'disputes' | 'payouts' | 'users' | 'mystery_box' | 'settings'>('pending');
@@ -72,6 +74,7 @@ export const AdminDashboardView: React.FC = () => {
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [isWipingData, setIsWipingData] = useState(false);
   const [isSeedingData, setIsSeedingData] = useState(false);
+  const [isTogglingAutoApprove, setIsTogglingAutoApprove] = useState(false);
   const [showWipeConfirmModal, setShowWipeConfirmModal] = useState(false);
 
   // User Management State
@@ -377,7 +380,7 @@ export const AdminDashboardView: React.FC = () => {
       )}
 
       {/* Admin Header Banner */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-red-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-red-950/30 via-slate-900 to-slate-950 shadow-2xl">
+      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-red-500/30 flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-gradient-to-r from-red-950/30 via-slate-900 to-slate-950 shadow-2xl">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 text-xs font-black text-red-400 bg-red-500/15 border border-red-500/30 px-3 py-1 rounded-lg mb-1">
             <ShieldAlert size={14} />
@@ -391,8 +394,8 @@ export const AdminDashboardView: React.FC = () => {
           </p>
         </div>
 
-        {/* Tab Controls */}
-        <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 overflow-x-auto max-w-full pb-1.5 sm:pb-1.5 scrollbar-none">
+        {/* Tab Controls (Clean layout on desktop and smooth horizontal scroll on mobile) */}
+        <div className="flex items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-2xl border border-slate-800 overflow-x-auto max-w-full scrollbar-none shrink-0">
           <button
             onClick={() => setActiveTab('pending')}
             className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
@@ -1077,6 +1080,48 @@ export const AdminDashboardView: React.FC = () => {
             <Settings size={16} className="text-amber-400" />
             <span>Cấu Hình Vận Hành Hệ Thống Sàn LQMarket</span>
           </h3>
+
+          {/* Auto-Approve Accounts Setting Toggle */}
+          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-amber-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Tự động duyệt bài đăng bán (Auto-Approve):</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  isAutoApproveAccounts ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {isAutoApproveAccounts ? 'BẬT (TỰ ĐỘNG DUYỆT)' : 'TẮT (ADMIN DUYỆT TAY)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {isAutoApproveAccounts
+                  ? 'Khi BẬT: Mọi bài đăng bán acc của Seller sẽ được tự động hiển thị công khai trên sàn ngay lập tức mà không cần Admin phê duyệt trước.'
+                  : 'Khi TẮT: Mọi bài đăng bán mới sẽ ở trạng thái "Chờ duyệt" và chỉ xuất hiện khi Admin bấm nút Phê duyệt.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={isTogglingAutoApprove}
+              onClick={async () => {
+                setIsTogglingAutoApprove(true);
+                const nextState = !isAutoApproveAccounts;
+                const res = await adminToggleAutoApproveAccounts(nextState);
+                setIsTogglingAutoApprove(false);
+                showNotification(res.message);
+              }}
+              className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                isAutoApproveAccounts ? 'bg-emerald-500' : 'bg-slate-700'
+              }`}
+              title={isAutoApproveAccounts ? 'Bấm để Tắt tự động duyệt' : 'Bấm để Bật tự động duyệt'}
+            >
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  isAutoApproveAccounts ? 'translate-x-7' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">

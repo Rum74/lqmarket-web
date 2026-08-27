@@ -439,6 +439,8 @@ export const SellAccountView: React.FC = () => {
                     onChange={e => setRank(e.target.value as RankTier)}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs sm:text-sm rounded-xl p-3 focus:outline-none focus:border-amber-500 cursor-pointer"
                   >
+                    <option value="Thách Đấu">Thách Đấu</option>
+                    <option value="Chiến Thần">Chiến Thần</option>
                     <option value="Chiến Tướng">Chiến Tướng</option>
                     <option value="Cao Thủ">Cao Thủ</option>
                     <option value="Tinh Anh">Tinh Anh</option>

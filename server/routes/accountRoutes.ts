@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { Account, IAccount } from '../models/Account';
 import { User } from '../models/User';
+import { Order } from '../models/Order';
+import { Setting } from '../models/Setting';
 import {
   authenticateToken,
   optionalAuth,
@@ -153,6 +155,40 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
   }
 });
 
+// GET /api/accounts/public-stats (Public stats from Database)
+router.get('/public-stats', async (req: Request, res: Response) => {
+  try {
+    const [
+      totalSuccessfulOrders,
+      totalSoldAccounts,
+      totalAvailableAccounts,
+      autoApproveSetting
+    ] = await Promise.all([
+      Order.countDocuments({ status: 'completed' }),
+      Account.countDocuments({ status: 'sold' }),
+      Account.countDocuments({ status: 'approved' }),
+      Setting.findOne({ key: 'auto_approve_accounts' })
+    ]);
+
+    const totalCompletedTransactions = Math.max(totalSuccessfulOrders, totalSoldAccounts, 0);
+
+    return res.json({
+      success: true,
+      totalCompletedTransactions,
+      totalAvailableAccounts,
+      isAutoApprove: autoApproveSetting ? Boolean(autoApproveSetting.value) : false
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi tải số liệu thống kê.',
+      totalCompletedTransactions: 0,
+      totalAvailableAccounts: 0,
+      isAutoApprove: false
+    });
+  }
+});
+
 // GET /api/accounts/:id
 router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -241,6 +277,11 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     const randomCodeNum = Math.floor(10000 + Math.random() * 90000);
     const code = `LQ${randomCodeNum}`;
 
+    // Check auto-approve setting from Database (Admin config)
+    const autoApproveSetting = await Setting.findOne({ key: 'auto_approve_accounts' });
+    const isAutoApprove = autoApproveSetting ? Boolean(autoApproveSetting.value) : false;
+    const initialStatus = (seller.role === 'admin' || isAutoApprove) ? 'approved' : 'pending';
+
     const newAccount = new Account({
       id: accountId,
       code,
@@ -266,7 +307,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       sellerCompletedSales: seller.completedSales || 0,
       sellerResponseTime: '< 15 phút',
       sellerVerified: seller.isVerifiedSeller || false,
-      status: 'approved', // Auto-approved for verified or standard listings
+      status: initialStatus,
       credentials: {
         username: credentials.username.trim(),
         password: credentials.password.trim(),
