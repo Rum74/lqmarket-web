@@ -52,16 +52,23 @@ export const AccountsListView: React.FC = () => {
     }
 
     // Rank filter
-    if (filterOptions.rank !== 'all') {
-      if (filterOptions.rank === 'Đồng - Bạc') {
-        if (acc.rank !== 'Đồng' && acc.rank !== 'Bạc') return false;
-      } else if (acc.rank !== filterOptions.rank) {
+    if (filterOptions.rank && filterOptions.rank !== 'all') {
+      const normalize = (str: string) => (str || '').trim().toLowerCase().normalize('NFC');
+      const selectedRank = normalize(filterOptions.rank);
+      const accRank = normalize(acc.rank);
+
+      if (selectedRank === 'đồng - bạc' || selectedRank === 'dong - bac') {
+        if (accRank !== 'đồng' && accRank !== 'bạc' && accRank !== 'dong' && accRank !== 'bac') return false;
+      } else if (accRank !== selectedRank) {
         return false;
       }
     }
 
     // Price range
-    if (acc.price < filterOptions.minPrice || acc.price > filterOptions.maxPrice) {
+    if (filterOptions.minPrice > 0 && acc.price < filterOptions.minPrice) {
+      return false;
+    }
+    if (filterOptions.maxPrice > 0 && filterOptions.maxPrice < 100000000 && acc.price > filterOptions.maxPrice) {
       return false;
     }
 
@@ -115,12 +122,12 @@ export const AccountsListView: React.FC = () => {
 
   const activeFilterCount =
     (filterOptions.rank !== 'all' ? 1 : 0) +
-    (filterOptions.minPrice > 0 || filterOptions.maxPrice < 6000000 ? 1 : 0) +
+    (filterOptions.minPrice > 0 || (filterOptions.maxPrice > 0 && filterOptions.maxPrice < 100000000) ? 1 : 0) +
     (filterOptions.minHeroes > 0 ? 1 : 0) +
     (filterOptions.minSkins > 0 ? 1 : 0) +
     (filterOptions.rareSkinType !== 'all' ? 1 : 0) +
     (filterOptions.badge !== 'all' ? 1 : 0) +
-    (filterOptions.search ? 1 : 0);
+    (filterOptions.search.trim() ? 1 : 0);
 
   return (
     <div className="space-y-6 pb-12">
@@ -268,7 +275,9 @@ export const AccountsListView: React.FC = () => {
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-300">Khoảng Giá:</label>
                 <span className="text-xs font-bold text-amber-400">
-                  {filterOptions.minPrice.toLocaleString('vi-VN')}đ - {filterOptions.maxPrice.toLocaleString('vi-VN')}đ
+                  {filterOptions.minPrice === 0 && (filterOptions.maxPrice >= 100000000 || filterOptions.maxPrice === 0)
+                    ? 'Tất cả mức giá'
+                    : `${filterOptions.minPrice.toLocaleString('vi-VN')}đ - ${filterOptions.maxPrice >= 100000000 ? 'Không giới hạn' : `${filterOptions.maxPrice.toLocaleString('vi-VN')}đ`}`}
                 </span>
               </div>
 
@@ -279,8 +288,8 @@ export const AccountsListView: React.FC = () => {
                   { label: '200k - 500k', min: 200000, max: 500000 },
                   { label: '500k - 1 Triệu', min: 500000, max: 1000000 },
                   { label: '1Tr - 2 Triệu', min: 1000000, max: 2000000 },
-                  { label: 'Trên 2 Triệu', min: 2000000, max: 6000000 },
-                  { label: 'Tất cả giá', min: 0, max: 6000000 }
+                  { label: 'Trên 2 Triệu', min: 2000000, max: 100000000 },
+                  { label: 'Tất cả giá', min: 0, max: 100000000 }
                 ].map((chip, idx) => (
                   <button
                     key={idx}

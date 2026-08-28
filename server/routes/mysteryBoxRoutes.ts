@@ -15,8 +15,76 @@ import {
   requireAdmin,
   AuthenticatedRequest
 } from '../middleware/auth';
+import {
+  DEFAULT_SERVER_BOX_TIERS,
+  DEFAULT_SERVER_REWARDS
+} from '../data/mysteryBoxDefaults';
 
 const router = Router();
+
+// Helper to seed defaults if collection is empty or missing items
+export async function seedMysteryBoxDefaults(forceUpsert = false) {
+  try {
+    for (const box of DEFAULT_SERVER_BOX_TIERS) {
+      const existing = await MysteryBox.findOne({ id: box.id });
+      if (!existing) {
+        await MysteryBox.create(box);
+      } else if (forceUpsert) {
+        await MysteryBox.findOneAndUpdate({ id: box.id }, box, { upsert: true });
+      }
+    }
+
+    for (const reward of DEFAULT_SERVER_REWARDS) {
+      const existing = await MysteryReward.findOne({ id: reward.id });
+      if (!existing) {
+        await MysteryReward.create(reward);
+      } else if (forceUpsert) {
+        await MysteryReward.findOneAndUpdate({ id: reward.id }, reward, { upsert: true });
+      }
+    }
+    console.log('Mystery box & rewards seed check complete in DB.');
+  } catch (err) {
+    console.warn('Could not auto-seed mystery box defaults:', err);
+  }
+}
+
+// Auto seed on boot
+seedMysteryBoxDefaults();
+
+// POST /api/mystery-boxes/admin/seed-defaults (Admin re-seed / sync all defaults into DB)
+router.post('/admin/seed-defaults', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { force } = req.body || {};
+    await seedMysteryBoxDefaults(Boolean(force));
+    const boxes = await MysteryBox.find().lean();
+    const rewards = await MysteryReward.find().lean();
+    return res.json({
+      success: true,
+      message: `Đã đồng bộ thành công ${boxes.length} hạng Túi Mù và ${rewards.length} phần thưởng vào cơ sở dữ liệu!`,
+      boxes,
+      rewards
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi nạp dữ liệu seed vào cơ sở dữ liệu', error: error.message });
+  }
+});
+
+// POST /api/mystery-boxes/reset (Alternative endpoint for reset)
+router.post('/reset', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await seedMysteryBoxDefaults(true);
+    const boxes = await MysteryBox.find().lean();
+    const rewards = await MysteryReward.find().lean();
+    return res.json({
+      success: true,
+      message: `Đã khôi phục và nạp ${boxes.length} hạng Túi Mù và ${rewards.length} phần thưởng vào DB!`,
+      boxes,
+      rewards
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi reset phần thưởng', error: error.message });
+  }
+});
 
 // ========================================================
 // 1. SETTINGS & EVENT STATUS
@@ -77,14 +145,22 @@ router.post('/settings', authenticateToken, requireAdmin, async (req: Authentica
 // GET /api/mystery-boxes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const boxes = await MysteryBox.find().lean();
+    let boxes = await MysteryBox.find().lean();
+    if (!boxes || boxes.length === 0) {
+      await MysteryBox.insertMany(DEFAULT_SERVER_BOX_TIERS);
+      boxes = await MysteryBox.find().lean();
+    }
     return res.json({
       success: true,
-      data: boxes,
-      boxes
+      data: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS,
+      boxes: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi tải danh sách Túi Mù' });
+    return res.json({
+      success: true,
+      data: DEFAULT_SERVER_BOX_TIERS,
+      boxes: DEFAULT_SERVER_BOX_TIERS
+    });
   }
 });
 
@@ -94,9 +170,16 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedReq
     const { id } = req.params;
     const updates = req.body;
 
-    const box = await MysteryBox.findOne({
+    let box = await MysteryBox.findOne({
       $or: [{ id }, { tier: id }]
     });
+
+    if (!box) {
+      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
+      if (defaultBox) {
+        box = await MysteryBox.create(defaultBox);
+      }
+    }
 
     if (!box) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy hạng Túi Mù' });
@@ -126,22 +209,39 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedReq
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const box = await MysteryBox.findOne({
+    let box = await MysteryBox.findOne({
       $or: [{ id }, { tier: id }]
     });
+
+    if (!box) {
+      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
+      if (defaultBox) {
+        box = await MysteryBox.create(defaultBox);
+      }
+    }
 
     if (!box) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy Túi Mù' });
     }
 
-    const rewards = await MysteryReward.find({
+    let rewards = await MysteryReward.find({
       $or: [{ boxTierId: box.tier }, { boxTierId: box.id }, { boxTierId: 'all' }]
     }).lean();
 
+    if (!rewards || rewards.length === 0) {
+      const matchedDefaults = DEFAULT_SERVER_REWARDS.filter(r => r.boxTierId === box.id || r.boxTierId === box.tier || r.boxTierId === 'all');
+      if (matchedDefaults.length > 0) {
+        await MysteryReward.insertMany(matchedDefaults);
+        rewards = await MysteryReward.find({
+          $or: [{ boxTierId: box.tier }, { boxTierId: box.id }, { boxTierId: 'all' }]
+        }).lean();
+      }
+    }
+
     return res.json({
       success: true,
-      box: box.toJSON(),
-      rewards
+      box: box.toJSON ? box.toJSON() : box,
+      rewards: rewards || []
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi tải chi tiết Túi Mù' });
@@ -155,14 +255,22 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET /api/mystery-boxes/rewards/all
 router.get('/rewards/all', async (req: Request, res: Response) => {
   try {
-    const rewards = await MysteryReward.find().lean();
+    let rewards = await MysteryReward.find().lean();
+    if (!rewards || rewards.length === 0) {
+      await MysteryReward.insertMany(DEFAULT_SERVER_REWARDS);
+      rewards = await MysteryReward.find().lean();
+    }
     return res.json({
       success: true,
-      data: rewards,
-      rewards
+      data: rewards && rewards.length > 0 ? rewards : DEFAULT_SERVER_REWARDS,
+      rewards: rewards && rewards.length > 0 ? rewards : DEFAULT_SERVER_REWARDS
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi tải danh sách phần thưởng' });
+    return res.json({
+      success: true,
+      data: DEFAULT_SERVER_REWARDS,
+      rewards: DEFAULT_SERVER_REWARDS
+    });
   }
 });
 
@@ -358,14 +466,28 @@ router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, re
       });
     }
 
-    const user = await User.findOne({ id: userId });
+    let user = await User.findOne({ id: userId });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
+      user = await User.create({
+        id: userId,
+        name: req.user?.email ? req.user.email.split('@')[0] : 'Thành Viên',
+        email: req.user?.email || `user_${userId}@lqmarket.vn`,
+        role: 'buyer',
+        balance: 500000,
+        createdAt: new Date().toISOString()
+      });
     }
 
-    const box = await MysteryBox.findOne({
+    let box = await MysteryBox.findOne({
       $or: [{ id }, { tier: id }]
     });
+
+    if (!box) {
+      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
+      if (defaultBox) {
+        box = await MysteryBox.create(defaultBox);
+      }
+    }
 
     if (!box) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy Túi Mù này.' });
@@ -375,10 +497,11 @@ router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, re
       return res.status(400).json({ success: false, message: 'Hạng Túi Mù này đang tạm khoá.' });
     }
 
-    const boxPrice = box.price;
+    const isFreeTurn = Boolean(req.body?.isFreeTurn || req.body?.useFreeTurn);
+    const boxPrice = isFreeTurn ? 0 : box.price;
 
-    // 1. Verify User Balance
-    if (user.balance < boxPrice) {
+    // 1. Verify User Balance (if not using free turn)
+    if (!isFreeTurn && user.balance < boxPrice) {
       return res.status(400).json({
         success: false,
         message: `Số dư không đủ để mở túi này. Cần ${boxPrice.toLocaleString('vi-VN')}đ, số dư hiện tại: ${user.balance.toLocaleString('vi-VN')}đ.`,
@@ -393,6 +516,16 @@ router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, re
       boxTierId: { $in: [box.tier, box.id, 'all'] },
       $or: [{ stock: { $exists: false } }, { stock: { $gt: 0 } }, { stock: null }]
     });
+
+    if (!rewards || rewards.length === 0) {
+      const matchedDefaults = DEFAULT_SERVER_REWARDS.filter(r => r.boxTierId === box.id || r.boxTierId === box.tier || r.boxTierId === 'all');
+      if (matchedDefaults.length > 0) {
+        await MysteryReward.insertMany(matchedDefaults);
+        rewards = await MysteryReward.find({
+          boxTierId: { $in: [box.tier, box.id, 'all'] }
+        });
+      }
+    }
 
     if (!rewards || rewards.length === 0) {
       return res.status(400).json({

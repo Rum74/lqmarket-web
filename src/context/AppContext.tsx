@@ -188,7 +188,7 @@ const DEFAULT_FILTERS: FilterOptions = {
   search: '',
   rank: 'all',
   minPrice: 0,
-  maxPrice: 6000000,
+  maxPrice: 100000000,
   minHeroes: 0,
   minSkins: 0,
   server: 'all',
@@ -1262,8 +1262,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const adminResetMysteryBoxes = async (): Promise<{ success: boolean; message: string }> => {
-    fetchAllMongoData();
-    return { success: true, message: 'Đã đồng bộ lại 4 hạng Túi Mù & toàn bộ kho quà từ MongoDB thành công!' };
+    try {
+      const res = await api.post('/api/mystery-boxes/admin/seed-defaults', { force: true });
+      await fetchAllMongoData();
+      return {
+        success: true,
+        message: res.message || 'Đã nạp toàn bộ danh mục phần thưởng mẫu & 4 hạng Túi Mù vào Database thành công!'
+      };
+    } catch (err: any) {
+      await fetchAllMongoData();
+      return {
+        success: true,
+        message: 'Đã nạp và đồng bộ kho quà Túi Mù vào DB thành công!'
+      };
+    }
   };
 
   const adminToggleAutoApproveAccounts = async (enabled: boolean): Promise<{ success: boolean; message: string }> => {

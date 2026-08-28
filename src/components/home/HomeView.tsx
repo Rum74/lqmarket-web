@@ -34,15 +34,21 @@ export const HomeView: React.FC = () => {
   const approvedAccounts = accounts.filter(a => a.status === 'approved');
 
   // Real-time dynamic counts per rank calculated directly from database
-  const thachDauCount = approvedAccounts.filter(a => a.rank === 'Thách Đấu').length;
-  const chienThanCount = approvedAccounts.filter(a => a.rank === 'Chiến Thần').length;
-  const chienTuongCount = approvedAccounts.filter(a => a.rank === 'Chiến Tướng').length;
-  const caoThuCount = approvedAccounts.filter(a => a.rank === 'Cao Thủ').length;
-  const tinhAnhCount = approvedAccounts.filter(a => a.rank === 'Tinh Anh').length;
-  const kimCuongCount = approvedAccounts.filter(a => a.rank === 'Kim Cương').length;
-  const bachKimCount = approvedAccounts.filter(a => a.rank === 'Bạch Kim').length;
-  const vangCount = approvedAccounts.filter(a => a.rank === 'Vàng').length;
-  const dongBacCount = approvedAccounts.filter(a => a.rank === 'Đồng' || a.rank === 'Bạc').length;
+  const normalize = (str: string) => (str || '').trim().toLowerCase().normalize('NFC');
+  const countByRank = (rankName: string) => approvedAccounts.filter(a => normalize(a.rank) === normalize(rankName)).length;
+
+  const thachDauCount = countByRank('Thách Đấu');
+  const chienThanCount = countByRank('Chiến Thần');
+  const chienTuongCount = countByRank('Chiến Tướng');
+  const caoThuCount = countByRank('Cao Thủ');
+  const tinhAnhCount = countByRank('Tinh Anh');
+  const kimCuongCount = countByRank('Kim Cương');
+  const bachKimCount = countByRank('Bạch Kim');
+  const vangCount = countByRank('Vàng');
+  const dongBacCount = approvedAccounts.filter(a => {
+    const nr = normalize(a.rank);
+    return nr === 'đồng' || nr === 'bạc' || nr === 'dong' || nr === 'bac';
+  }).length;
 
   const totalAvailableCount = approvedAccounts.length;
   const totalCompletedSales = totalSystemCompletedSales > 0 ? totalSystemCompletedSales : (orders.filter(o => o.status === 'completed').length || accounts.filter(a => a.status === 'sold').length);
@@ -71,13 +77,23 @@ export const HomeView: React.FC = () => {
   );
 
   const handleRankQuickFilter = (rankName: string) => {
-    setFilterOptions(prev => ({ ...prev, rank: rankName }));
+    setFilterOptions(prev => ({
+      ...prev,
+      rank: rankName,
+      minPrice: 0,
+      maxPrice: 100000000
+    }));
     setCurrentView('accounts');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handlePriceQuickFilter = (max: number) => {
-    setFilterOptions(prev => ({ ...prev, maxPrice: max, minPrice: 0 }));
+    setFilterOptions(prev => ({
+      ...prev,
+      minPrice: 0,
+      maxPrice: max >= 2000000 ? 100000000 : max,
+      rank: 'all'
+    }));
     setCurrentView('accounts');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

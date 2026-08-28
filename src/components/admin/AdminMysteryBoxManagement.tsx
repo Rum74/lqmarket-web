@@ -378,10 +378,10 @@ export const AdminMysteryBoxManagement: React.FC = () => {
             onClick={handleResetTiers}
             disabled={isResettingTiers}
             className="py-2 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-xl border border-slate-700 shadow cursor-pointer flex items-center gap-1.5 transition-all"
-            title="Đảm bảo hiển thị đầy đủ 4 hạng Túi Mù mặc định & phần thưởng chuẩn"
+            title="Đồng bộ / Nạp toàn bộ 4 hạng Túi Mù và kho quà mặc định chuẩn vào Database"
           >
             <RefreshCw size={14} className={isResettingTiers ? 'animate-spin text-amber-400' : 'text-amber-400'} />
-            <span>{isResettingTiers ? 'Đang khôi phục...' : 'Khôi Phục Đủ 4 Hạng Túi'}</span>
+            <span>{isResettingTiers ? 'Đang nạp seed...' : 'Nạp Data Seed Kho Quà Vào DB'}</span>
           </button>
 
           <button
@@ -621,16 +621,40 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setRewardToDelete(rew)}
-                        className="p-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg transition-colors cursor-pointer"
-                        title="Xoá phần thưởng"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleOpenEditRewardModal(rew)}
+                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 rounded-lg transition-colors cursor-pointer"
+                          title="Chỉnh sửa phần thưởng"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => setRewardToDelete(rew)}
+                          className="p-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                          title="Xoá phần thưởng"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
+                {filteredRewards.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400">
+                      <p className="font-bold text-sm">Chưa có phần thưởng nào trong danh mục này.</p>
+                      <button
+                        onClick={handleResetTiers}
+                        disabled={isResettingTiers}
+                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow cursor-pointer"
+                      >
+                        <RefreshCw size={14} className={isResettingTiers ? 'animate-spin' : ''} />
+                        <span>Nạp Data Seed Kho Quà Mặc Định Vào DB Ngay</span>
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
