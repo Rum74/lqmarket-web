@@ -33,67 +33,80 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       limit = '100'
     } = req.query;
 
-    const filterQuery: any = {};
-
-    // Only show approved accounts to public users, or all if admin/seller querying own
+    const conditions: any[] = [];
     const currentUserId = req.user?.userId;
     const isUserAdmin = req.user?.role === 'admin';
 
     if (sellerId) {
-      filterQuery.sellerId = sellerId;
+      conditions.push({ sellerId });
       if (status) {
-        filterQuery.status = status;
+        conditions.push({ status });
       }
-    } else if (status && isUserAdmin) {
-      filterQuery.status = status;
+    } else if (status) {
+      conditions.push({ status });
+    } else if (isUserAdmin) {
+      // Admin sees all accounts by default if no status specified
+    } else if (currentUserId) {
+      // Logged-in user: show public accounts PLUS their own pending/rejected accounts
+      conditions.push({
+        $or: [
+          { status: { $in: ['approved', 'sold'] } },
+          { sellerId: currentUserId }
+        ]
+      });
     } else {
-      filterQuery.status = { $in: ['approved', 'sold'] };
+      conditions.push({ status: { $in: ['approved', 'sold'] } });
     }
 
     if (search) {
       const searchRegex = new RegExp(String(search).trim(), 'i');
-      filterQuery.$or = [
-        { title: searchRegex },
-        { code: searchRegex },
-        { description: searchRegex },
-        { 'rareSkins.name': searchRegex },
-        { notableHeroes: searchRegex }
-      ];
+      conditions.push({
+        $or: [
+          { title: searchRegex },
+          { code: searchRegex },
+          { description: searchRegex },
+          { 'rareSkins.name': searchRegex },
+          { notableHeroes: searchRegex }
+        ]
+      });
     }
 
     if (rank && rank !== 'all') {
-      filterQuery.rank = rank;
+      conditions.push({ rank });
     }
 
     if (minPrice || maxPrice) {
-      filterQuery.price = {};
-      if (minPrice) filterQuery.price.$gte = Number(minPrice);
-      if (maxPrice) filterQuery.price.$lte = Number(maxPrice);
+      const priceFilter: any = {};
+      if (minPrice) priceFilter.$gte = Number(minPrice);
+      if (maxPrice) priceFilter.$lte = Number(maxPrice);
+      conditions.push({ price: priceFilter });
     }
 
     if (minHeroes && Number(minHeroes) > 0) {
-      filterQuery.heroesCount = { $gte: Number(minHeroes) };
+      conditions.push({ heroesCount: { $gte: Number(minHeroes) } });
     }
 
     if (minSkins && Number(minSkins) > 0) {
-      filterQuery.skinsCount = { $gte: Number(minSkins) };
+      conditions.push({ skinsCount: { $gte: Number(minSkins) } });
     }
 
     if (server && server !== 'all') {
-      filterQuery.server = server;
+      conditions.push({ server });
     }
 
     if (badge && badge !== 'all') {
-      filterQuery.badgeTag = badge;
+      conditions.push({ badgeTag: badge });
     }
 
     if (securityType && securityType !== 'all') {
-      filterQuery['credentials.securityType'] = securityType;
+      conditions.push({ 'credentials.securityType': securityType });
     }
 
     if (rareSkinType && rareSkinType !== 'all') {
-      filterQuery['rareSkins.tier'] = rareSkinType;
+      conditions.push({ 'rareSkins.tier': rareSkinType });
     }
+
+    const filterQuery: any = conditions.length > 1 ? { $and: conditions } : conditions.length === 1 ? conditions[0] : {};
 
     // Sorting
     let sortObj: any = { createdAt: -1 };

@@ -300,8 +300,8 @@ router.post('/import-account', authenticateToken, requireAdmin, async (req: Auth
 // 4. PUBLIC HISTORY FEED
 // ========================================================
 
-// GET /api/mystery-boxes/public/history
-router.get('/public/history', async (req: Request, res: Response) => {
+// GET /api/mystery-boxes/public/history (and /api/mystery-boxes/history)
+const getPublicHistoryHandler = async (req: Request, res: Response) => {
   try {
     const history = await MysteryHistory.find()
       .sort({ openedAt: -1 })
@@ -330,7 +330,10 @@ router.get('/public/history', async (req: Request, res: Response) => {
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi tải lịch sử trúng thưởng' });
   }
-});
+};
+
+router.get('/public/history', getPublicHistoryHandler);
+router.get('/history', getPublicHistoryHandler);
 
 // ========================================================
 // 5. UNBOXING ENGINE (AUTHORITATIVE SERVER-SIDE)

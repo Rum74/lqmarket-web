@@ -350,9 +350,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const histRes = await api.get('/api/mystery-boxes/public/history').catch(() => null);
       if (histRes && histRes.success && Array.isArray(histRes.data || histRes.history)) {
         const histList = histRes.data || histRes.history;
-        if (histList.length > 0) {
-          setMysteryHistory(histList);
-        }
+        setMysteryHistory(histList);
       }
 
       // Authenticated queries if token exists
@@ -639,9 +637,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (response && response.success && (response.account || response.data)) {
         const createdAcc = response.account || response.data;
         setAccounts(prev => [createdAcc, ...prev.filter(a => a.id !== createdAcc.id)]);
+        fetchAllMongoData();
         return {
           success: true,
-          message: response.message || 'Đăng bán tài khoản thành công! Dữ liệu đã lưu vào MongoDB.',
+          message: response.message || 'Đăng bán tài khoản thành công! Đang chờ admin phê duyệt.',
           accountId: createdAcc.id
         };
       }
@@ -666,6 +665,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     try {
       await api.put(`/api/accounts/${accountId}`, { status, rejectionReason });
+      fetchAllMongoData();
     } catch (e) {
       console.warn('MongoDB update account status notice:', e);
     }

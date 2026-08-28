@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { User, IUser } from '../models/User';
+import { Notification } from '../models/Notification';
 import { authenticateToken, generateToken, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
@@ -99,6 +100,22 @@ router.post('/register', async (req: Request, res: Response) => {
       role: newUser.role
     });
 
+    // Create welcome Notification
+    try {
+      const welcomeNotif = new Notification({
+        id: `notif_reg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userId: newUser.id,
+        type: 'system',
+        title: 'Chào mừng thành viên mới!',
+        message: `Chúc mừng bạn đã tạo tài khoản thành công trên Sàn giao dịch Liên Quân LQMarket. Hãy bảo vệ mật khẩu và nạp tiền để bắt đầu mua bán hoặc xé túi mù!`,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      await welcomeNotif.save();
+    } catch (notifErr) {
+      console.warn('Welcome notification notice:', notifErr);
+    }
+
     const userResponse = typeof newUser.toJSON === 'function' ? newUser.toJSON() : { ...newUser };
     delete userResponse.password;
 
@@ -181,6 +198,23 @@ router.post('/login', async (req: Request, res: Response) => {
       email: user.email,
       role: user.role
     });
+
+    // Create login Notification
+    try {
+      const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ngày ' + new Date().toLocaleDateString('vi-VN');
+      const loginNotif = new Notification({
+        id: `notif_login_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userId: user.id,
+        type: 'system',
+        title: 'Đăng nhập thành công',
+        message: `Chào mừng ${user.name || user.username}! Bạn đã đăng nhập vào hệ thống lúc ${nowStr}.`,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      await loginNotif.save();
+    } catch (notifErr) {
+      console.warn('Login notification notice:', notifErr);
+    }
 
     const userResponse = typeof user.toJSON === 'function' ? user.toJSON() : { ...user };
     delete userResponse.password;

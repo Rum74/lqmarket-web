@@ -658,35 +658,42 @@ export const MysteryBoxView: React.FC = () => {
             </div>
 
             <div className="divide-y divide-slate-800">
-              {mysteryHistory.map((item, idx) => (
-                <div key={item.id || idx} className="py-3 flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={item.userAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80'}
-                      alt=""
-                      className="w-8 h-8 rounded-full border border-slate-700 object-cover"
-                    />
-                    <div>
-                      <div className="font-bold text-white flex items-center gap-1.5">
-                        <span>{item.userName}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded">
-                          {item.boxName}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-amber-400 font-medium">
-                        Trúng: {item.rewardTitle}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="font-mono font-black text-slate-200">
-                      {item.rewardValue ? `${item.rewardValue.toLocaleString('vi-VN')}đ` : 'Phần quà VIP'}
-                    </div>
-                    <span className="text-[10px] text-slate-500">{item.openedAt}</span>
-                  </div>
+              {mysteryHistory.length === 0 ? (
+                <div className="text-center py-12 space-y-3">
+                  <Sparkles className="w-10 h-10 text-slate-600 mx-auto" />
+                  <p className="text-slate-400 text-xs">Chưa có lượt mở túi nào gần đây. Hãy là người đầu tiên trúng giải lớn hôm nay!</p>
                 </div>
-              ))}
+              ) : (
+                mysteryHistory.map((item, idx) => (
+                  <div key={item.id || idx} className="py-3 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={item.userAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80'}
+                        alt=""
+                        className="w-8 h-8 rounded-full border border-slate-700 object-cover"
+                      />
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <span>{item.userName}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded">
+                            {item.boxName}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-amber-400 font-medium">
+                          Trúng: {item.rewardTitle}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-mono font-black text-slate-200">
+                        {item.rewardValue ? `${item.rewardValue.toLocaleString('vi-VN')}đ` : 'Phần quà VIP'}
+                      </div>
+                      <span className="text-[10px] text-slate-500">{item.openedAt}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}

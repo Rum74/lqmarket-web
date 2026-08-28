@@ -243,8 +243,8 @@ router.get('/products', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// PUT /api/admin/products/:id/status
-router.put('/products/:id/status', async (req: AuthenticatedRequest, res: Response) => {
+// PUT /api/admin/products/:id/status (and /api/admin/accounts/:id/status)
+const updateProductStatusHandler = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { status, rejectionReason } = req.body;
@@ -254,15 +254,50 @@ router.put('/products/:id/status', async (req: AuthenticatedRequest, res: Respon
       return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản' });
     }
 
+    const prevStatus = account.status;
     account.status = status;
     if (rejectionReason) account.rejectionReason = rejectionReason;
     await account.save();
+
+    // Create Notification for seller
+    if (account.sellerId && status !== prevStatus) {
+      try {
+        if (status === 'approved') {
+          const notif = new Notification({
+            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userId: account.sellerId,
+            type: 'account',
+            title: 'Tài khoản đã được duyệt!',
+            message: `Tài khoản "${account.title}" (#${account.code}) của bạn đã được Admin phê duyệt và hiển thị công khai trên sàn LQMarket.`,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          await notif.save();
+        } else if (status === 'rejected') {
+          const notif = new Notification({
+            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userId: account.sellerId,
+            type: 'account',
+            title: 'Tài khoản bị từ chối duyệt',
+            message: `Tài khoản "${account.title}" (#${account.code}) bị từ chối duyệt. Lý do: ${rejectionReason || 'Thông tin chưa hợp lệ'}.`,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          await notif.save();
+        }
+      } catch (notifErr) {
+        console.warn('Admin account status notification notice:', notifErr);
+      }
+    }
 
     return res.json({ success: true, message: 'Cập nhật trạng thái duyệt thành công', account: account.toJSON() });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi cập nhật trạng thái' });
   }
-});
+};
+
+router.put('/products/:id/status', updateProductStatusHandler);
+router.put('/accounts/:id/status', updateProductStatusHandler);
 
 // GET /api/admin/orders
 router.get('/orders', async (req: AuthenticatedRequest, res: Response) => {

@@ -3,6 +3,7 @@ import { Account, IAccount } from '../models/Account';
 import { User } from '../models/User';
 import { Order } from '../models/Order';
 import { Setting } from '../models/Setting';
+import { Notification } from '../models/Notification';
 import {
   authenticateToken,
   optionalAuth,
@@ -33,67 +34,80 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       limit = '100'
     } = req.query;
 
-    const filterQuery: any = {};
-
-    // Only show approved accounts to public users, or all if admin/seller querying own
+    const conditions: any[] = [];
     const currentUserId = req.user?.userId;
     const isUserAdmin = req.user?.role === 'admin';
 
     if (sellerId) {
-      filterQuery.sellerId = sellerId;
+      conditions.push({ sellerId });
       if (status) {
-        filterQuery.status = status;
+        conditions.push({ status });
       }
-    } else if (status && isUserAdmin) {
-      filterQuery.status = status;
+    } else if (status) {
+      conditions.push({ status });
+    } else if (isUserAdmin) {
+      // Admin sees all accounts by default if no status specified
+    } else if (currentUserId) {
+      // Logged-in user: show public accounts PLUS their own pending/rejected accounts
+      conditions.push({
+        $or: [
+          { status: { $in: ['approved', 'sold'] } },
+          { sellerId: currentUserId }
+        ]
+      });
     } else {
-      filterQuery.status = { $in: ['approved', 'sold'] };
+      conditions.push({ status: { $in: ['approved', 'sold'] } });
     }
 
     if (search) {
       const searchRegex = new RegExp(String(search).trim(), 'i');
-      filterQuery.$or = [
-        { title: searchRegex },
-        { code: searchRegex },
-        { description: searchRegex },
-        { 'rareSkins.name': searchRegex },
-        { notableHeroes: searchRegex }
-      ];
+      conditions.push({
+        $or: [
+          { title: searchRegex },
+          { code: searchRegex },
+          { description: searchRegex },
+          { 'rareSkins.name': searchRegex },
+          { notableHeroes: searchRegex }
+        ]
+      });
     }
 
     if (rank && rank !== 'all') {
-      filterQuery.rank = rank;
+      conditions.push({ rank });
     }
 
     if (minPrice || maxPrice) {
-      filterQuery.price = {};
-      if (minPrice) filterQuery.price.$gte = Number(minPrice);
-      if (maxPrice) filterQuery.price.$lte = Number(maxPrice);
+      const priceFilter: any = {};
+      if (minPrice) priceFilter.$gte = Number(minPrice);
+      if (maxPrice) priceFilter.$lte = Number(maxPrice);
+      conditions.push({ price: priceFilter });
     }
 
     if (minHeroes && Number(minHeroes) > 0) {
-      filterQuery.heroesCount = { $gte: Number(minHeroes) };
+      conditions.push({ heroesCount: { $gte: Number(minHeroes) } });
     }
 
     if (minSkins && Number(minSkins) > 0) {
-      filterQuery.skinsCount = { $gte: Number(minSkins) };
+      conditions.push({ skinsCount: { $gte: Number(minSkins) } });
     }
 
     if (server && server !== 'all') {
-      filterQuery.server = server;
+      conditions.push({ server });
     }
 
     if (badge && badge !== 'all') {
-      filterQuery.badgeTag = badge;
+      conditions.push({ badgeTag: badge });
     }
 
     if (securityType && securityType !== 'all') {
-      filterQuery['credentials.securityType'] = securityType;
+      conditions.push({ 'credentials.securityType': securityType });
     }
 
     if (rareSkinType && rareSkinType !== 'all') {
-      filterQuery['rareSkins.tier'] = rareSkinType;
+      conditions.push({ 'rareSkins.tier': rareSkinType });
     }
+
+    const filterQuery: any = conditions.length > 1 ? { $and: conditions } : conditions.length === 1 ? conditions[0] : {};
 
     // Sorting
     let sortObj: any = { createdAt: -1 };
@@ -322,9 +336,27 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 
     await newAccount.save();
 
+    // Create Notification for seller
+    try {
+      const notif = new Notification({
+        id: `notif_acc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userId: seller.id,
+        type: 'account',
+        title: initialStatus === 'approved' ? 'Tài khoản đã được đăng bán công khai' : 'Tài khoản đang chờ duyệt',
+        message: initialStatus === 'approved'
+          ? `Tài khoản "${newAccount.title}" (#${newAccount.code}) đã được phê duyệt và hiển thị công khai trên sàn LQMarket.`
+          : `Tài khoản "${newAccount.title}" (#${newAccount.code}) đã được gửi lên hệ thống và đang chờ Admin duyệt.`,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      await notif.save();
+    } catch (notifErr) {
+      console.warn('Account create notification notice:', notifErr);
+    }
+
     return res.status(201).json({
       success: true,
-      message: 'Đăng bán tài khoản thành công!',
+      message: initialStatus === 'approved' ? 'Đăng bán và phê duyệt tài khoản thành công!' : 'Đăng bán thành công! Tài khoản đang chờ duyệt.',
       data: newAccount.toJSON(),
       account: newAccount.toJSON(),
       product: newAccount.toJSON()
@@ -379,6 +411,8 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
       'isFeatured'
     ];
 
+    const prevStatus = account.status;
+
     allowedUpdates.forEach(key => {
       if (req.body[key] !== undefined) {
         (account as any)[key] = req.body[key];
@@ -386,6 +420,37 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
     });
 
     await account.save();
+
+    // Create Notification if status changed
+    if (req.body.status && req.body.status !== prevStatus && account.sellerId) {
+      try {
+        if (req.body.status === 'approved') {
+          const notif = new Notification({
+            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userId: account.sellerId,
+            type: 'account',
+            title: 'Tài khoản đã được phê duyệt!',
+            message: `Tài khoản "${account.title}" (#${account.code}) đã được Admin duyệt và hiển thị công khai trên sàn LQMarket.`,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          await notif.save();
+        } else if (req.body.status === 'rejected') {
+          const notif = new Notification({
+            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userId: account.sellerId,
+            type: 'account',
+            title: 'Tài khoản bị từ chối duyệt',
+            message: `Tài khoản "${account.title}" (#${account.code}) bị từ chối duyệt. Lý do: ${req.body.rejectionReason || 'Thông tin chưa hợp lệ'}.`,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          await notif.save();
+        }
+      } catch (e) {
+        console.warn('Account status notification notice:', e);
+      }
+    }
 
     return res.json({
       success: true,
