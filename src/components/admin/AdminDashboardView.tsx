@@ -380,25 +380,25 @@ export const AdminDashboardView: React.FC = () => {
       )}
 
       {/* Admin Header Banner */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-red-500/30 flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-gradient-to-r from-red-950/30 via-slate-900 to-slate-950 shadow-2xl">
+      <div className="p-4 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl bg-slate-900/95 border border-red-500/30 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-gradient-to-r from-red-950/40 via-slate-900 to-slate-950 shadow-2xl backdrop-blur-sm">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 text-xs font-black text-red-400 bg-red-500/15 border border-red-500/30 px-3 py-1 rounded-lg mb-1">
-            <ShieldAlert size={14} />
-            <span>SUPER ADMIN CONTROL CENTER • DỮ LIỆU THẬT 100%</span>
+          <div className="inline-flex items-center gap-1.5 text-[11px] font-black text-red-400 bg-red-500/15 border border-red-500/30 px-2.5 py-0.5 rounded-lg">
+            <ShieldAlert size={13} />
+            <span>SUPER ADMIN CONTROL CENTER • DỮ LIỆU ĐỒNG BỘ REAL-TIME</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+          <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white tracking-tight">
             TRUNG TÂM KIỂM DUYỆT & VẬN HÀNH LQMARKET
           </h1>
           <p className="text-xs text-slate-400">
-            Duyệt tin đăng bán, xử lý khiếu nại trung gian Escrow và quản lý người dùng toàn hệ thống.
+            Duyệt tin đăng bán, xử lý khiếu nại trung gian Escrow và quản trị thành viên toàn hệ thống.
           </p>
         </div>
 
-        {/* Tab Controls (Clean layout on desktop and smooth horizontal scroll on mobile) */}
-        <div className="flex items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-2xl border border-slate-800 overflow-x-auto max-w-full scrollbar-none shrink-0">
+        {/* Tab Controls */}
+        <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl sm:rounded-2xl border border-slate-800/80 overflow-x-auto max-w-full scrollbar-none shrink-0">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeTab === 'pending'
                 ? 'bg-red-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -414,7 +414,7 @@ export const AdminDashboardView: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('accounts')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'accounts'
                 ? 'bg-red-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -425,14 +425,14 @@ export const AdminDashboardView: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('disputes')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeTab === 'disputes'
                 ? 'bg-red-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <AlertTriangle size={13} />
-            <span>Khiếu Nại & Tranh Chấp</span>
+            <span>Khiếu Nại</span>
             {disputedOrders.length > 0 && (
               <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full animate-bounce">
                 {disputedOrders.length}
@@ -442,14 +442,14 @@ export const AdminDashboardView: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('payouts')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeTab === 'payouts'
                 ? 'bg-red-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Wallet size={13} />
-            <span>Giải Ngân & Rút Tiền</span>
+            <span>Giải Ngân</span>
             {pendingWithdrawals.length > 0 && (
               <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-bounce">
                 {pendingWithdrawals.length}
@@ -459,30 +459,30 @@ export const AdminDashboardView: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('users')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'users'
                 ? 'bg-red-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Người Dùng ({allUsers.length})
+            Thành Viên ({allUsers.length})
           </button>
 
           <button
             onClick={() => setActiveTab('mystery_box')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeTab === 'mystery_box'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md'
                 : 'text-amber-400 hover:text-white bg-amber-400/10'
             }`}
           >
             <PackageOpen size={13} />
-            <span>🎁 Túi Mù May Mắn</span>
+            <span>Túi Mù</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'settings'
                 ? 'bg-red-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -493,61 +493,71 @@ export const AdminDashboardView: React.FC = () => {
         </div>
       </div>
 
-      {/* TOP STATS ROW (100% REAL DYNAMIC CALCULATIONS) */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+      {/* TOP STATS ROW (CLEAN & COMPACT ON DESKTOP) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+        <div className="p-3.5 rounded-xl sm:rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 transition-colors space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Doanh thu sàn (5%)</span>
-            <DollarSign size={14} className="text-amber-400" />
+            <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              <DollarSign size={13} className="text-amber-400" />
+            </div>
           </div>
-          <div className="text-lg sm:text-xl font-black text-amber-400">
+          <div className="text-base sm:text-lg font-black text-amber-400 truncate">
             {totalMarketplaceRevenue.toLocaleString('vi-VN')}đ
           </div>
-          <div className="text-[10px] text-slate-500">Từ {completedOrders.length} đơn hoàn tất</div>
+          <div className="text-[10px] text-slate-500">{completedOrders.length} đơn hoàn tất</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+        <div className="p-3.5 rounded-xl sm:rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-cyan-500/40 transition-colors space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Tổng đơn hàng</span>
-            <ShoppingBag size={14} className="text-cyan-400" />
+            <div className="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+              <ShoppingBag size={13} className="text-cyan-400" />
+            </div>
           </div>
-          <div className="text-lg sm:text-xl font-black text-cyan-400">
-            {orders.length}
+          <div className="text-base sm:text-lg font-black text-cyan-400">
+            {orders.length} đơn
           </div>
           <div className="text-[10px] text-slate-500">
-            {completedOrders.length} xong • {orders.filter(o => o.status === 'account_delivered').length} đang kiểm tra
+            {completedOrders.length} xong • {orders.filter(o => o.status === 'account_delivered').length} chờ
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+        <div className="p-3.5 rounded-xl sm:rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-emerald-500/40 transition-colors space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Acc đang bán</span>
-            <Layers size={14} className="text-emerald-400" />
+            <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <Layers size={13} className="text-emerald-400" />
+            </div>
           </div>
-          <div className="text-lg sm:text-xl font-black text-emerald-400">
-            {approvedAccounts.length}
+          <div className="text-base sm:text-lg font-black text-emerald-400">
+            {approvedAccounts.length} acc
           </div>
-          <div className="text-[10px] text-slate-500">{soldAccounts.length} acc đã bán thành công</div>
+          <div className="text-[10px] text-slate-500">{soldAccounts.length} acc đã bán xong</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+        <div className="p-3.5 rounded-xl sm:rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 transition-colors space-y-1">
           <div className="flex items-center justify-between text-xs text-amber-400 font-bold">
-            <span>Chờ duyệt bài ⏳</span>
-            <ShieldAlert size={14} />
+            <span>Chờ duyệt bài</span>
+            <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              <ShieldAlert size={13} className="text-amber-400" />
+            </div>
           </div>
-          <div className="text-lg sm:text-xl font-black text-amber-400">
-            {pendingAccounts.length}
+          <div className="text-base sm:text-lg font-black text-amber-400">
+            {pendingAccounts.length} acc
           </div>
           <div className="text-[10px] text-slate-500">Cần admin kiểm tra</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+        <div className="col-span-2 sm:col-span-1 p-3.5 rounded-xl sm:rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-purple-500/40 transition-colors space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Thành viên</span>
-            <Users size={14} className="text-purple-400" />
+            <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <Users size={13} className="text-purple-400" />
+            </div>
           </div>
-          <div className="text-lg sm:text-xl font-black text-purple-400">
-            {allUsers.length}
+          <div className="text-base sm:text-lg font-black text-purple-400">
+            {allUsers.length} user
           </div>
           <div className="text-[10px] text-slate-500">
             {allUsers.filter(u => u.role === 'seller').length} Seller • {allUsers.filter(u => u.role === 'buyer').length} Buyer
@@ -952,31 +962,31 @@ export const AdminDashboardView: React.FC = () => {
           </div>
 
           {/* User List */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl">
             {filteredUsers.length === 0 ? (
               <div className="p-10 text-center text-slate-500 text-xs space-y-2">
                 <Users size={28} className="mx-auto text-slate-600" />
                 <p>Không tìm thấy thành viên nào phù hợp với bộ lọc.</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-800">
+              <div className="divide-y divide-slate-800/80">
                 {filteredUsers.map(user => (
                   <div
                     key={user.id}
-                    className="p-4 sm:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors"
+                    className="p-3.5 sm:p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 sm:gap-4 hover:bg-slate-800/40 transition-colors"
                   >
                     {/* User Info */}
-                    <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <img
                         src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80'}
                         alt={user.name || 'User'}
-                        className="w-12 h-12 rounded-2xl object-cover border-2 border-amber-500/30 shrink-0"
+                        className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl object-cover border-2 border-amber-500/30 shrink-0"
                       />
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="text-xs sm:text-sm font-bold text-white">{user.name || 'Thành viên'}</h4>
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <h4 className="text-xs sm:text-sm font-bold text-white truncate max-w-[200px] sm:max-w-xs">{user.name || 'Thành viên'}</h4>
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
                               user.role === 'admin'
                                 ? 'bg-red-500/20 text-red-400 border-red-500/30'
                                 : user.role === 'seller'
@@ -984,7 +994,7 @@ export const AdminDashboardView: React.FC = () => {
                                 : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
                             }`}
                           >
-                            {user.role === 'admin' ? 'SUPER ADMIN' : user.role === 'seller' ? 'SELLER (SHOP)' : 'BUYER (KHÁCH)'}
+                            {user.role === 'admin' ? 'ADMIN' : user.role === 'seller' ? 'SELLER' : 'BUYER'}
                           </span>
 
                           {user.isVerifiedSeller && (
@@ -1000,8 +1010,8 @@ export const AdminDashboardView: React.FC = () => {
                           )}
                         </div>
 
-                        <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="flex items-center gap-1"><Mail size={11} /> {user.email || 'N/A'}</span>
+                        <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                          <span className="flex items-center gap-1"><Mail size={11} className="text-slate-500" /> {user.email || 'N/A'}</span>
                           <span>• SĐT: <strong className="text-slate-300">{user.phone || 'Chưa cập nhật'}</strong></span>
                           <span>• ID: <code className="text-slate-500 font-mono text-[10px]">{user.id}</code></span>
                           {user.completedSales !== undefined && user.completedSales > 0 && (
@@ -1012,13 +1022,13 @@ export const AdminDashboardView: React.FC = () => {
                     </div>
 
                     {/* Balance & Actions */}
-                    <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 w-full lg:w-auto pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-800">
+                    <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800/80 shrink-0">
                       {/* Wallet Balance Box */}
-                      <div className="p-2 px-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                        <Wallet size={14} className="text-amber-400" />
+                      <div className="p-1.5 px-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                        <Wallet size={13} className="text-amber-400 shrink-0" />
                         <div>
-                          <div className="text-[9px] text-slate-500 uppercase font-bold">Số dư ví:</div>
-                          <div className="text-xs font-black text-amber-400">
+                          <div className="text-[9px] text-slate-500 uppercase font-bold leading-tight">Số dư ví:</div>
+                          <div className="text-xs font-black text-amber-400 leading-tight">
                             {(user.balance || 0).toLocaleString('vi-VN')}đ
                           </div>
                         </div>
@@ -1035,29 +1045,29 @@ export const AdminDashboardView: React.FC = () => {
                               reason: 'Admin nạp tiền điều chỉnh ví'
                             })
                           }
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-400 border border-slate-700 hover:border-emerald-500/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-400 border border-slate-700 hover:border-emerald-500/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
                           title="Nạp / Trừ tiền ví"
                         >
-                          <Plus size={13} className="text-emerald-400" />
-                          <span className="hidden sm:inline">Ví tiền</span>
+                          <Plus size={12} className="text-emerald-400" />
+                          <span>Ví tiền</span>
                         </button>
 
                         <button
                           onClick={() => setEditingUser({ ...user })}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-amber-950/60 text-slate-300 hover:text-amber-400 border border-slate-700 hover:border-amber-500/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-950/60 text-slate-300 hover:text-amber-400 border border-slate-700 hover:border-amber-500/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
                           title="Chỉnh sửa thông tin thành viên"
                         >
-                          <Edit2 size={13} className="text-amber-400" />
-                          <span className="hidden sm:inline">Sửa</span>
+                          <Edit2 size={12} className="text-amber-400" />
+                          <span>Sửa</span>
                         </button>
 
                         {user.id !== currentUser.id && (
                           <button
                             onClick={() => setDeletingUser(user)}
-                            className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 text-xs transition-colors cursor-pointer"
+                            className="p-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 text-xs transition-colors cursor-pointer"
                             title="Xóa tài khoản"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={12} />
                           </button>
                         )}
                       </div>

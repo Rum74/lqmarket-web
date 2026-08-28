@@ -1,10 +1,15 @@
-import { AccountItem, UserProfile, OrderItem, WalletTransaction } from '../types';
+import { IAccount } from '../models/Account';
+import { IUser } from '../models/User';
+import { IOrder } from '../models/Order';
+import bcrypt from 'bcryptjs';
 
-export const INITIAL_USERS: UserProfile[] = [
+export const DEFAULT_SERVER_USERS: Array<Partial<IUser>> = [
   {
     id: 'user_admin_super',
     name: 'Huỳnh Văn Phòng',
+    username: 'admin',
     email: 'admin@lqmarket.vn',
+    password: '', // will be hashed in seeder
     phone: '0966924316',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80',
     role: 'admin',
@@ -14,14 +19,15 @@ export const INITIAL_USERS: UserProfile[] = [
     completedSales: 15,
     isVerifiedSeller: true,
     sellerTier: 'VIP',
-    createdAt: '2026-01-01',
     bio: 'Super Admin LQMarket - Hỗ trợ nạp rút, duyệt tin và giải quyết khiếu nại trung gian 24/7.',
-    wishlistIds: []
+    status: 'active'
   },
   {
     id: 'user_seller_shopacc',
     name: 'Shop Acc Liên Quân VIP',
+    username: 'shopacc',
     email: 'shopacc@cholienquan.com',
+    password: '',
     phone: '0932547709',
     avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=shopacc',
     role: 'seller',
@@ -31,14 +37,15 @@ export const INITIAL_USERS: UserProfile[] = [
     completedSales: 28,
     isVerifiedSeller: true,
     sellerTier: 'PRO',
-    createdAt: '2026-01-10',
     bio: 'Chuyên cung cấp Acc Liên Quân VIP, rank Cao Thủ / Chiến Tướng, cam kết 100% trắng thông tin bảo hiểm trọn đời.',
-    wishlistIds: []
+    status: 'active'
   },
   {
     id: 'user_buyer_haihuynh',
     name: 'Hải Huỳnh',
+    username: 'haihuynh',
     email: 'vanhai@cholienquan.com',
+    password: '',
     phone: '0987654321',
     avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=haihuynh',
     role: 'buyer',
@@ -48,14 +55,15 @@ export const INITIAL_USERS: UserProfile[] = [
     completedSales: 0,
     isVerifiedSeller: false,
     sellerTier: 'FREE',
-    createdAt: '2026-02-01',
     bio: 'Game thủ Liên Quân tìm mua nick tướng tủ rank Cao Thủ.',
-    wishlistIds: []
+    status: 'active'
   },
   {
     id: 'user_buyer_caotlenduy',
     name: 'caotlenduy',
+    username: 'caotlenduy',
     email: 'd4188890@cholienquan.com',
+    password: '',
     phone: '0385442067',
     avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=caotlenduy',
     role: 'buyer',
@@ -65,13 +73,12 @@ export const INITIAL_USERS: UserProfile[] = [
     completedSales: 0,
     isVerifiedSeller: false,
     sellerTier: 'FREE',
-    createdAt: '2026-02-15',
     bio: 'Thành viên sàn LQMarket.',
-    wishlistIds: []
+    status: 'active'
   }
 ];
 
-export const INITIAL_ACCOUNTS: AccountItem[] = [
+export const DEFAULT_SERVER_ACCOUNTS: Array<Partial<IAccount>> = [
   {
     id: 'acc_01_chientuong_sss',
     code: 'LQ-88291',
@@ -86,8 +93,8 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     server: 'Việt Nam',
     rareSkins: [
       { name: 'Thứ Nguyên Vệ Thần', hero: 'Nakroth', tier: 'SSS', tagColor: 'bg-red-500 text-white' },
-      { name: 'Muay Thái', hero: 'Raz', tier: 'Tuyệt Sắc', tagColor: 'bg-amber-500 text-slate-950' },
-      { name: 'Thần Sứ Tuyệt Sắc', hero: 'Tulen', tier: 'Tuyệt Sắc', tagColor: 'bg-purple-500 text-white' }
+      { name: 'Muay Thái', hero: 'Raz', tier: 'SS+', tagColor: 'bg-amber-500 text-slate-950' },
+      { name: 'Thần Sứ Tuyệt Sắc', hero: 'Tulen', tier: 'SS', tagColor: 'bg-purple-500 text-white' }
     ],
     notableHeroes: ['Nakroth', 'Raz', 'Tulen', 'Florentino', 'Murad', 'Aoi'],
     badgeTag: 'VIP',
@@ -106,11 +113,11 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'nakroth_chientuong_vip',
-      password: '••••••••',
+      password: 'PassLQ_2026_Vip99',
       securityType: 'Trắng Thông Tin',
-      secretNotes: ''
+      secretNotes: 'Đăng nhập Garena đổi pass ngay sau khi mua.'
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
     views: 1420,
     likes: 85,
     isFeatured: true
@@ -128,8 +135,8 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     runePages: '90/90 Full Ngọc Phép & Sát Thủ',
     server: 'Việt Nam',
     rareSkins: [
-      { name: 'Chí Tôn Kiếm Tiên', hero: 'Tulen', tier: 'Tuyệt Sắc', tagColor: 'bg-purple-500 text-white' },
-      { name: 'Tinh Hệ', hero: 'Florentino', tier: 'Hữu Hạn', tagColor: 'bg-cyan-500 text-slate-950' }
+      { name: 'Chí Tôn Kiếm Tiên', hero: 'Tulen', tier: 'SS', tagColor: 'bg-purple-500 text-white' },
+      { name: 'Tinh Hệ', hero: 'Florentino', tier: 'S+ Hữu Hạn', tagColor: 'bg-cyan-500 text-slate-950' }
     ],
     notableHeroes: ['Tulen', 'Florentino', 'Liliana', 'Elsu', 'Hayate'],
     badgeTag: 'HOT',
@@ -148,11 +155,11 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'caothu_tulen_185',
-      password: '••••••••',
+      password: 'PassLQ_2026_Ct28',
       securityType: 'Trắng Thông Tin',
-      secretNotes: ''
+      secretNotes: 'Tài khoản sạch 100%.'
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
     views: 890,
     likes: 42,
     isFeatured: true
@@ -172,7 +179,7 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     rareSkins: [
       { name: 'Seven Ultraman SSS', hero: 'Florentino', tier: 'SSS', tagColor: 'bg-red-500 text-white' },
       { name: 'Thứ Nguyên Vệ Thần SSS', hero: 'Violet', tier: 'SSS', tagColor: 'bg-red-500 text-white' },
-      { name: 'Muay Thái', hero: 'Raz', tier: 'Tuyệt Sắc', tagColor: 'bg-amber-500 text-slate-950' }
+      { name: 'Muay Thái', hero: 'Raz', tier: 'SS+', tagColor: 'bg-amber-500 text-slate-950' }
     ],
     notableHeroes: ['Florentino', 'Violet', 'Raz', 'Nakroth', 'Keera', 'Zuka'],
     badgeTag: 'VIP',
@@ -191,11 +198,11 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'thachdau_lq_top50',
-      password: '••••••••',
+      password: 'PassLQ_2026_TdTop',
       securityType: 'Trắng Thông Tin',
-      secretNotes: ''
+      secretNotes: 'Acc bảo hành vĩnh viễn từ Super Admin.'
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 20).toISOString(),
     views: 2450,
     likes: 190,
     isFeatured: true
@@ -213,8 +220,8 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     runePages: '90/90 Ngọc Sát Thủ & Xạ Thủ',
     server: 'Việt Nam',
     rareSkins: [
-      { name: 'Siêu Việt V Bậc Cao', hero: 'Murad', tier: 'Siêu Việt', tagColor: 'bg-purple-500 text-white' },
-      { name: 'Vũ Điệu Hoàng Gia', hero: 'Valhein', tier: 'Hữu Hạn', tagColor: 'bg-cyan-500 text-slate-950' }
+      { name: 'Siêu Việt V Bậc Cao', hero: 'Murad', tier: 'SS', tagColor: 'bg-purple-500 text-white' },
+      { name: 'Vũ Điệu Hoàng Gia', hero: 'Valhein', tier: 'S+ Hữu Hạn', tagColor: 'bg-cyan-500 text-slate-950' }
     ],
     notableHeroes: ['Murad', 'Valhein', 'Arthur', 'Natalya', 'Triệu Vân'],
     badgeTag: 'GIÁ RẺ',
@@ -232,11 +239,11 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'tinhanh_murad_120',
-      password: '••••••••',
+      password: 'PassLQ_2026_Ta85',
       securityType: 'Trắng Thông Tin',
-      secretNotes: ''
+      secretNotes: 'Đổi mật khẩu ngay sau mua.'
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 30).toISOString(),
     views: 650,
     likes: 28,
     isFeatured: false
@@ -254,7 +261,7 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     runePages: '90/90 Ngọc Trọng Kích Chí Mạng',
     server: 'Việt Nam',
     rareSkins: [
-      { name: 'Nhóc Tì Bá Đạo', hero: 'Ngộ Không', tier: 'Tuyệt Sắc', tagColor: 'bg-purple-500 text-white' }
+      { name: 'Nhóc Tì Bá Đạo', hero: 'Ngộ Không', tier: 'SS', tagColor: 'bg-purple-500 text-white' }
     ],
     notableHeroes: ['Ngộ Không', 'Yorn', 'Krixi', 'Gildur', 'Tel’Annas'],
     badgeTag: 'GIÁ RẺ',
@@ -272,11 +279,11 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'kimcuong_ngokhong_95',
-      password: '••••••••',
+      password: 'PassLQ_2026_Kc72',
       securityType: 'Trắng Thông Tin',
-      secretNotes: ''
+      secretNotes: 'Tài khoản đổi mật khẩu thoải mái.'
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
     views: 430,
     likes: 19,
     isFeatured: false
@@ -295,7 +302,7 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     server: 'Việt Nam',
     rareSkins: [
       { name: 'Xạ Thần Khởi Nguyên', hero: 'Laville', tier: 'SSS', tagColor: 'bg-red-500 text-white' },
-      { name: 'Haruhi Suzumiya Anime', hero: 'Capheny', tier: 'Anime', tagColor: 'bg-pink-500 text-white' }
+      { name: 'Haruhi Suzumiya Anime', hero: 'Capheny', tier: 'SS Hữu Hạn', tagColor: 'bg-pink-500 text-white' }
     ],
     notableHeroes: ['Laville', 'Capheny', 'Hayate', 'Elsu', 'Thorne', 'Yorn'],
     badgeTag: 'HOT',
@@ -313,11 +320,11 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'chienthan_laville_sss',
-      password: '••••••••',
+      password: 'PassLQ_2026_Ct38',
       securityType: 'Trắng Thông Tin',
-      secretNotes: ''
+      secretNotes: 'Tài khoản sạch, giao tự động.'
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 50).toISOString(),
     views: 1120,
     likes: 67,
     isFeatured: true
@@ -335,7 +342,7 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     runePages: '90/90 Ngọc Phép Chuẩn',
     server: 'Việt Nam',
     rareSkins: [
-      { name: 'Tiệc Bãi Biển', hero: 'Điêu Thuyền', tier: 'Tiệc Bãi Biển', tagColor: 'bg-cyan-500 text-slate-950' }
+      { name: 'Tiệc Bãi Biển', hero: 'Điêu Thuyền', tier: 'S+ Hữu Hạn', tagColor: 'bg-cyan-500 text-slate-950' }
     ],
     notableHeroes: ['Điêu Thuyền', 'Veera', 'Krixi', 'Natalya'],
     badgeTag: 'GIÁ RẺ',
@@ -353,18 +360,58 @@ export const INITIAL_ACCOUNTS: AccountItem[] = [
     status: 'approved',
     credentials: {
       username: 'bachkim_dieuthuyen_65',
+      password: 'PassLQ_2026_Bk58',
+      securityType: 'Trắng Thông Tin',
+      secretNotes: 'Đổi thông tin lập tức.'
+    },
+    createdAt: new Date(Date.now() - 3600000 * 60).toISOString(),
+    views: 310,
+    likes: 12,
+    isFeatured: false
+  },
+  {
+    id: 'acc_08_sold_sample',
+    code: 'LQ-11099',
+    title: 'Acc Cao Thủ 15 Sao • 95 Tướng • 130 Trang Phục • Raz Siêu Cấp Tin Tặc',
+    price: 200000,
+    originalPrice: 280000,
+    rank: 'Cao Thủ',
+    level: 30,
+    heroesCount: 95,
+    skinsCount: 130,
+    runePages: '90/90 Ngọc Chuẩn',
+    server: 'Việt Nam',
+    rareSkins: [
+      { name: 'Siêu Cấp Tin Tặc', hero: 'Raz', tier: 'S+', tagColor: 'bg-cyan-500 text-slate-950' }
+    ],
+    notableHeroes: ['Raz', 'Zuka', 'Lauriel'],
+    badgeTag: 'ĐÃ BÁN',
+    images: [
+      'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80'
+    ],
+    description: 'Acc đã được bàn giao trung gian Escrow thành công cho khách hàng.',
+    sellerId: 'user_seller_shopacc',
+    sellerName: 'Shop Acc Liên Quân VIP',
+    sellerAvatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=shopacc',
+    sellerRating: 4.9,
+    sellerCompletedSales: 28,
+    sellerResponseTime: '< 5 phút',
+    sellerVerified: true,
+    status: 'sold',
+    credentials: {
+      username: 'raz_tintac_sold',
       password: '••••••••',
       securityType: 'Trắng Thông Tin',
       secretNotes: ''
     },
-    createdAt: new Date().toISOString(),
-    views: 310,
-    likes: 12,
+    createdAt: new Date(Date.now() - 3600000 * 72).toISOString(),
+    views: 520,
+    likes: 31,
     isFeatured: false
   }
 ];
 
-export const INITIAL_ORDERS: OrderItem[] = [
+export const DEFAULT_SERVER_ORDERS: Array<Partial<IOrder>> = [
   {
     id: 'order_completed_01',
     orderCode: '#ORD11099',
@@ -387,11 +434,10 @@ export const INITIAL_ORDERS: OrderItem[] = [
     },
     createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
     completedAt: new Date(Date.now() - 3600000 * 23).toISOString(),
-    ratingGiven: 5,
-    reviewComment: 'Giao acc tự động cực nhanh, thông tin đúng mô tả 100%!'
+    review: {
+      rating: 5,
+      comment: 'Giao acc tự động cực nhanh, thông tin đúng mô tả 100%!',
+      createdAt: new Date(Date.now() - 3600000 * 23).toISOString()
+    }
   }
 ];
-
-export const INITIAL_TRANSACTIONS: WalletTransaction[] = [];
-
-

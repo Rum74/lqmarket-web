@@ -109,7 +109,7 @@ export class MemoryCollection<T extends { id?: string; _id?: any }> {
     return doc;
   }
 
-  async find(query: any = {}): Promise<any> {
+  find(query: any = {}): any {
     const list: any[] = [];
     for (const item of this.items.values()) {
       if (matchesQuery(item, query)) {
@@ -146,22 +146,58 @@ export class MemoryCollection<T extends { id?: string; _id?: any }> {
     };
 
     queryPromise.select = () => queryPromise;
-    queryPromise.lean = () => Promise.resolve(list.map(d => (d.toJSON ? d.toJSON() : d)));
+    queryPromise.populate = () => queryPromise;
+    queryPromise.exec = () => queryPromise;
+    queryPromise.lean = () => Promise.resolve(list.map(d => (d?.toJSON ? d.toJSON() : d)));
 
     return queryPromise;
   }
 
-  async findOne(query: any = {}): Promise<any> {
+  findOne(query: any = {}): any {
+    let matchDoc: any = null;
     for (const item of this.items.values()) {
       if (matchesQuery(item, query)) {
-        return this.wrapDoc(item);
+        matchDoc = this.wrapDoc(item);
+        break;
       }
     }
-    return null;
+
+    const queryPromise: any = Promise.resolve(matchDoc);
+    queryPromise.select = () => queryPromise;
+    queryPromise.populate = () => queryPromise;
+    queryPromise.exec = () => queryPromise;
+    queryPromise.lean = () => Promise.resolve(matchDoc ? (matchDoc.toJSON ? matchDoc.toJSON() : matchDoc) : null);
+    return queryPromise;
   }
 
-  async findById(id: string): Promise<any> {
+  findById(id: string): any {
     return this.findOne({ id });
+  }
+
+  updateOne(query: any, update: any): any {
+    const p = this.findOneAndUpdate(query, update);
+    const queryPromise: any = Promise.resolve(p);
+    queryPromise.exec = () => queryPromise;
+    return queryPromise;
+  }
+
+  deleteOne(query: any): any {
+    const p = this.findOneAndDelete(query);
+    const queryPromise: any = Promise.resolve(p);
+    queryPromise.exec = () => queryPromise;
+    return queryPromise;
+  }
+
+  countDocuments(query: any = {}): any {
+    let count = 0;
+    for (const item of this.items.values()) {
+      if (matchesQuery(item, query)) {
+        count++;
+      }
+    }
+    const queryPromise: any = Promise.resolve(count);
+    queryPromise.exec = () => queryPromise;
+    return queryPromise;
   }
 
   async create(data: any | any[]): Promise<any> {
@@ -248,16 +284,6 @@ export class MemoryCollection<T extends { id?: string; _id?: any }> {
     return null;
   }
 
-  async countDocuments(query: any = {}): Promise<number> {
-    let count = 0;
-    for (const item of this.items.values()) {
-      if (matchesQuery(item, query)) {
-        count++;
-      }
-    }
-    return count;
-  }
-
   newInstance(data: any) {
     const id = data.id || `id_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const doc = { ...data, id, createdAt: data.createdAt || new Date().toISOString() };
@@ -282,6 +308,38 @@ export const memoryStore = {
   settings: new MemoryCollection<any>('settings'),
 };
 
+// Seed initial memory store with default authentic data
+import { DEFAULT_SERVER_USERS, DEFAULT_SERVER_ACCOUNTS, DEFAULT_SERVER_ORDERS } from '../data/defaultMarketData';
+
+export async function seedMemoryMarketData() {
+  try {
+    if (memoryStore.users.items.size === 0) {
+      for (const u of DEFAULT_SERVER_USERS) {
+        const salt = await bcrypt.genSalt(10);
+        const defaultPass = u.username === 'admin' ? 'admin123' : '123456';
+        const hashedPassword = await bcrypt.hash(defaultPass, salt);
+        memoryStore.users.items.set(u.id!, { ...u, password: hashedPassword });
+      }
+    }
+    if (memoryStore.accounts.items.size === 0) {
+      for (const a of DEFAULT_SERVER_ACCOUNTS) {
+        memoryStore.accounts.items.set(a.id!, { ...a });
+      }
+    }
+    if (memoryStore.orders.items.size === 0) {
+      for (const o of DEFAULT_SERVER_ORDERS) {
+        memoryStore.orders.items.set(o.id!, { ...o });
+      }
+    }
+    console.log(`📦 Seeded ${memoryStore.accounts.items.size} accounts, ${memoryStore.orders.items.size} orders, and ${memoryStore.users.items.size} users into MemoryStore.`);
+  } catch (err) {
+    console.warn('Memory market data auto-seed notice:', err);
+  }
+}
+
+// Auto seed on import
+seedMemoryMarketData();
+
 /**
  * Creates a smart model that delegates to Mongoose when connected to MongoDB Atlas,
  * or safely falls back to the in-memory collection when in standby/offline mode.
@@ -295,10 +353,10 @@ export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection
   }
 
   // Bind static methods with fallback
-  ModelConstructor.findOne = async (query: any, ...args: any[]) => {
+  ModelConstructor.findOne = (query: any = {}, ...args: any[]) => {
     if (getDBConnectionStatus()) {
       try {
-        return await (mongooseModel as any).findOne(query, ...args);
+        return (mongooseModel as any).findOne(query, ...args);
       } catch (err) {
         console.warn('Mongoose query failed, falling back to Memory Store:', err);
       }
@@ -306,10 +364,10 @@ export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection
     return memoryCollection.findOne(query);
   };
 
-  ModelConstructor.find = async (query: any = {}, ...args: any[]) => {
+  ModelConstructor.find = (query: any = {}, ...args: any[]) => {
     if (getDBConnectionStatus()) {
       try {
-        return await (mongooseModel as any).find(query, ...args);
+        return (mongooseModel as any).find(query, ...args);
       } catch (err) {
         console.warn('Mongoose query failed, falling back to Memory Store:', err);
       }
@@ -317,10 +375,10 @@ export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection
     return memoryCollection.find(query);
   };
 
-  ModelConstructor.findById = async (id: string, ...args: any[]) => {
+  ModelConstructor.findById = (id: string, ...args: any[]) => {
     if (getDBConnectionStatus()) {
       try {
-        return await (mongooseModel as any).findById(id, ...args);
+        return (mongooseModel as any).findById(id, ...args);
       } catch (err) {
         console.warn('Mongoose query failed, falling back to Memory Store:', err);
       }
@@ -361,6 +419,17 @@ export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection
     return memoryCollection.findOneAndUpdate(query, update, options);
   };
 
+  ModelConstructor.updateOne = (query: any, update: any, ...args: any[]) => {
+    if (getDBConnectionStatus()) {
+      try {
+        return (mongooseModel as any).updateOne(query, update, ...args);
+      } catch (err) {
+        console.warn('Mongoose query failed, falling back to Memory Store:', err);
+      }
+    }
+    return memoryCollection.updateOne(query, update);
+  };
+
   ModelConstructor.updateMany = async (query: any, update: any, ...args: any[]) => {
     if (getDBConnectionStatus()) {
       try {
@@ -383,10 +452,21 @@ export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection
     return memoryCollection.findOneAndDelete(query);
   };
 
-  ModelConstructor.countDocuments = async (query: any = {}, ...args: any[]) => {
+  ModelConstructor.deleteOne = (query: any, ...args: any[]) => {
     if (getDBConnectionStatus()) {
       try {
-        return await (mongooseModel as any).countDocuments(query, ...args);
+        return (mongooseModel as any).deleteOne(query, ...args);
+      } catch (err) {
+        console.warn('Mongoose query failed, falling back to Memory Store:', err);
+      }
+    }
+    return memoryCollection.deleteOne(query);
+  };
+
+  ModelConstructor.countDocuments = (query: any = {}, ...args: any[]) => {
+    if (getDBConnectionStatus()) {
+      try {
+        return (mongooseModel as any).countDocuments(query, ...args);
       } catch (err) {
         console.warn('Mongoose query failed, falling back to Memory Store:', err);
       }
