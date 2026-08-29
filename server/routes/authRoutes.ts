@@ -281,22 +281,26 @@ router.post('/refresh', authenticateToken, async (req: AuthenticatedRequest, res
 router.put('/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
-    const { name, phone, avatar, bio, bankName, bankAccount, bankAccountName } = req.body;
+    const { name, phone, avatar, bio, bankName, bankAccount, bankAccountName, password } = req.body;
+
+    const updateFields: any = {
+      ...(name ? { name: name.trim() } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(avatar ? { avatar } : {}),
+      ...(bio !== undefined ? { bio } : {}),
+      ...(bankName !== undefined ? { bankName } : {}),
+      ...(bankAccount !== undefined ? { bankAccount } : {}),
+      ...(bankAccountName !== undefined ? { bankAccountName } : {}),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (password && typeof password === 'string' && password.trim().length >= 6) {
+      updateFields.password = await bcrypt.hash(password.trim(), 10);
+    }
 
     const updated = await User.findOneAndUpdate(
       { id: userId },
-      {
-        $set: {
-          ...(name ? { name: name.trim() } : {}),
-          ...(phone !== undefined ? { phone } : {}),
-          ...(avatar ? { avatar } : {}),
-          ...(bio !== undefined ? { bio } : {}),
-          ...(bankName !== undefined ? { bankName } : {}),
-          ...(bankAccount !== undefined ? { bankAccount } : {}),
-          ...(bankAccountName !== undefined ? { bankAccountName } : {}),
-          updatedAt: new Date().toISOString()
-        }
-      },
+      { $set: updateFields },
       { new: true }
     );
 
@@ -311,6 +315,41 @@ router.put('/profile', authenticateToken, async (req: AuthenticatedRequest, res:
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi cập nhật hồ sơ' });
+  }
+});
+
+// PUT /api/auth/change-password
+router.put('/change-password', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    const { newPassword, currentPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+    }
+
+    const user = await User.findOne({ id: userId });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+    }
+
+    if (currentPassword && user.password) {
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ success: false, message: 'Mật khẩu hiện tại không chính xác' });
+      }
+    }
+
+    user.password = await bcrypt.hash(newPassword.trim(), 10);
+    user.updatedAt = new Date().toISOString();
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Đổi mật khẩu tài khoản thành công!'
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi đổi mật khẩu' });
   }
 });
 

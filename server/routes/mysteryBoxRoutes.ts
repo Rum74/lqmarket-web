@@ -139,121 +139,11 @@ router.post('/settings', authenticateToken, requireAdmin, async (req: Authentica
 });
 
 // ========================================================
-// 2. BOX TIERS
+// 2. REWARDS MANAGEMENT & QUERY ENDPOINTS (Must be before /:id)
 // ========================================================
 
-// GET /api/mystery-boxes
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    let boxes = await MysteryBox.find().lean();
-    if (!boxes || boxes.length === 0) {
-      await MysteryBox.insertMany(DEFAULT_SERVER_BOX_TIERS);
-      boxes = await MysteryBox.find().lean();
-    }
-    return res.json({
-      success: true,
-      data: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS,
-      boxes: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS
-    });
-  } catch (error: any) {
-    return res.json({
-      success: true,
-      data: DEFAULT_SERVER_BOX_TIERS,
-      boxes: DEFAULT_SERVER_BOX_TIERS
-    });
-  }
-});
-
-// PUT /api/mystery-boxes/:id (Admin update box tier config)
-router.put('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-
-    let box = await MysteryBox.findOne({
-      $or: [{ id }, { tier: id }]
-    });
-
-    if (!box) {
-      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
-      if (defaultBox) {
-        box = await MysteryBox.create(defaultBox);
-      }
-    }
-
-    if (!box) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy hạng Túi Mù' });
-    }
-
-    if (updates.price !== undefined) box.price = Number(updates.price);
-    if (updates.stockRemaining !== undefined) box.stockRemaining = Number(updates.stockRemaining);
-    if (updates.isActive !== undefined) box.isActive = Boolean(updates.isActive);
-    if (updates.name) box.name = updates.name;
-    if (updates.description) box.description = updates.description;
-    if (updates.badge) box.badge = updates.badge;
-    if (updates.color) box.color = updates.color;
-
-    await box.save();
-
-    return res.json({
-      success: true,
-      message: `Đã cập nhật hạng "${box.name}" thành công!`,
-      box: box.toJSON()
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi cập nhật Túi Mù' });
-  }
-});
-
-// GET /api/mystery-boxes/:id (Single box tier detail)
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    let box = await MysteryBox.findOne({
-      $or: [{ id }, { tier: id }]
-    });
-
-    if (!box) {
-      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
-      if (defaultBox) {
-        box = await MysteryBox.create(defaultBox);
-      }
-    }
-
-    if (!box) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy Túi Mù' });
-    }
-
-    let rewards = await MysteryReward.find({
-      $or: [{ boxTierId: box.tier }, { boxTierId: box.id }, { boxTierId: 'all' }]
-    }).lean();
-
-    if (!rewards || rewards.length === 0) {
-      const matchedDefaults = DEFAULT_SERVER_REWARDS.filter(r => r.boxTierId === box.id || r.boxTierId === box.tier || r.boxTierId === 'all');
-      if (matchedDefaults.length > 0) {
-        await MysteryReward.insertMany(matchedDefaults);
-        rewards = await MysteryReward.find({
-          $or: [{ boxTierId: box.tier }, { boxTierId: box.id }, { boxTierId: 'all' }]
-        }).lean();
-      }
-    }
-
-    return res.json({
-      success: true,
-      box: box.toJSON ? box.toJSON() : box,
-      rewards: rewards || []
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi tải chi tiết Túi Mù' });
-  }
-});
-
-// ========================================================
-// 3. REWARDS MANAGEMENT (ADMIN)
-// ========================================================
-
-// GET /api/mystery-boxes/rewards/all
-router.get('/rewards/all', async (req: Request, res: Response) => {
+// GET /api/mystery-boxes/rewards/all (and /api/mystery-boxes/rewards)
+const getAllRewardsHandler = async (req: Request, res: Response) => {
   try {
     let rewards = await MysteryReward.find().lean();
     if (!rewards || rewards.length === 0) {
@@ -272,7 +162,10 @@ router.get('/rewards/all', async (req: Request, res: Response) => {
       rewards: DEFAULT_SERVER_REWARDS
     });
   }
-});
+};
+
+router.get('/rewards/all', getAllRewardsHandler);
+router.get('/rewards', getAllRewardsHandler);
 
 // POST /api/mystery-boxes/rewards (Admin Add Reward)
 router.post('/rewards', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
@@ -405,10 +298,9 @@ router.post('/import-account', authenticateToken, requireAdmin, async (req: Auth
 });
 
 // ========================================================
-// 4. PUBLIC HISTORY FEED
+// 3. PUBLIC HISTORY & RECENT OPENINGS
 // ========================================================
 
-// GET /api/mystery-boxes/public/history (and /api/mystery-boxes/history)
 const getPublicHistoryHandler = async (req: Request, res: Response) => {
   try {
     const history = await MysteryHistory.find()
@@ -442,15 +334,85 @@ const getPublicHistoryHandler = async (req: Request, res: Response) => {
 
 router.get('/public/history', getPublicHistoryHandler);
 router.get('/history', getPublicHistoryHandler);
+router.get('/recent-openings', getPublicHistoryHandler);
 
 // ========================================================
-// 5. UNBOXING ENGINE (AUTHORITATIVE SERVER-SIDE)
+// 4. USER INVENTORY
 // ========================================================
 
-// POST /api/mystery-boxes/:id/open
-router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/user/inventory', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+    }
+
+    const items = await UserInventory.find({ userId }).sort({ receivedAt: -1 }).lean();
+    return res.json({
+      success: true,
+      data: items,
+      inventory: items,
+      items
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải kho đồ' });
+  }
+});
+
+router.post('/user/inventory/:id/use', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.userId;
+
+    const item = await UserInventory.findOne({ id, userId });
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy vật phẩm' });
+    }
+
+    item.isUsed = true;
+    item.usedAt = new Date().toISOString();
+    await item.save();
+
+    return res.json({
+      success: true,
+      message: 'Sử dụng vật phẩm thành công!',
+      item: item.toJSON()
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi dùng vật phẩm' });
+  }
+});
+
+// ========================================================
+// 5. BOX TIERS LIST & DETAIL & UNBOXING ENGINE
+// ========================================================
+
+// GET /api/mystery-boxes
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    let boxes = await MysteryBox.find().lean();
+    if (!boxes || boxes.length === 0) {
+      await MysteryBox.insertMany(DEFAULT_SERVER_BOX_TIERS);
+      boxes = await MysteryBox.find().lean();
+    }
+    return res.json({
+      success: true,
+      data: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS,
+      boxes: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS
+    });
+  } catch (error: any) {
+    return res.json({
+      success: true,
+      data: DEFAULT_SERVER_BOX_TIERS,
+      boxes: DEFAULT_SERVER_BOX_TIERS
+    });
+  }
+});
+
+// Helper for opening a mystery box
+const handleOpenMysteryBox = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = req.params.id || req.body?.boxTierId || req.body?.id;
     const userId = req.user?.userId;
 
     if (!userId) {
@@ -561,18 +523,20 @@ router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, re
     await user.save();
 
     // 6. Record Wallet Transaction for Box Purchase
-    const boxTx = new WalletTransaction({
-      id: `tx_mb_${Date.now()}_1`,
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      type: 'purchase',
-      amount: -boxPrice,
-      status: 'success',
-      note: `Mở Túi Mù May Mắn: ${box.name}`,
-      createdAt: new Date().toISOString()
-    });
-    await boxTx.save();
+    if (boxPrice > 0) {
+      const boxTx = new WalletTransaction({
+        id: `tx_mb_${Date.now()}_1`,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        type: 'purchase',
+        amount: -boxPrice,
+        status: 'success',
+        note: `Mở Túi Mù May Mắn: ${box.name}`,
+        createdAt: new Date().toISOString()
+      });
+      await boxTx.save();
+    }
 
     // If cash reward, record reward transaction
     if (chosenReward.type === 'cash' && chosenReward.value > 0) {
@@ -664,54 +628,94 @@ router.post('/:id/open', authenticateToken, async (req: AuthenticatedRequest, re
       error: error.message
     });
   }
-});
+};
 
-// ========================================================
-// 6. INVENTORY
-// ========================================================
+// Opening routes (all supported variants)
+router.post('/open', authenticateToken, handleOpenMysteryBox);
+router.post('/open/:id', authenticateToken, handleOpenMysteryBox);
+router.post('/:id/open', authenticateToken, handleOpenMysteryBox);
 
-// GET /api/mystery-boxes/user/inventory (User's rewards inventory)
-router.get('/user/inventory', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+// PUT /api/mystery-boxes/:id (Admin update box tier config)
+router.put('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+    const { id } = req.params;
+    const updates = req.body;
+
+    let box = await MysteryBox.findOne({
+      $or: [{ id }, { tier: id }]
+    });
+
+    if (!box) {
+      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
+      if (defaultBox) {
+        box = await MysteryBox.create(defaultBox);
+      }
     }
 
-    const items = await UserInventory.find({ userId }).sort({ receivedAt: -1 }).lean();
+    if (!box) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy hạng Túi Mù' });
+    }
+
+    if (updates.price !== undefined) box.price = Number(updates.price);
+    if (updates.stockRemaining !== undefined) box.stockRemaining = Number(updates.stockRemaining);
+    if (updates.isActive !== undefined) box.isActive = Boolean(updates.isActive);
+    if (updates.name) box.name = updates.name;
+    if (updates.description) box.description = updates.description;
+    if (updates.badge) box.badge = updates.badge;
+    if (updates.color) box.color = updates.color;
+
+    await box.save();
+
     return res.json({
       success: true,
-      data: items,
-      inventory: items,
-      items
+      message: `Đã cập nhật hạng "${box.name}" thành công!`,
+      box: box.toJSON()
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi tải kho đồ' });
+    return res.status(500).json({ success: false, message: 'Lỗi cập nhật Túi Mù' });
   }
 });
 
-// POST /api/mystery-boxes/user/inventory/:id/use
-router.post('/user/inventory/:id/use', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+// GET /api/mystery-boxes/:id (Single box tier detail - MUST BE LAST)
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.user?.userId;
+    let box = await MysteryBox.findOne({
+      $or: [{ id }, { tier: id }]
+    });
 
-    const item = await UserInventory.findOne({ id, userId });
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy vật phẩm' });
+    if (!box) {
+      const defaultBox = DEFAULT_SERVER_BOX_TIERS.find(b => b.id === id || b.tier === id);
+      if (defaultBox) {
+        box = await MysteryBox.create(defaultBox);
+      }
     }
 
-    item.isUsed = true;
-    item.usedAt = new Date().toISOString();
-    await item.save();
+    if (!box) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy Túi Mù' });
+    }
+
+    let rewards = await MysteryReward.find({
+      $or: [{ boxTierId: box.tier }, { boxTierId: box.id }, { boxTierId: 'all' }]
+    }).lean();
+
+    if (!rewards || rewards.length === 0) {
+      const matchedDefaults = DEFAULT_SERVER_REWARDS.filter(r => r.boxTierId === box.id || r.boxTierId === box.tier || r.boxTierId === 'all');
+      if (matchedDefaults.length > 0) {
+        await MysteryReward.insertMany(matchedDefaults);
+        rewards = await MysteryReward.find({
+          $or: [{ boxTierId: box.tier }, { boxTierId: box.id }, { boxTierId: 'all' }]
+        }).lean();
+      }
+    }
 
     return res.json({
       success: true,
-      message: 'Sử dụng vật phẩm thành công!',
-      item: item.toJSON()
+      box: box.toJSON ? box.toJSON() : box,
+      rewards: rewards || []
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi khi dùng vật phẩm' });
+    return res.status(500).json({ success: false, message: 'Lỗi tải chi tiết Túi Mù' });
   }
 });
 

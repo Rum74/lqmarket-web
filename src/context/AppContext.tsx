@@ -14,7 +14,6 @@ import {
   MysteryBoxHistoryItem,
   UserInventoryItem
 } from '../types';
-import { INITIAL_USERS, INITIAL_ACCOUNTS, INITIAL_ORDERS, INITIAL_TRANSACTIONS } from '../data/mockData';
 import {
   DEFAULT_MYSTERY_BOX_TIERS,
   DEFAULT_MYSTERY_BOX_REWARDS,
@@ -224,14 +223,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const savedUser = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
       const parsedSaved = savedUser ? [JSON.parse(savedUser)] : [];
-      const localUsers = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('lqmarket_local_users') || '[]') : [];
-      const map = new Map<string, UserProfile>();
-      INITIAL_USERS.forEach(u => map.set(u.id, u));
-      localUsers.forEach((u: UserProfile) => { if (u?.id) map.set(u.id, u); });
-      parsedSaved.forEach((u: UserProfile) => { if (u?.id) map.set(u.id, u); });
-      return Array.from(map.values());
+      return parsedSaved.filter(u => u && u.id);
     } catch {
-      return INITIAL_USERS;
+      return [];
     }
   });
 
@@ -254,9 +248,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
   // Core App Collections
-  const [accounts, setAccounts] = useState<AccountItem[]>(INITIAL_ACCOUNTS);
-  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_ORDERS);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>(INITIAL_TRANSACTIONS);
+  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -264,7 +258,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Mystery Box (Túi Mù May Mắn) States
   const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(DEFAULT_MYSTERY_BOX_TIERS);
   const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>(DEFAULT_MYSTERY_BOX_REWARDS);
-  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>(DEFAULT_MYSTERY_BOX_HISTORY);
+  const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>([]);
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>({});
   const [isMysteryBoxEventActive, setIsMysteryBoxEventActive] = useState<boolean>(true);
@@ -303,9 +297,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const accRes = await api.get('/api/accounts').catch(() => null);
       if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
         const list = accRes.data || accRes.accounts;
-        if (list.length > 0) {
-          setAccounts(list);
-        }
+        setAccounts(list || []);
       }
 
       // 1b. Fetch Public System Stats (Total completed transactions & auto-approve setting from Database)
@@ -350,7 +342,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const histRes = await api.get('/api/mystery-boxes/public/history').catch(() => null);
       if (histRes && histRes.success && Array.isArray(histRes.data || histRes.history)) {
         const histList = histRes.data || histRes.history;
-        setMysteryHistory(histList);
+        setMysteryHistory(histList || []);
       }
 
       // Authenticated queries if token exists
@@ -467,11 +459,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     if (matchInAll) return matchInAll;
 
-    const matchInInit = INITIAL_USERS.find(
-      u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
-    );
-    if (matchInInit) return matchInInit;
-
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
       if (raw) {
@@ -540,6 +527,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoggedIn(false);
     setCurrentUserId('');
     setCurrentView('home');
+    setOrders([]);
+    setTransactions([]);
+    setUserInventory([]);
+    setNotifications([]);
   };
 
   const quickSwitchUser = (_userId: string) => {};

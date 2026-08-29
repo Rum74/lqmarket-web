@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { compressAvatar } from '../../utils/imageCompressor';
-import { changeSupabasePassword } from '../../lib/supabaseAuth';
-import { changeFirebasePassword } from '../../lib/authService';
+import { changeUserPassword } from '../../lib/authService';
 import {
   User,
   Shield,
@@ -234,10 +233,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
     setIsSaving(true);
     try {
-      let res = await changeSupabasePassword(newPassword);
-      if (!res.success) {
-        res = await changeFirebasePassword(newPassword, currentUser.id);
-      }
+      const res = await changeUserPassword(newPassword, currentPassword);
       if (res.success) {
         setCurrentPassword('');
         setNewPassword('');

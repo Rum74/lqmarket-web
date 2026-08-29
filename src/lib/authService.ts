@@ -299,16 +299,16 @@ export function onFirebaseAuthStateChanged(
 /**
  * Update password directly in MongoDB Atlas
  */
-export async function changeFirebasePassword(
+export async function changeUserPassword(
   newPassword: string,
-  _userId?: string
+  currentPassword?: string
 ): Promise<{ success: boolean; message: string }> {
   try {
     if (!newPassword || newPassword.length < 6) {
       return { success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự!' };
     }
 
-    const res = await api.put('/api/auth/profile', { password: newPassword });
+    const res = await api.put('/api/auth/change-password', { newPassword, currentPassword });
     if (res.success) {
       return { success: true, message: 'Đổi mật khẩu tài khoản thành công!' };
     }
@@ -321,3 +321,5 @@ export async function changeFirebasePassword(
     };
   }
 }
+
+export const changeFirebasePassword = changeUserPassword;

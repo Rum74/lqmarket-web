@@ -308,8 +308,8 @@ export const memoryStore = {
   settings: new MemoryCollection<any>('settings'),
 };
 
-// Seed initial memory store with default authentic data
-import { DEFAULT_SERVER_USERS, DEFAULT_SERVER_ACCOUNTS, DEFAULT_SERVER_ORDERS } from '../data/defaultMarketData';
+// Seed initial memory store with admin account if empty
+import { DEFAULT_SERVER_USERS } from '../data/defaultMarketData';
 
 export async function seedMemoryMarketData() {
   try {
@@ -321,19 +321,8 @@ export async function seedMemoryMarketData() {
         memoryStore.users.items.set(u.id!, { ...u, password: hashedPassword });
       }
     }
-    if (memoryStore.accounts.items.size === 0) {
-      for (const a of DEFAULT_SERVER_ACCOUNTS) {
-        memoryStore.accounts.items.set(a.id!, { ...a });
-      }
-    }
-    if (memoryStore.orders.items.size === 0) {
-      for (const o of DEFAULT_SERVER_ORDERS) {
-        memoryStore.orders.items.set(o.id!, { ...o });
-      }
-    }
-    console.log(`📦 Seeded ${memoryStore.accounts.items.size} accounts, ${memoryStore.orders.items.size} orders, and ${memoryStore.users.items.size} users into MemoryStore.`);
   } catch (err) {
-    console.warn('Memory market data auto-seed notice:', err);
+    console.warn('Memory user seed notice:', err);
   }
 }
 
