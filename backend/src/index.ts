@@ -109,6 +109,14 @@ async function startServer() {
     req.url = '/webhook';
     paymentRoutes(req, res, next);
   });
+  app.all('/confirm-webhook', (req, res, next) => {
+    req.url = '/confirm-webhook';
+    paymentRoutes(req, res, next);
+  });
+  app.all('/api/confirm-webhook', (req, res, next) => {
+    req.url = '/confirm-webhook';
+    paymentRoutes(req, res, next);
+  });
 
   // Valuation helper
   app.post('/api/market/estimate-price', (req, res) => {

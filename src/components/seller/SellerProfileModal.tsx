@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../lib/apiClient';
+import { UserProfile } from '../../types';
 import { AccountCard } from '../accounts/AccountCard';
 import { getDynamicSellerInfo } from '../../utils/sellerHelper';
 import {
@@ -18,7 +20,8 @@ import {
   ThumbsUp,
   Store,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 
 export const SellerProfileModal: React.FC = () => {
@@ -26,6 +29,7 @@ export const SellerProfileModal: React.FC = () => {
     selectedSellerId,
     setSelectedSellerId,
     allUsers,
+    setAllUsers,
     accounts,
     orders,
     openChatWith,
@@ -33,16 +37,77 @@ export const SellerProfileModal: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'policies'>('listings');
+  const [fetchedSeller, setFetchedSeller] = useState<UserProfile | null>(null);
+  const [isLoadingSeller, setIsLoadingSeller] = useState(false);
+
+  // When selectedSellerId opens, check if present in allUsers or fetch from API
+  useEffect(() => {
+    if (!selectedSellerId) {
+      setFetchedSeller(null);
+      setIsLoadingSeller(false);
+      return;
+    }
+
+    const localFound = allUsers.find(u => u.id === selectedSellerId || u.username === selectedSellerId);
+    if (localFound) {
+      setFetchedSeller(localFound);
+      return;
+    }
+
+    // Try finding by sellerId in accounts
+    const accMatching = accounts.find(a => a.sellerId === selectedSellerId);
+    if (accMatching && accMatching.sellerName) {
+      const derivedUser: UserProfile = {
+        id: selectedSellerId,
+        name: accMatching.sellerName,
+        username: accMatching.sellerName.toLowerCase().replace(/\s+/g, ''),
+        email: `${selectedSellerId}@cholienquan.com`,
+        phone: '',
+        role: 'seller',
+        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedSellerId}`,
+        balance: 0,
+        pendingBalance: 0,
+        rating: 5.0,
+        completedSales: 0,
+        isVerifiedSeller: true,
+        sellerTier: 'PRO',
+        createdAt: accMatching.createdAt || new Date().toISOString()
+      };
+      setFetchedSeller(derivedUser);
+    }
+
+    // Fetch live from server
+    setIsLoadingSeller(true);
+    api.get(`/api/auth/seller/${selectedSellerId}`)
+      .then(res => {
+        if (res && res.success && (res.seller || res.user)) {
+          const sellerObj = res.seller || res.user;
+          setFetchedSeller(sellerObj);
+          if (typeof setAllUsers === 'function') {
+            setAllUsers(prev => {
+              if (prev.some(u => u.id === sellerObj.id)) return prev;
+              return [...prev, sellerObj];
+            });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Could not fetch seller profile:', err);
+      })
+      .finally(() => {
+        setIsLoadingSeller(false);
+      });
+  }, [selectedSellerId, allUsers, accounts, setAllUsers]);
 
   if (!selectedSellerId) return null;
 
-  const seller = allUsers.find(u => u.id === selectedSellerId);
+  const seller = fetchedSeller || allUsers.find(u => u.id === selectedSellerId || u.username === selectedSellerId);
   const sellerInfo = seller ? getDynamicSellerInfo(seller.id, allUsers, orders) : null;
 
   // Accounts belonging to this seller
   const sellerAccounts = seller
     ? accounts.filter(a => a.sellerId === seller.id && (a.status === 'approved' || a.status === 'sold'))
-    : [];
+    : accounts.filter(a => a.sellerId === selectedSellerId && (a.status === 'approved' || a.status === 'sold'));
   const activeListings = sellerAccounts.filter(a => a.status === 'approved');
 
   // Real Reviews from Completed Orders in MongoDB
@@ -68,9 +133,9 @@ export const SellerProfileModal: React.FC = () => {
         })
     : [];
 
-  const completedSalesCount = sellerInfo?.completedSales || 0;
+  const completedSalesCount = seller?.completedSales || sellerInfo?.completedSales || 0;
   const hasReviews = sellerReviews.length > 0;
-  const averageRating = sellerInfo?.averageRating || null;
+  const averageRating = seller?.rating || sellerInfo?.averageRating || 5.0;
 
   const formatJoinDate = (dateStr?: string) => {
     if (!dateStr) return 'Mới tham gia sàn';
@@ -85,6 +150,18 @@ export const SellerProfileModal: React.FC = () => {
       return 'Mới tham gia sàn';
     }
   };
+
+  if (isLoadingSeller && !seller) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+          <Loader2 size={36} className="animate-spin text-amber-400 mx-auto" />
+          <h3 className="text-base font-bold text-white">Đang tải hồ sơ người bán...</h3>
+          <p className="text-xs text-slate-400">Vui lòng đợi giây lát</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!seller) {
     return (

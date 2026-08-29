@@ -353,4 +353,78 @@ router.put('/change-password', authenticateToken, async (req: AuthenticatedReque
   }
 });
 
+// GET /api/auth/seller/:sellerId (Public Seller Profile for all users & guests)
+router.get('/seller/:sellerId', async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    const user = await User.findOne({
+      $or: [{ id: sellerId }, { username: sellerId }]
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy hồ sơ người bán'
+      });
+    }
+
+    const publicProfile = {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      avatar: user.avatar,
+      role: user.role,
+      isVerifiedSeller: Boolean(user.isVerifiedSeller),
+      sellerTier: user.sellerTier || 'STANDARD',
+      rating: user.rating || 5.0,
+      completedSales: user.completedSales || 0,
+      bio: user.bio || 'Chuyên cung cấp tài khoản Liên Quân uy tín, bảo hành chu đáo.',
+      createdAt: (user as any).createdAt || user.createdAt
+    };
+
+    return res.json({
+      success: true,
+      seller: publicProfile,
+      user: publicProfile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi tải hồ sơ người bán'
+    });
+  }
+});
+
+// GET /api/auth/users/:id/public
+router.get('/users/:id/public', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findOne({
+      $or: [{ id }, { username: id }]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+    }
+
+    const publicProfile = {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      avatar: user.avatar,
+      role: user.role,
+      isVerifiedSeller: Boolean(user.isVerifiedSeller),
+      sellerTier: user.sellerTier || 'STANDARD',
+      rating: user.rating || 5.0,
+      completedSales: user.completedSales || 0,
+      bio: user.bio || '',
+      createdAt: (user as any).createdAt || user.createdAt
+    };
+
+    return res.json({ success: true, user: publicProfile, seller: publicProfile });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi tải hồ sơ' });
+  }
+});
+
 export default router;

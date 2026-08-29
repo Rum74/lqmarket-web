@@ -176,7 +176,9 @@ interface AppContextType {
 
   // System & Database Management
   totalSystemCompletedSales: number;
+  totalSystemAvailableAccounts: number;
   isAutoApproveAccounts: boolean;
+  refreshAllData: () => Promise<void>;
   adminToggleAutoApproveAccounts: (enabled: boolean) => Promise<{ success: boolean; message: string }>;
   resetToDefaultData: () => void;
   clearAllDatabaseData: () => Promise<{ success: boolean; message: string }>;
@@ -285,6 +287,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // System Stats & Config State
   const [totalSystemCompletedSales, setTotalSystemCompletedSales] = useState<number>(0);
+  const [totalSystemAvailableAccounts, setTotalSystemAvailableAccounts] = useState<number>(0);
   const [isAutoApproveAccounts, setIsAutoApproveAccounts] = useState<boolean>(false);
 
   // ----------------------------------------------------
@@ -301,11 +304,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAccounts(list || []);
       }
 
-      // 1b. Fetch Public System Stats (Total completed transactions & auto-approve setting from Database)
+      // 1b. Fetch Public System Stats (Total completed transactions, total available accounts & auto-approve)
       const statsRes = await api.get('/api/accounts/public-stats').catch(() => null);
       if (statsRes && statsRes.success) {
         if (typeof statsRes.totalCompletedTransactions === 'number') {
           setTotalSystemCompletedSales(statsRes.totalCompletedTransactions);
+        }
+        if (typeof statsRes.totalAvailableAccounts === 'number') {
+          setTotalSystemAvailableAccounts(statsRes.totalAvailableAccounts);
         }
         if (typeof statsRes.isAutoApprove === 'boolean') {
           setIsAutoApproveAccounts(statsRes.isAutoApprove);
@@ -364,20 +370,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(userObj));
           } catch {}
 
-          // If user is admin, fetch ALL users from MongoDB
+          // If user is admin, fetch ALL data (users, accounts, orders, transactions) from Admin API
           if (userObj.role === 'admin') {
             const adminUsersRes = await api.get('/api/admin/users').catch(() => null);
             if (adminUsersRes && adminUsersRes.success && Array.isArray(adminUsersRes.data || adminUsersRes.users)) {
               const uList = adminUsersRes.data || adminUsersRes.users;
               setAllUsers(uList);
             }
+            const adminProductsRes = await api.get('/api/admin/products').catch(() => null);
+            if (adminProductsRes && adminProductsRes.success && Array.isArray(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts)) {
+              const aList = adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts;
+              setAccounts(aList);
+            }
+            const adminOrdersRes = await api.get('/api/admin/orders').catch(() => null);
+            if (adminOrdersRes && adminOrdersRes.success && Array.isArray(adminOrdersRes.data || adminOrdersRes.orders)) {
+              setOrders(adminOrdersRes.data || adminOrdersRes.orders);
+            }
+            const adminTxRes = await api.get('/api/admin/transactions').catch(() => null);
+            if (adminTxRes && adminTxRes.success && Array.isArray(adminTxRes.data || adminTxRes.transactions)) {
+              setTransactions(adminTxRes.data || adminTxRes.transactions);
+            }
           }
         }
 
-        // Fetch User Orders
+        // Fetch User Orders (for non-admin or personal view)
         const ordRes = await api.get('/api/orders').catch(() => null);
         if (ordRes && ordRes.success && Array.isArray(ordRes.data || ordRes.orders)) {
-          setOrders(ordRes.data || ordRes.orders);
+          setOrders(prev => {
+            const currentRole = meRes?.user?.role;
+            if (currentRole === 'admin') return prev; // Keep admin's full orders list
+            return ordRes.data || ordRes.orders;
+          });
         }
 
         // Fetch Wallet Transactions
@@ -1342,8 +1365,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cloudSyncStatus,
 
         totalSystemCompletedSales,
+        totalSystemAvailableAccounts,
         isAutoApproveAccounts,
         adminToggleAutoApproveAccounts,
+        refreshAllData: fetchAllMongoData,
 
         currentView,
         setCurrentView,

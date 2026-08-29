@@ -62,7 +62,8 @@ export const WalletModal: React.FC = () => {
     depositBalance,
     withdrawBalance,
     transactions,
-    setCurrentView
+    setCurrentView,
+    refreshAllData
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history' | 'guide'>('deposit');
@@ -286,12 +287,8 @@ export const WalletModal: React.FC = () => {
       try {
         const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
         if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
-          // Real transaction verified by PayOS
-          depositBalance(
-            depositAmount,
-            'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
-            `Khách chuyển khoản PayOS đơn #${payOsOrderCode}`
-          );
+          // Real transaction verified by PayOS and already credited strictly once in DB
+          await refreshAllData();
           setDepositSuccess(true);
           setIsCheckingResult(false);
 
@@ -317,7 +314,7 @@ export const WalletModal: React.FC = () => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [isWalletModalOpen, depositSuccess, activeTab, depositStep, payOsOrderCode, depositAmount, depositBalance, setIsWalletModalOpen, setCurrentView]);
+  }, [isWalletModalOpen, depositSuccess, activeTab, depositStep, payOsOrderCode, refreshAllData, setIsWalletModalOpen, setCurrentView]);
 
   // Action: "Thanh toán đã hoàn tất" -> chuyển sang màn hình Chờ xử lý (Processing) và truy vấn thật từ PayOS
   const handlePaymentCompleted = async () => {
@@ -329,11 +326,7 @@ export const WalletModal: React.FC = () => {
       try {
         const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
         if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
-          depositBalance(
-            depositAmount,
-            'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
-            `Khách chuyển khoản PayOS đơn #${payOsOrderCode}`
-          );
+          await refreshAllData();
           setDepositSuccess(true);
           setIsCheckingResult(false);
 
@@ -368,11 +361,7 @@ export const WalletModal: React.FC = () => {
     try {
       const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
       if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
-        depositBalance(
-          depositAmount,
-          'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
-          `Khách chuyển khoản PayOS đơn #${payOsOrderCode}`
-        );
+        await refreshAllData();
         setDepositSuccess(true);
         try {
           confetti({

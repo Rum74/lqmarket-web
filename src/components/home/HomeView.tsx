@@ -29,7 +29,18 @@ import {
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
-  const { accounts, orders, allUsers, setCurrentView, setFilterOptions, openSellerProfile, openChatWith, mysteryBoxes, totalSystemCompletedSales } = useApp();
+  const {
+    accounts,
+    orders,
+    allUsers,
+    setCurrentView,
+    setFilterOptions,
+    openSellerProfile,
+    openChatWith,
+    mysteryBoxes,
+    totalSystemCompletedSales,
+    totalSystemAvailableAccounts
+  } = useApp();
 
   const approvedAccounts = accounts.filter(a => a.status === 'approved');
 
@@ -50,7 +61,7 @@ export const HomeView: React.FC = () => {
     return nr === 'đồng' || nr === 'bạc' || nr === 'dong' || nr === 'bac';
   }).length;
 
-  const totalAvailableCount = approvedAccounts.length;
+  const totalAvailableCount = totalSystemAvailableAccounts > 0 ? totalSystemAvailableAccounts : approvedAccounts.length;
   const totalCompletedSales = totalSystemCompletedSales > 0 ? totalSystemCompletedSales : (orders.filter(o => o.status === 'completed').length || accounts.filter(a => a.status === 'sold').length);
 
   // Prominent Sellers List from Database (Dynamic sync)

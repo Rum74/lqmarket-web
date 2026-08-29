@@ -109,14 +109,17 @@ router.put('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // GET /api/admin/products (or /api/admin/accounts)
-router.get('/products', async (req: AuthenticatedRequest, res: Response) => {
+const getAdminProductsHandler = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const products = await Account.find().sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: products, products, accounts: products });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi tải danh sách sản phẩm' });
   }
-});
+};
+
+router.get('/products', getAdminProductsHandler);
+router.get('/accounts', getAdminProductsHandler);
 
 // PUT /api/admin/products/:id/status (and /api/admin/accounts/:id/status)
 const updateProductStatusHandler = async (req: AuthenticatedRequest, res: Response) => {
