@@ -45,7 +45,7 @@ export const SellerProfileModal: React.FC = () => {
     : [];
   const activeListings = sellerAccounts.filter(a => a.status === 'approved');
 
-  // Real Reviews from Completed Orders in Firestore
+  // Real Reviews from Completed Orders in MongoDB
   const sellerReviews = seller
     ? orders
         .filter(o => o.sellerId === seller.id && (o.reviewComment || o.ratingGiven))
@@ -101,7 +101,7 @@ export const SellerProfileModal: React.FC = () => {
           </div>
           <h3 className="text-base font-bold text-white">Không Tìm Thấy Người Bán</h3>
           <p className="text-xs text-slate-400">
-            Hồ sơ người bán này không tồn tại hoặc đã được xoá sạch khỏi cơ sở dữ liệu Firebase.
+            Hồ sơ người bán này không tồn tại hoặc đã được xoá khỏi hệ thống.
           </p>
           <button
             onClick={() => setSelectedSellerId(null)}

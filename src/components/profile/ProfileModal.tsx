@@ -89,7 +89,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Sync state when currentUser or modal open state updates from Firebase
+  // Sync state when currentUser or modal open state updates
   useEffect(() => {
     if (isOpen && currentUser) {
       setName(currentUser.name || '');
@@ -104,7 +104,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   if (!isOpen) return null;
 
-  // Stats calculation dynamically from real Firestore orders
+  // Stats calculation dynamically from real orders
   const myBuyOrders = orders.filter(o => o.buyerId === currentUser.id);
   const mySellOrders = orders.filter(o => o.sellerId === currentUser.id);
   const myCompletedSales = mySellOrders.filter(o => o.status === 'completed').length;

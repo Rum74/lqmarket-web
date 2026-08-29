@@ -8,6 +8,10 @@ import { MysteryBox } from '../models/MysteryBox';
 import { MysteryReward } from '../models/MysteryReward';
 import { Setting } from '../models/Setting';
 import { Notification } from '../models/Notification';
+import { Conversation } from '../models/Conversation';
+import { UserInventory } from '../models/UserInventory';
+import { MysteryHistory } from '../models/MysteryHistory';
+import { Review } from '../models/Review';
 import {
   authenticateToken,
   requireAdmin,
@@ -377,6 +381,33 @@ router.post('/settings', async (req: AuthenticatedRequest, res: Response) => {
     return res.json({ success: true, message: 'Lưu cấu hình sàn thành công!' });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi lưu cấu hình' });
+  }
+});
+
+// POST /api/admin/clear-database
+router.post('/clear-database', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Delete market items, orders, transactions, chats, notifications, inventory, withdrawals
+    await Promise.all([
+      Account.deleteMany({}),
+      Order.deleteMany({}),
+      WalletTransaction.deleteMany({}),
+      WithdrawalRequest.deleteMany({}),
+      Notification.deleteMany({}),
+      Conversation.deleteMany({}),
+      UserInventory.deleteMany({}),
+      MysteryHistory.deleteMany({}),
+      Review.deleteMany({}),
+      // Retain admin users, delete non-admin users
+      User.deleteMany({ role: { $ne: 'admin' } })
+    ]);
+
+    return res.json({
+      success: true,
+      message: 'Đã xóa sạch toàn bộ dữ liệu thị trường (tài khoản, đơn hàng, giao dịch) trên cơ sở dữ liệu MongoDB Atlas! Đã giữ lại tài khoản Quản trị viên.'
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi xóa dữ liệu trên MongoDB: ' + error.message });
   }
 });
 

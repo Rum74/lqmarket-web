@@ -61,6 +61,7 @@ export const AdminDashboardView: React.FC = () => {
     adminAdjustUserBalance,
     setSelectedAccountId,
     resetToDefaultData,
+    clearAllDatabaseData,
     clearAllFirebaseData,
     seedSampleData,
     cloudSyncStatus,
@@ -1163,20 +1164,31 @@ export const AdminDashboardView: React.FC = () => {
                     Toàn bộ tài khoản, đơn hàng, số dư ví và quà túi mù may mắn được lưu trữ bảo mật & đồng bộ tức thì trên MongoDB Atlas.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={isSeedingData}
-                  onClick={async () => {
-                    setIsSeedingData(true);
-                    const res = await seedSampleData();
-                    setIsSeedingData(false);
-                    showNotification(res.message);
-                  }}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer transition-all shrink-0"
-                >
-                  <RefreshCw size={14} className={isSeedingData ? 'animate-spin' : ''} />
-                  <span>{isSeedingData ? 'Đang làm mới...' : 'Đồng Bộ / Làm Mới Dữ Liệu'}</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isSeedingData}
+                    onClick={async () => {
+                      setIsSeedingData(true);
+                      const res = await seedSampleData();
+                      setIsSeedingData(false);
+                      showNotification(res.message);
+                    }}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer transition-all shrink-0"
+                  >
+                    <RefreshCw size={14} className={isSeedingData ? 'animate-spin' : ''} />
+                    <span>{isSeedingData ? 'Đang làm mới...' : 'Đồng Bộ / Làm Mới Dữ Liệu'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowWipeConfirmModal(true)}
+                    className="px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 font-bold text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-all shrink-0"
+                  >
+                    <Trash2 size={14} />
+                    <span>Xóa Sạch Dữ Liệu Thị Trường</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1305,20 +1317,20 @@ export const AdminDashboardView: React.FC = () => {
         </div>
       )}
 
-      {/* WIPE FIREBASE CONFIRMATION MODAL */}
+      {/* WIPE MONGODB CONFIRMATION MODAL */}
       {showWipeConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
           <div className="bg-slate-900 border border-rose-800/80 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl shadow-rose-950/40">
             <div className="flex items-center gap-2 text-rose-400 font-bold text-base">
               <AlertTriangle size={20} />
-              <span>Xác Nhận Xoá Toàn Bộ Dữ Liệu Firebase?</span>
+              <span>Xác Nhận Xoá Toàn Bộ Dữ Liệu Thị Trường?</span>
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              Hành động này sẽ <strong>xoá vĩnh viễn toàn bộ</strong> tài khoản đăng bán, đơn hàng, giao dịch ví tiền và tin nhắn chat đang lưu trên cơ sở dữ liệu đám mây <strong>Firebase Firestore</strong>.
+              Hành động này sẽ <strong>xoá vĩnh viễn toàn bộ</strong> tài khoản đăng bán, đơn hàng, giao dịch ví tiền và tin nhắn chat đang lưu trên cơ sở dữ liệu <strong>MongoDB Atlas</strong>.
             </p>
             <p className="text-[11px] text-slate-400">
-              * Tài khoản Super Admin (<code className="text-amber-400">admin@lqmarket.vn</code>) sẽ được giữ lại để bạn có thể tiếp tục quản trị hệ thống.
+              * Tài khoản Quản trị viên (<code className="text-amber-400">admin@lqmarket.vn</code>) sẽ được giữ lại để bạn có thể tiếp tục quản trị hệ thống.
             </p>
 
             <div className="flex gap-2 justify-end pt-2">
@@ -1335,7 +1347,7 @@ export const AdminDashboardView: React.FC = () => {
                 onClick={async () => {
                   setIsWipingData(true);
                   setShowWipeConfirmModal(false);
-                  const res = await clearAllFirebaseData();
+                  const res = await clearAllDatabaseData();
                   setIsWipingData(false);
                   showNotification(res.message);
                 }}
@@ -1855,7 +1867,7 @@ export const AdminDashboardView: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              Bạn có chắc chắn muốn xóa tài khoản <strong>"{deletingUser.name}"</strong> ({deletingUser.email}) khỏi hệ thống và Firebase Firestore?
+              Bạn có chắc chắn muốn xóa tài khoản <strong>"{deletingUser.name}"</strong> ({deletingUser.email}) khỏi hệ thống và cơ sở dữ liệu MongoDB Atlas?
             </p>
 
             <div className="flex gap-2 justify-end pt-2">

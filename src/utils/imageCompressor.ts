@@ -1,7 +1,7 @@
 /**
  * Client-side Image Compression Utility
- * Resizes and compresses images using HTML5 Canvas before sending or saving to Firestore,
- * ensuring document sizes stay well below Firestore's 1MB limit (typically ~20-60KB).
+ * Resizes and compresses images using HTML5 Canvas before uploading,
+ * ensuring high resolution while keeping file sizes lightweight (typically ~20-60KB).
  */
 
 export interface CompressOptions {

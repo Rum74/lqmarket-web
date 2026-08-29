@@ -230,7 +230,7 @@ export const SellAccountView: React.FC = () => {
           <div className="font-bold text-amber-400">Quyền lợi Người Bán:</div>
           <ul className="space-y-1 text-slate-400 list-disc list-inside">
             <li>Đăng bán tài khoản không giới hạn số lượng</li>
-            <li>Hệ thống nén ảnh trực tiếp lên Cloud Firestore</li>
+            <li>Hệ thống nén và tải ảnh nhanh chóng, bảo mật cao</li>
             <li>Bàn giao mật khẩu tự động & rút tiền về ATM tức thì</li>
           </ul>
         </div>

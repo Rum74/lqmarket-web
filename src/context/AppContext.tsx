@@ -179,6 +179,7 @@ interface AppContextType {
   isAutoApproveAccounts: boolean;
   adminToggleAutoApproveAccounts: (enabled: boolean) => Promise<{ success: boolean; message: string }>;
   resetToDefaultData: () => void;
+  clearAllDatabaseData: () => Promise<{ success: boolean; message: string }>;
   clearAllFirebaseData: () => Promise<{ success: boolean; message: string }>;
   seedSampleData: () => Promise<{ success: boolean; message: string }>;
 }
@@ -1290,9 +1291,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchAllMongoData();
   };
 
-  const clearAllFirebaseData = async (): Promise<{ success: boolean; message: string }> => {
-    return { success: true, message: 'Hệ thống đang hoạt động trên cơ sở dữ liệu MongoDB Atlas duy nhất.' };
+  const clearAllDatabaseData = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.post('/api/admin/clear-database');
+      if (res && res.success) {
+        setAccounts([]);
+        setOrders([]);
+        setTransactions([]);
+        setUserInventory([]);
+        setMysteryHistory([]);
+        setChatMessages([]);
+        setNotifications([]);
+        await fetchAllMongoData();
+        return { success: true, message: res.message || 'Đã xóa sạch toàn bộ dữ liệu trên MongoDB Atlas thành công!' };
+      }
+      return { success: false, message: res.message || 'Không thể xóa dữ liệu trên MongoDB.' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || 'Lỗi kết nối máy chủ MongoDB.' };
+    }
   };
+
+  const clearAllFirebaseData = clearAllDatabaseData;
 
   const seedSampleData = async (): Promise<{ success: boolean; message: string }> => {
     fetchAllMongoData();
@@ -1412,6 +1431,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminResetMysteryBoxes,
 
         resetToDefaultData,
+        clearAllDatabaseData,
         clearAllFirebaseData,
         seedSampleData
       }}

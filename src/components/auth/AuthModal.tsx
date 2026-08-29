@@ -378,7 +378,7 @@ export const AuthModal: React.FC = () => {
         {/* Footer Security Notice */}
         <div className="p-3 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-500 text-center flex items-center justify-center gap-1.5">
           <ShieldCheck size={14} className="text-emerald-500" />
-          <span>Bảo mật Cloud Firestore 256-bit & Giao dịch trung gian an toàn</span>
+          <span>Bảo mật dữ liệu MongoDB Atlas SSL/TLS 256-bit & Giao dịch trung gian an toàn</span>
         </div>
       </div>
     </div>

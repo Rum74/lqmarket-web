@@ -10,6 +10,7 @@ Hệ thống sàn thương mại điện tử chuyên biệt cho cộng đồng 
 - 📊 **Bảng điều khiển quản trị (Admin Dashboard)**: Duyệt tin bán, xử lý khiếu nại tranh chấp, quản lý rút tiền và phân quyền người dùng.
 
 ## 🛠️ Công Nghệ Sử Dụng
-- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, Framer Motion
-- **Database & Storage**: Google Cloud Firestore, Firebase Authentication
-- **Deployment**: Vercel / Cloud Run (Version 2.5 - Release 2026)
+- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS, Lucide Icons, Motion
+- **Backend & API**: Node.js, Express, RESTful API Gateway, JWT Authentication
+- **Database & Storage**: MongoDB Atlas, Mongoose ODM
+- **Deployment**: Vercel / Cloud Run (Version 3.0 - Full-Stack Release)
