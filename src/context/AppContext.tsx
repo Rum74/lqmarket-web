@@ -403,18 +403,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // Fetch Wallet Transactions (For admin, request all=true so all user withdrawals are visible)
+        // Fetch Wallet Transactions (For admin, adminTxRes above already loaded the authoritative list)
         const isAdmin = meRes?.user?.role === 'admin';
-        const txUrl = isAdmin ? '/api/wallet/transactions?all=true' : '/api/wallet/transactions';
-        const txRes = await api.get(txUrl).catch(() => null);
-        if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
-          const list = txRes.data || txRes.transactions;
-          setTransactions(prev => {
-            if (isAdmin && prev.length > list.length) {
-              return prev; // keep the richer list from admin api
-            }
-            return list;
-          });
+        if (!isAdmin) {
+          const txRes = await api.get('/api/wallet/transactions').catch(() => null);
+          if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
+            setTransactions(txRes.data || txRes.transactions);
+          }
         }
 
         // Fetch Notifications
@@ -962,9 +957,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
     try {
-      await api.put(`/api/wallet/transactions/${txId}/approve`, { refNote });
-      fetchAllMongoData();
-      return { success: true, message: 'Đã giải ngân rút tiền thành công!' };
+      // Call admin approve endpoint first, with fallback to wallet endpoint
+      const res = await api.put(`/api/admin/transactions/${txId}/approve`, { refNote }).catch(() => null)
+        || await api.put(`/api/wallet/transactions/${txId}/approve`, { refNote }).catch(() => null);
+
+      await fetchAllMongoData();
+      return { success: true, message: res?.message || 'Đã giải ngân và duyệt rút tiền thành công!' };
     } catch (e: any) {
       return { success: false, message: e.message || 'Lỗi khi duyệt rút tiền.' };
     }
@@ -984,9 +982,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     try {
-      await api.put(`/api/wallet/transactions/${txId}/reject`, { reason });
-      fetchAllMongoData();
-      return { success: true, message: 'Đã từ chối lệnh rút tiền và hoàn tiền vào ví.' };
+      // Call admin reject endpoint first, with fallback to wallet endpoint
+      const res = await api.put(`/api/admin/transactions/${txId}/reject`, { reason }).catch(() => null)
+        || await api.put(`/api/wallet/transactions/${txId}/reject`, { reason }).catch(() => null);
+
+      await fetchAllMongoData();
+      return { success: true, message: res?.message || 'Đã từ chối lệnh rút tiền và hoàn tiền vào ví.' };
     } catch (e: any) {
       return { success: false, message: e.message || 'Lỗi khi từ chối rút tiền.' };
     }

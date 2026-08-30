@@ -193,36 +193,49 @@ router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => 
     const transactions = await WalletTransaction.find().sort({ createdAt: -1 }).lean();
     const withdrawals = await WithdrawalRequest.find().sort({ createdAt: -1 }).lean();
 
-    // Map existing transaction IDs & keys
-    const existingTxIds = new Set(transactions.map(t => t.id));
+    // Map of existing transactions by their id and other identifiers
+    const txMap = new Map<string, any>();
+    for (const t of transactions) {
+      txMap.set(t.id, t);
+    }
 
-    // If any withdrawal request is missing from transactions list, include it
-    const mergedList = [...transactions];
+    // Merge withdrawals into transactions if they aren't already represented
+    const mergedList: any[] = [...transactions];
     for (const w of withdrawals) {
-      if (!existingTxIds.has(w.id)) {
-        // Check if there is already a transaction matching this withdrawal
-        const hasMatching = transactions.some(
-          t => t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount && Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 60000
-        );
-        if (!hasMatching) {
-          mergedList.push({
-            id: w.id,
-            userId: w.userId,
-            userName: w.userName || 'Người dùng',
-            userEmail: w.userEmail || '',
-            type: 'withdraw',
-            amount: -w.amount,
-            status: w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending',
-            note: `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
-            bankName: w.bankName,
-            bankCode: w.bankCode || '970422',
-            bankAccount: w.bankAccount,
-            bankAccountName: w.bankAccountName,
-            rejectReason: w.rejectionReason,
-            processedAt: w.processedAt,
-            createdAt: w.createdAt
-          } as any);
+      const existingTx = mergedList.find(
+        t => t.id === w.id ||
+             (t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount && Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 60000)
+      );
+
+      if (existingTx) {
+        // Synchronize status if withdrawal record is approved/rejected
+        if (w.status === 'approved' && existingTx.status === 'pending') {
+          existingTx.status = 'success';
+          existingTx.processedAt = w.processedAt || existingTx.processedAt;
+          if (w.referenceNote) existingTx.note = `${existingTx.note} (Mã GD: ${w.referenceNote})`;
+        } else if (w.status === 'rejected' && existingTx.status === 'pending') {
+          existingTx.status = 'failed';
+          existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason;
+          existingTx.processedAt = w.processedAt || existingTx.processedAt;
         }
+      } else {
+        mergedList.push({
+          id: w.id,
+          userId: w.userId,
+          userName: w.userName || 'Người dùng',
+          userEmail: w.userEmail || '',
+          type: 'withdraw',
+          amount: -w.amount,
+          status: w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending',
+          note: `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
+          bankName: w.bankName,
+          bankCode: w.bankCode || '970422',
+          bankAccount: w.bankAccount,
+          bankAccountName: w.bankAccountName,
+          rejectReason: w.rejectionReason,
+          processedAt: w.processedAt,
+          createdAt: w.createdAt
+        });
       }
     }
 
@@ -245,38 +258,148 @@ router.get('/withdrawals', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// Helper to approve withdrawal in both models
+async function approveWithdrawalInternal(id: string, refNote?: string) {
+  let matched = false;
+  const tx = await WalletTransaction.findOne({
+    $or: [{ id }, { id: id.replace('wdr_', 'tx_') }, { id: id.replace('tx_', 'wdr_') }]
+  });
+
+  if (tx) {
+    matched = true;
+    tx.status = 'success';
+    tx.processedAt = new Date().toISOString();
+    if (refNote) {
+      tx.note = `${tx.note} (Mã GD giải ngân: ${refNote})`;
+    }
+    await tx.save();
+
+    const user = await User.findOne({ id: tx.userId });
+    if (user) {
+      user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - Math.abs(tx.amount));
+      await user.save();
+    }
+  }
+
+  const wdr = await WithdrawalRequest.findOne({
+    $or: [
+      { id },
+      { id: id.replace('tx_', 'wdr_') },
+      { id: id.replace('wdr_', 'tx_') },
+      ...(tx ? [{ userId: tx.userId, amount: Math.abs(tx.amount) }] : [])
+    ]
+  });
+
+  if (wdr) {
+    matched = true;
+    wdr.status = 'approved';
+    wdr.referenceNote = refNote;
+    wdr.processedAt = new Date().toISOString();
+    await wdr.save();
+
+    if (!tx) {
+      const user = await User.findOne({ id: wdr.userId });
+      if (user) {
+        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - wdr.amount);
+        await user.save();
+      }
+    }
+  }
+
+  // Also check if id is a generic custom id
+  if (!matched) {
+    await WalletTransaction.findOneAndUpdate(
+      { id },
+      { $set: { status: 'success', processedAt: new Date().toISOString() } }
+    );
+    await WithdrawalRequest.findOneAndUpdate(
+      { id },
+      { $set: { status: 'approved', processedAt: new Date().toISOString(), referenceNote: refNote } }
+    );
+  }
+}
+
+// Helper to reject withdrawal in both models
+async function rejectWithdrawalInternal(id: string, reason: string) {
+  let refundProcessed = false;
+  const tx = await WalletTransaction.findOne({
+    $or: [{ id }, { id: id.replace('wdr_', 'tx_') }, { id: id.replace('tx_', 'wdr_') }]
+  });
+
+  if (tx) {
+    tx.status = 'failed';
+    tx.rejectReason = reason;
+    tx.processedAt = new Date().toISOString();
+    await tx.save();
+
+    const refundAmount = Math.abs(tx.amount);
+    const user = await User.findOne({ id: tx.userId });
+    if (user) {
+      user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - refundAmount);
+      user.balance = (user.balance || 0) + refundAmount;
+      await user.save();
+      refundProcessed = true;
+
+      const refundTx = new WalletTransaction({
+        id: `tx_${Date.now()}_refund`,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        type: 'refund',
+        amount: refundAmount,
+        status: 'success',
+        note: `Hoàn tiền yêu cầu rút không thành công: ${reason}`,
+        createdAt: new Date().toISOString()
+      });
+      await refundTx.save();
+    }
+  }
+
+  const wdr = await WithdrawalRequest.findOne({
+    $or: [
+      { id },
+      { id: id.replace('tx_', 'wdr_') },
+      { id: id.replace('wdr_', 'tx_') },
+      ...(tx ? [{ userId: tx.userId, amount: Math.abs(tx.amount) }] : [])
+    ]
+  });
+
+  if (wdr) {
+    wdr.status = 'rejected';
+    wdr.rejectionReason = reason;
+    wdr.processedAt = new Date().toISOString();
+    await wdr.save();
+
+    if (!refundProcessed) {
+      const user = await User.findOne({ id: wdr.userId });
+      if (user) {
+        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - wdr.amount);
+        user.balance = (user.balance || 0) + wdr.amount;
+        await user.save();
+
+        const refundTx = new WalletTransaction({
+          id: `tx_${Date.now()}_refund`,
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          type: 'refund',
+          amount: wdr.amount,
+          status: 'success',
+          note: `Hoàn tiền yêu cầu rút không thành công: ${reason}`,
+          createdAt: new Date().toISOString()
+        });
+        await refundTx.save();
+      }
+    }
+  }
+}
+
 // PUT /api/admin/transactions/:id/approve
 router.put('/transactions/:id/approve', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { refNote } = req.body;
-
-    const tx = await WalletTransaction.findOne({ id });
-    if (tx) {
-      tx.status = 'success';
-      tx.processedAt = new Date().toISOString();
-      if (refNote) {
-        tx.note = `${tx.note} (Mã GD giải ngân: ${refNote})`;
-      }
-      await tx.save();
-
-      const user = await User.findOne({ id: tx.userId });
-      if (user) {
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - Math.abs(tx.amount));
-        await user.save();
-      }
-    }
-
-    const wdr = await WithdrawalRequest.findOne({
-      $or: [{ id }, { userId: tx?.userId, amount: tx ? Math.abs(tx.amount) : undefined }]
-    });
-    if (wdr) {
-      wdr.status = 'approved';
-      wdr.referenceNote = refNote;
-      wdr.processedAt = new Date().toISOString();
-      await wdr.save();
-    }
-
+    await approveWithdrawalInternal(id, refNote);
     return res.json({ success: true, message: 'Đã giải ngân và duyệt lệnh rút tiền thành công!' });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi duyệt lệnh rút tiền' });
@@ -288,46 +411,7 @@ router.put('/transactions/:id/reject', async (req: AuthenticatedRequest, res: Re
   try {
     const { id } = req.params;
     const { reason = 'Thông tin ngân hàng không hợp lệ' } = req.body;
-
-    const tx = await WalletTransaction.findOne({ id });
-    if (tx) {
-      tx.status = 'failed';
-      tx.rejectReason = reason;
-      tx.processedAt = new Date().toISOString();
-      await tx.save();
-
-      const refundAmount = Math.abs(tx.amount);
-      const user = await User.findOne({ id: tx.userId });
-      if (user) {
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - refundAmount);
-        user.balance = (user.balance || 0) + refundAmount;
-        await user.save();
-
-        const refundTx = new WalletTransaction({
-          id: `tx_${Date.now()}_refund`,
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          type: 'refund',
-          amount: refundAmount,
-          status: 'success',
-          note: `Hoàn tiền yêu cầu rút không thành công: ${reason}`,
-          createdAt: new Date().toISOString()
-        });
-        await refundTx.save();
-      }
-    }
-
-    const wdr = await WithdrawalRequest.findOne({
-      $or: [{ id }, { userId: tx?.userId, amount: tx ? Math.abs(tx.amount) : undefined }]
-    });
-    if (wdr) {
-      wdr.status = 'rejected';
-      wdr.rejectionReason = reason;
-      wdr.processedAt = new Date().toISOString();
-      await wdr.save();
-    }
-
+    await rejectWithdrawalInternal(id, reason);
     return res.json({ success: true, message: 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.' });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi từ chối rút tiền' });
@@ -340,85 +424,10 @@ router.put('/withdrawals/:id', async (req: AuthenticatedRequest, res: Response) 
     const { id } = req.params;
     const { status, adminNote } = req.body;
 
-    const request = await WithdrawalRequest.findOne({
-      $or: [{ id }, { id: id.replace('tx_', 'wdr_') }]
-    });
-
-    if (request) {
-      const previousStatus = request.status;
-      request.status = status === 'completed' ? 'approved' : status;
-      if (adminNote !== undefined) {
-        if (status === 'rejected') {
-          request.rejectionReason = adminNote;
-        } else {
-          request.referenceNote = adminNote;
-        }
-      }
-      request.processedAt = new Date().toISOString();
-      await request.save();
-
-      const user = await User.findOne({ id: request.userId });
-
-      if (user) {
-        if ((status === 'completed' || status === 'approved') && previousStatus === 'pending') {
-          user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
-          await user.save();
-
-          const notif = new Notification({
-            id: `notif_${Date.now()}`,
-            userId: user.id,
-            title: 'Rút tiền thành công',
-            message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng ${request.bankName} (${request.bankAccount}) đã được chuyển khoản thành công.`,
-            type: 'wallet',
-            createdAt: new Date().toISOString()
-          });
-          await notif.save();
-        } else if (status === 'rejected' && previousStatus === 'pending') {
-          user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
-          user.balance = (user.balance || 0) + request.amount;
-          await user.save();
-
-          const refundTx = new WalletTransaction({
-            id: `tx_${Date.now()}_refund`,
-            userId: user.id,
-            userName: user.name,
-            userEmail: user.email,
-            type: 'refund',
-            amount: request.amount,
-            status: 'success',
-            note: `Hoàn tiền yêu cầu rút không thành công: ${adminNote || 'Sai thông tin STK'}`,
-            createdAt: new Date().toISOString()
-          });
-          await refundTx.save();
-
-          const notif = new Notification({
-            id: `notif_${Date.now()}`,
-            userId: user.id,
-            title: 'Yêu cầu rút tiền bị từ chối',
-            message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ đã bị từ chối (${adminNote || 'Thông tin ngân hàng không hợp lệ'}). Tiền đã được hoàn lại vào số dư ví của bạn.`,
-            type: 'wallet',
-            createdAt: new Date().toISOString()
-          });
-          await notif.save();
-        }
-      }
-    }
-
-    // Also update WalletTransaction
-    const tx = await WalletTransaction.findOne({
-      $or: [{ id }, { id: id.replace('wdr_', 'tx_') }]
-    });
-    if (tx) {
-      tx.status = (status === 'completed' || status === 'approved') ? 'success' : status === 'rejected' ? 'failed' : 'pending';
-      tx.processedAt = new Date().toISOString();
-      if (adminNote) {
-        if (status === 'rejected') {
-          tx.rejectReason = adminNote;
-        } else {
-          tx.note = `${tx.note} (Mã GD giải ngân: ${adminNote})`;
-        }
-      }
-      await tx.save();
+    if (status === 'completed' || status === 'approved') {
+      await approveWithdrawalInternal(id, adminNote);
+    } else if (status === 'rejected') {
+      await rejectWithdrawalInternal(id, adminNote || 'Thông tin ngân hàng không hợp lệ');
     }
 
     return res.json({
