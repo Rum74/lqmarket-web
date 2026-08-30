@@ -135,13 +135,13 @@ export const WalletModal: React.FC = () => {
     }
   }, [currentUser, isWalletModalOpen, activeTab]);
 
-  // Initialize or reset when modal opens
+  // Initialize or reset when modal opens (preserve 'qr' or 'processing' if returning from payment)
   useEffect(() => {
     if (isWalletModalOpen) {
       if (activeTab === 'guide' && currentUser?.role !== 'admin') {
         setActiveTab('deposit');
       }
-      setDepositStep('select');
+      setDepositStep(prev => (prev === 'qr' || prev === 'processing' ? prev : 'select'));
       setSelectedMethod('qr_pay');
       setDepositSuccess(false);
       setIsCheckingResult(false);
@@ -156,15 +156,21 @@ export const WalletModal: React.FC = () => {
     if (typeof window === 'undefined') return;
     const searchParams = new URLSearchParams(window.location.search);
     const paymentStatus = searchParams.get('payment');
-    const codeParam = searchParams.get('orderCode') || searchParams.get('order_code') || searchParams.get('code');
+    const orderCodeParam = searchParams.get('orderCode') || searchParams.get('order_code');
     const payOsStatus = searchParams.get('status');
+    const isCode00 = searchParams.get('code') === '00';
     const storedCode = localStorage.getItem('last_payos_order_code') || localStorage.getItem('last_payos_memo');
     const storedAmount = Number(localStorage.getItem('last_payos_amount'));
 
-    if (paymentStatus === 'success' || payOsStatus === 'PAID' || searchParams.get('code') === '00' || (codeParam && paymentStatus !== 'cancelled')) {
-      const targetCode = codeParam || storedCode || '';
+    const isReturning = paymentStatus === 'success' || payOsStatus === 'PAID' || isCode00 || (orderCodeParam && paymentStatus !== 'cancelled');
+
+    if (isReturning) {
+      const targetCode = orderCodeParam || storedCode || '';
       if (targetCode) {
-        setPayOsOrderCode(Number(targetCode));
+        const num = Number(targetCode);
+        if (!isNaN(num) && num > 0) {
+          setPayOsOrderCode(num);
+        }
         setTransferCode(targetCode);
       }
       if (storedAmount && !isNaN(storedAmount) && storedAmount > 0) {
@@ -172,32 +178,35 @@ export const WalletModal: React.FC = () => {
       }
       setIsWalletModalOpen(true);
       setActiveTab('deposit');
-      setDepositStep('qr'); // Return to payment QR tab as shown in Hình 2
+      setDepositStep('qr'); // Keep strictly on the QR tab (Hình 2) as requested
 
       // Background verify and credit on backend
-      api.post('/api/payos/manual-sync', {
-        orderCode: Number(targetCode) || Number(storedCode),
-        userId: currentUser?.id,
-        userEmail: currentUser?.email,
-        userName: currentUser?.name
-      })
-      .then(async (syncData) => {
-        if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
-          await refreshAllData();
-        } else if (targetCode) {
-          const checkRes = await api.get(`/api/payos/check-payment/${targetCode}`);
-          if (checkRes && checkRes.success && (checkRes.status === 'PAID' || checkRes.isPaid)) {
+      const codeNum = Number(targetCode) || (storedCode ? Number(storedCode) : undefined);
+      if (codeNum) {
+        api.post('/api/payos/manual-sync', {
+          orderCode: codeNum,
+          userId: currentUser?.id,
+          userEmail: currentUser?.email,
+          userName: currentUser?.name
+        })
+        .then(async (syncData) => {
+          if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
             await refreshAllData();
+          } else {
+            const checkRes = await api.get(`/api/payos/check-payment/${codeNum}`);
+            if (checkRes && checkRes.success && (checkRes.status === 'PAID' || checkRes.isPaid)) {
+              await refreshAllData();
+            }
           }
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        try {
-          const newUrl = window.location.pathname;
-          window.history.replaceState({}, document.title, newUrl);
-        } catch {}
-      });
+        })
+        .catch(() => {})
+        .finally(() => {
+          try {
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+          } catch {}
+        });
+      }
     }
   }, [currentUser?.id, currentUser?.email, currentUser?.name, refreshAllData, setIsWalletModalOpen]);
 

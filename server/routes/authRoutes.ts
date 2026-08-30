@@ -361,12 +361,32 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
   try {
     const { sellerId } = req.params;
     let user = await User.findOne({
-      $or: [{ id: sellerId }, { username: sellerId }]
+      $or: [
+        { id: sellerId },
+        { username: sellerId },
+        { name: sellerId },
+        { email: sellerId }
+      ]
     });
 
     const accountForSeller = await Account.findOne({
-      $or: [{ sellerId }, { sellerName: sellerId }]
+      $or: [
+        { sellerId },
+        { sellerName: sellerId },
+        { id: sellerId },
+        { code: sellerId }
+      ]
     });
+
+    if (!user && !accountForSeller) {
+      // Also check if any account exists matching sellerName loosely
+      const looseAccount = await Account.findOne({
+        sellerName: new RegExp(`^${sellerId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+      });
+      if (looseAccount) {
+        user = await User.findOne({ id: looseAccount.sellerId });
+      }
+    }
 
     if (!user && !accountForSeller) {
       return res.status(404).json({
@@ -408,6 +428,7 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
 
     const accountIds = sellerAccounts.map(a => a.id).filter(Boolean);
     const accountCodes = sellerAccounts.map(a => a.code).filter(Boolean);
+    const soldAccountsCount = sellerAccounts.filter(a => a.status === 'sold').length;
 
     // Fetch all orders associated with this seller or any of their accounts
     const sellerOrders = await Order.find({
@@ -498,13 +519,15 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
       }
     }
 
-    // Accurate calculation of total sales and average rating
+    // Accurate calculation of total sales and average rating:
+    // Should be the maximum among completed orders, sold accounts, user profile completed sales, and review count
     const totalSales = Math.max(
       completedOrders.length,
       sellerOrders.length,
+      soldAccountsCount,
       user?.completedSales || 0,
       accountForSeller?.sellerCompletedSales || 0,
-      sellerAccounts.filter(a => a.status === 'sold').length
+      formattedReviews.length
     );
 
     const avgRating = formattedReviews.length > 0 

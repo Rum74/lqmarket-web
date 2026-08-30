@@ -136,7 +136,20 @@ export const SellerProfileModal: React.FC = () => {
           };
         });
 
-  const completedSalesCount = fetchedSeller?.completedSales ?? (seller?.completedSales || sellerInfo?.completedSales || activeListings.length || 0);
+  const soldAccountsOnClient = sellerAccounts.filter(a => a.status === 'sold').length;
+  const completedOrdersOnClient = orders.filter(o => 
+    (o.sellerId === selectedSellerId || o.sellerName === (seller?.name || accMatching?.sellerName)) &&
+    (o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold')
+  ).length;
+
+  const completedSalesCount = Math.max(
+    fetchedSeller?.completedSales ?? 0,
+    seller?.completedSales ?? 0,
+    sellerInfo?.completedSales ?? 0,
+    soldAccountsOnClient,
+    completedOrdersOnClient,
+    sellerReviews.length
+  );
   const averageRating = fetchedSeller?.rating ?? (seller?.rating || sellerInfo?.averageRating || 5.0);
 
   const formatJoinDate = (dateStr?: string) => {
