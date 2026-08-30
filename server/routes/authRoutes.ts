@@ -375,52 +375,106 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
       });
     }
 
-    const sellerName = user?.name || accountForSeller?.sellerName || 'Shop Tài Khoản';
+    const sellerName = user?.name || accountForSeller?.sellerName || 'Shop Acc Liên Quân';
     const sellerUsername = user?.username || (user?.email ? user.email.split('@')[0] : '') || sellerId;
     const sellerAvatar = user?.avatar || accountForSeller?.sellerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${sellerId}`;
     const isVerified = user?.isVerifiedSeller ?? (accountForSeller?.sellerVerified ?? true);
-    
-    // Fetch orders and reviews from database
-    const completedOrders = await Order.find({
-      $or: [{ sellerId }, { sellerName }],
-      status: { $in: ['completed', 'account_delivered'] }
-    }).sort({ completedAt: -1, createdAt: -1 }).lean();
 
-    const dbReviews = await Review.find({
-      $or: [{ sellerId }, { sellerName }]
+    // Build comprehensive identifier sets to match all orders, reviews, and accounts
+    const sellerIdSet = new Set<string>();
+    if (sellerId) sellerIdSet.add(sellerId);
+    if (user?.id) sellerIdSet.add(user.id);
+    if (user?.username) sellerIdSet.add(user.username);
+    if (accountForSeller?.sellerId) sellerIdSet.add(accountForSeller.sellerId);
+
+    const sellerNames = new Set<string>();
+    if (sellerName) sellerNames.add(sellerName);
+    if (user?.name) sellerNames.add(user.name);
+    if (accountForSeller?.sellerName) sellerNames.add(accountForSeller.sellerName);
+    if (sellerId && isNaN(Number(sellerId))) sellerNames.add(sellerId);
+
+    const sellerNameRegexes = Array.from(sellerNames).map(
+      name => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    );
+
+    // Fetch all accounts belonging to this seller
+    const sellerAccounts = await Account.find({
+      $or: [
+        { sellerId: { $in: Array.from(sellerIdSet) } },
+        { sellerName: { $in: Array.from(sellerNames) } },
+        ...sellerNameRegexes.map(rx => ({ sellerName: rx }))
+      ]
     }).sort({ createdAt: -1 }).lean();
 
-    const sellerAccounts = await Account.find({
-      $or: [{ sellerId }, { sellerName }],
-      status: { $in: ['approved', 'sold'] }
+    const accountIds = sellerAccounts.map(a => a.id).filter(Boolean);
+    const accountCodes = sellerAccounts.map(a => a.code).filter(Boolean);
+
+    // Fetch all orders associated with this seller or any of their accounts
+    const sellerOrders = await Order.find({
+      $or: [
+        { sellerId: { $in: Array.from(sellerIdSet) } },
+        { sellerName: { $in: Array.from(sellerNames) } },
+        ...sellerNameRegexes.map(rx => ({ sellerName: rx })),
+        { accountId: { $in: accountIds } },
+        { accountCode: { $in: accountCodes } }
+      ]
+    }).sort({ completedAt: -1, createdAt: -1 }).lean();
+
+    // Filter completed or delivered sales
+    const completedOrders = sellerOrders.filter(
+      o => o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold'
+    );
+    const allOrderIds = sellerOrders.map(o => o.id).filter(Boolean);
+
+    // Fetch all customer reviews from the Review collection
+    const dbReviews = await Review.find({
+      $or: [
+        { sellerId: { $in: Array.from(sellerIdSet) } },
+        { sellerName: { $in: Array.from(sellerNames) } },
+        ...sellerNameRegexes.map(rx => ({ sellerName: rx })),
+        { accountId: { $in: accountIds } },
+        { accountCode: { $in: accountCodes } },
+        { orderId: { $in: allOrderIds } }
+      ]
     }).sort({ createdAt: -1 }).lean();
 
     // Format & collect customer reviews
     const formattedReviews: any[] = [];
-    
+    const seenReviewIds = new Set<string>();
+
     for (const rev of dbReviews) {
-      formattedReviews.push({
-        id: rev.id,
-        buyerName: rev.buyerName || 'Khách Hàng',
-        buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-        rating: rev.rating || 5,
-        comment: rev.comment || 'Tài khoản đúng mô tả, giao dịch nhanh chóng và an toàn.',
-        date: new Date(rev.createdAt).toLocaleDateString('vi-VN'),
-        accountCode: rev.accountCode || '',
-        accountTitle: ''
-      });
+      const reviewKey = rev.id || rev.orderId || `${rev.buyerId}_${rev.accountId}`;
+      if (!seenReviewIds.has(reviewKey)) {
+        seenReviewIds.add(reviewKey);
+        formattedReviews.push({
+          id: rev.id,
+          buyerName: rev.buyerName || 'Khách Hàng',
+          buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
+          rating: rev.rating || 5,
+          comment: rev.comment || 'Tài khoản đúng mô tả, giao dịch nhanh chóng và an toàn.',
+          date: rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('vi-VN') : '29/08/2026',
+          accountCode: rev.accountCode || '',
+          accountTitle: ''
+        });
+      }
     }
 
-    for (const ord of completedOrders) {
+    for (const ord of sellerOrders) {
       if (ord.review?.rating || ord.review?.comment) {
-        if (!formattedReviews.some(r => r.id === ord.id)) {
+        const reviewKey = ord.id;
+        if (!seenReviewIds.has(reviewKey)) {
+          seenReviewIds.add(reviewKey);
           formattedReviews.push({
             id: ord.id,
             buyerName: ord.buyerName || 'Người Mua',
             buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
             rating: ord.review?.rating || 5,
             comment: ord.review?.comment || 'Giao dịch thành công, nhận acc ngay tức thì.',
-            date: ord.completedAt ? new Date(ord.completedAt).toLocaleDateString('vi-VN') : new Date(ord.createdAt).toLocaleDateString('vi-VN'),
+            date: ord.completedAt
+              ? new Date(ord.completedAt).toLocaleDateString('vi-VN')
+              : ord.createdAt
+              ? new Date(ord.createdAt).toLocaleDateString('vi-VN')
+              : '29/08/2026',
             accountCode: ord.accountCode || '',
             accountTitle: ord.accountTitle || ''
           });
@@ -428,7 +482,7 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
       }
     }
 
-    // If there are completed orders without custom review, provide verified completion feedback
+    // If there are sold orders without custom review, provide verified completion feedback
     if (formattedReviews.length === 0 && completedOrders.length > 0) {
       for (const ord of completedOrders.slice(0, 5)) {
         formattedReviews.push({
@@ -444,33 +498,15 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
       }
     }
 
-    // Default high-reputation feedback if seller is new
-    if (formattedReviews.length === 0) {
-      formattedReviews.push(
-        {
-          id: 'rev_default_1',
-          buyerName: 'Nguyễn Thành Nam',
-          buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-          rating: 5,
-          comment: 'Acc chuẩn như hình, thông tin trắng sạch 100%, shop tư vấn rất nhiệt tình.',
-          date: '24/02/2026',
-          accountCode: accountForSeller?.code || 'LQ8899',
-          accountTitle: accountForSeller?.title || 'Acc Liên Quân VIP'
-        },
-        {
-          id: 'rev_default_2',
-          buyerName: 'Trần Minh Quang',
-          buyerAvatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=80&q=80',
-          rating: 5,
-          comment: 'Nhận acc sau 5 giây thanh toán, đã đổi mật khẩu và liên kết số điện thoại thành công.',
-          date: '20/02/2026',
-          accountCode: 'LQ6677',
-          accountTitle: 'Acc Full Tướng Full Ngọc'
-        }
-      );
-    }
+    // Accurate calculation of total sales and average rating
+    const totalSales = Math.max(
+      completedOrders.length,
+      sellerOrders.length,
+      user?.completedSales || 0,
+      accountForSeller?.sellerCompletedSales || 0,
+      sellerAccounts.filter(a => a.status === 'sold').length
+    );
 
-    const totalSales = Math.max(user?.completedSales || 0, accountForSeller?.sellerCompletedSales || 0, completedOrders.length);
     const avgRating = formattedReviews.length > 0 
       ? (formattedReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / formattedReviews.length).toFixed(1)
       : (user?.rating || 5.0).toFixed(1);
@@ -498,8 +534,16 @@ router.get('/seller/:sellerId', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      seller: publicProfile,
-      user: publicProfile,
+      seller: {
+        ...publicProfile,
+        completedSales: totalSales,
+        rating: parseFloat(avgRating)
+      },
+      user: {
+        ...publicProfile,
+        completedSales: totalSales,
+        rating: parseFloat(avgRating)
+      },
       reviews: formattedReviews,
       accounts: sellerAccounts,
       stats: {

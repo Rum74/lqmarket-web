@@ -20,19 +20,31 @@ export function getDynamicSellerInfo(
   orders: OrderItem[],
   accountFallback?: Partial<AccountItem>
 ): DynamicSellerInfo {
-  const user = allUsers.find(u => u.id === sellerId || u.username === sellerId);
-  const sellerOrders = orders.filter(o => o.sellerId === sellerId);
-  const completedOrders = sellerOrders.filter(o => o.status === 'completed');
-  const reviewOrders = sellerOrders.filter(o => (o.ratingGiven !== undefined && o.ratingGiven !== null) || o.reviewComment);
+  const user = allUsers.find(u => u.id === sellerId || u.username === sellerId || u.name === sellerId);
+  const sellerName = accountFallback?.sellerName || user?.name || sellerId;
+  const sellerOrders = orders.filter(
+    o => o.sellerId === sellerId || o.sellerName === sellerName || (user && (o.sellerId === user.id || o.sellerName === user.name))
+  );
+  const completedOrders = sellerOrders.filter(
+    o => o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold'
+  );
+  const reviewOrders = sellerOrders.filter(
+    o => (o.ratingGiven !== undefined && o.ratingGiven !== null) || o.reviewComment || (o as any).review?.rating || (o as any).review?.comment
+  );
 
-  const completedSales = Math.max(user?.completedSales || 0, accountFallback?.sellerCompletedSales || 0, completedOrders.length);
+  const completedSales = Math.max(
+    user?.completedSales || 0,
+    accountFallback?.sellerCompletedSales || 0,
+    completedOrders.length,
+    sellerOrders.length
+  );
   const reviewsCount = reviewOrders.length > 0 
     ? reviewOrders.length 
     : (completedSales > 0 ? Math.min(completedSales, 5) : 0);
   
   const averageRating =
     reviewOrders.length > 0
-      ? (reviewOrders.reduce((sum, o) => sum + (o.ratingGiven || 5), 0) / reviewOrders.length).toFixed(1)
+      ? (reviewOrders.reduce((sum, o) => sum + (o.ratingGiven || (o as any).review?.rating || 5), 0) / reviewOrders.length).toFixed(1)
       : user?.rating
       ? user.rating.toFixed(1)
       : accountFallback?.sellerRating
@@ -53,7 +65,7 @@ export function getDynamicSellerInfo(
 
   return {
     id: sellerId,
-    name: accountFallback?.sellerName || user?.name || 'Shop Tài Khoản',
+    name: accountFallback?.sellerName || user?.name || 'Shop Acc Liên Quân',
     avatar:
       accountFallback?.sellerAvatar ||
       user?.avatar ||

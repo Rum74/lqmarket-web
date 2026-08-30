@@ -156,24 +156,27 @@ export const WalletModal: React.FC = () => {
     if (typeof window === 'undefined') return;
     const searchParams = new URLSearchParams(window.location.search);
     const paymentStatus = searchParams.get('payment');
-    const codeParam = searchParams.get('orderCode') || searchParams.get('order_code');
+    const codeParam = searchParams.get('orderCode') || searchParams.get('order_code') || searchParams.get('code');
     const payOsStatus = searchParams.get('status');
+    const storedCode = localStorage.getItem('last_payos_order_code') || localStorage.getItem('last_payos_memo');
+    const storedAmount = Number(localStorage.getItem('last_payos_amount'));
 
-    if (paymentStatus === 'success' || payOsStatus === 'PAID' || (codeParam && paymentStatus !== 'cancelled')) {
-      const targetCode = codeParam || '';
+    if (paymentStatus === 'success' || payOsStatus === 'PAID' || searchParams.get('code') === '00' || (codeParam && paymentStatus !== 'cancelled')) {
+      const targetCode = codeParam || storedCode || '';
       if (targetCode) {
         setPayOsOrderCode(Number(targetCode));
         setTransferCode(targetCode);
       }
+      if (storedAmount && !isNaN(storedAmount) && storedAmount > 0) {
+        setDepositAmount(storedAmount);
+      }
       setIsWalletModalOpen(true);
       setActiveTab('deposit');
-      setDepositStep('processing');
-      setIsCheckingResult(true);
-      setCheckPaymentMessage('Đang đồng bộ giao dịch PayOS và cập nhật số dư ví...');
+      setDepositStep('qr'); // Return to payment QR tab as shown in Hình 2
 
-      // Auto-verify and credit on backend
+      // Background verify and credit on backend
       api.post('/api/payos/manual-sync', {
-        orderCode: Number(targetCode),
+        orderCode: Number(targetCode) || Number(storedCode),
         userId: currentUser?.id,
         userEmail: currentUser?.email,
         userName: currentUser?.name
@@ -181,39 +184,14 @@ export const WalletModal: React.FC = () => {
       .then(async (syncData) => {
         if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
           await refreshAllData();
-          setDepositSuccess(true);
-          setIsCheckingResult(false);
-          try {
-            confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
-          } catch {}
-          setTimeout(() => {
-            setIsWalletModalOpen(false);
-            setCurrentView('home');
-          }, 2500);
-        } else {
-          // Fallback check
+        } else if (targetCode) {
           const checkRes = await api.get(`/api/payos/check-payment/${targetCode}`);
           if (checkRes && checkRes.success && (checkRes.status === 'PAID' || checkRes.isPaid)) {
             await refreshAllData();
-            setDepositSuccess(true);
-            setIsCheckingResult(false);
-            try {
-              confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
-            } catch {}
-            setTimeout(() => {
-              setIsWalletModalOpen(false);
-              setCurrentView('home');
-            }, 2500);
-          } else {
-            setCheckPaymentMessage('Giao dịch đang chờ xác nhận từ PayOS. Bạn có thể bấm [Thanh toán đã hoàn tất] bên dưới.');
-            setIsCheckingResult(false);
           }
         }
       })
-      .catch(() => {
-        setIsCheckingResult(false);
-        setCheckPaymentMessage('Đã kết nối với PayOS. Vui lòng bấm [Kiểm tra lại ngay] nếu đã hoàn tất.');
-      })
+      .catch(() => {})
       .finally(() => {
         try {
           const newUrl = window.location.pathname;
@@ -221,12 +199,15 @@ export const WalletModal: React.FC = () => {
         } catch {}
       });
     }
-  }, [currentUser?.id, refreshAllData, setIsWalletModalOpen, setCurrentView]);
+  }, [currentUser?.id, currentUser?.email, currentUser?.name, refreshAllData, setIsWalletModalOpen]);
 
   // Create PayOS payment link
   const createPayOsLink = async (amountToDeposit: number, memoCode: string) => {
     setIsCreatingPayOsLink(true);
     try {
+      localStorage.setItem('last_payos_memo', memoCode);
+      localStorage.setItem('last_payos_amount', String(amountToDeposit));
+
       const data = await api.post('/api/payos/create-payment-link', {
         amount: amountToDeposit,
         description: `NAP ${memoCode}`,
@@ -240,6 +221,7 @@ export const WalletModal: React.FC = () => {
 
       if (data && data.success) {
         setPayOsOrderCode(data.orderCode);
+        localStorage.setItem('last_payos_order_code', String(data.orderCode));
         setPayOsCheckoutUrl(data.checkoutUrl);
         if (data.accountNumber) setPayOsAccountNo(data.accountNumber);
         if (data.accountName) setPayOsAccountName(data.accountName);
@@ -390,21 +372,49 @@ export const WalletModal: React.FC = () => {
 
   // Action: "Thanh toán đã hoàn tất" -> chuyển sang màn hình Chờ xử lý (Processing) và truy vấn thật từ PayOS
   const handlePaymentCompleted = async () => {
+    const codeToVerify = payOsOrderCode || Number(transferCode) || Number(localStorage.getItem('last_payos_order_code')) || Number(localStorage.getItem('last_payos_memo'));
     setDepositStep('processing');
     setIsCheckingResult(true);
     setCheckPaymentMessage('Đang kết nối ngân hàng & cổng PayOS để xác nhận giao dịch...');
 
-    if (payOsOrderCode) {
-      try {
-        const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
-        if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
+    try {
+      // 1. Try manual sync with PayOS
+      const syncData = await api.post('/api/payos/manual-sync', {
+        orderCode: codeToVerify,
+        userId: currentUser?.id,
+        userEmail: currentUser?.email,
+        userName: currentUser?.name
+      });
+
+      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+        await refreshAllData();
+        setDepositSuccess(true);
+        setIsCheckingResult(false);
+        try {
+          confetti({
+            particleCount: 150,
+            spread: 95,
+            origin: { y: 0.6 }
+          });
+        } catch {}
+
+        setTimeout(() => {
+          setIsWalletModalOpen(false);
+          setCurrentView('home');
+        }, 2500);
+        return;
+      }
+
+      // 2. Fallback check-payment endpoint
+      if (codeToVerify) {
+        const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+        if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
           await refreshAllData();
           setDepositSuccess(true);
           setIsCheckingResult(false);
-
           try {
             confetti({
-              particleCount: 130,
+              particleCount: 150,
               spread: 95,
               origin: { y: 0.6 }
             });
@@ -414,30 +424,37 @@ export const WalletModal: React.FC = () => {
             setIsWalletModalOpen(false);
             setCurrentView('home');
           }, 2500);
-        } else {
-          setCheckPaymentMessage('Chưa ghi nhận biến động số dư. Hệ thống đang tự động kiểm tra mỗi 2 giây...');
-          setIsCheckingResult(false);
+          return;
         }
-      } catch (e) {
-        setCheckPaymentMessage('Đang chờ hệ thống PayOS xử lý giao dịch...');
-        setIsCheckingResult(false);
       }
+
+      setCheckPaymentMessage('Chưa nhận được giao dịch từ ngân hàng. Hệ thống đang tự động kiểm tra lại...');
+      setIsCheckingResult(false);
+    } catch (e) {
+      setCheckPaymentMessage('Đang chờ hệ thống PayOS xử lý giao dịch...');
+      setIsCheckingResult(false);
     }
   };
 
   // Manual Check Now button
   const handleManualRecheck = async () => {
-    if (!payOsOrderCode) return;
+    const codeToVerify = payOsOrderCode || Number(transferCode) || Number(localStorage.getItem('last_payos_order_code')) || Number(localStorage.getItem('last_payos_memo'));
     setIsCheckingResult(true);
     setCheckPaymentMessage('Đang truy vấn trạng thái đơn hàng từ PayOS...');
     try {
-      const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
-      if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
+      const syncData = await api.post('/api/payos/manual-sync', {
+        orderCode: codeToVerify,
+        userId: currentUser?.id,
+        userEmail: currentUser?.email,
+        userName: currentUser?.name
+      });
+
+      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
         await refreshAllData();
         setDepositSuccess(true);
         try {
           confetti({
-            particleCount: 130,
+            particleCount: 150,
             spread: 95,
             origin: { y: 0.6 }
           });
@@ -446,9 +463,30 @@ export const WalletModal: React.FC = () => {
           setIsWalletModalOpen(false);
           setCurrentView('home');
         }, 2500);
-      } else {
-        setCheckPaymentMessage('Chưa nhận được giao dịch từ ngân hàng. Vui lòng hoàn tất chuyển khoản theo đúng mã đơn hàng.');
+        return;
       }
+
+      if (codeToVerify) {
+        const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+        if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
+          await refreshAllData();
+          setDepositSuccess(true);
+          try {
+            confetti({
+              particleCount: 150,
+              spread: 95,
+              origin: { y: 0.6 }
+            });
+          } catch {}
+          setTimeout(() => {
+            setIsWalletModalOpen(false);
+            setCurrentView('home');
+          }, 2500);
+          return;
+        }
+      }
+
+      setCheckPaymentMessage('Chưa nhận được giao dịch từ ngân hàng. Vui lòng hoàn tất chuyển khoản theo đúng mã đơn hàng.');
     } catch (err) {
       setCheckPaymentMessage('Lỗi kiểm tra trạng thái. Vui lòng bấm kiểm tra lại sau giây lát.');
     } finally {
@@ -1079,6 +1117,9 @@ export const WalletModal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
+                            if (payOsOrderCode) localStorage.setItem('last_payos_order_code', String(payOsOrderCode));
+                            if (transferCode) localStorage.setItem('last_payos_memo', transferCode);
+                            localStorage.setItem('last_payos_amount', String(depositAmount));
                             window.location.href = payOsCheckoutUrl;
                           }}
                           className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"

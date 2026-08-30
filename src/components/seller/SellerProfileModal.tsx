@@ -84,7 +84,9 @@ export const SellerProfileModal: React.FC = () => {
           }
           if (typeof setAllUsers === 'function') {
             setAllUsers(prev => {
-              if (prev.some(u => u.id === sellerObj.id)) return prev;
+              if (prev.some(u => u.id === sellerObj.id)) {
+                return prev.map(u => u.id === sellerObj.id ? { ...u, ...sellerObj } : u);
+              }
               return [...prev, sellerObj];
             });
           }
@@ -115,7 +117,7 @@ export const SellerProfileModal: React.FC = () => {
   const sellerReviews = fetchedReviews.length > 0
     ? fetchedReviews
     : orders
-        .filter(o => (o.sellerId === selectedSellerId || o.sellerName === seller?.name) && (o.reviewComment || o.ratingGiven))
+        .filter(o => (o.sellerId === selectedSellerId || o.sellerName === (seller?.name || accMatching?.sellerName)) && (o.reviewComment || o.ratingGiven || (o as any).review?.comment))
         .map(o => {
           const buyerUser = allUsers.find(u => u.id === o.buyerId);
           return {
@@ -124,18 +126,18 @@ export const SellerProfileModal: React.FC = () => {
             buyerAvatar:
               buyerUser?.avatar ||
               'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-            rating: o.ratingGiven || 5,
+            rating: o.ratingGiven || (o as any).review?.rating || 5,
             date: o.completedAt
               ? new Date(o.completedAt).toLocaleDateString('vi-VN')
               : new Date(o.createdAt).toLocaleDateString('vi-VN'),
             accountCode: o.accountCode,
             accountTitle: o.accountTitle,
-            comment: o.reviewComment || 'Giao dịch thành công, nhận tài khoản nhanh chóng.'
+            comment: o.reviewComment || (o as any).review?.comment || 'Giao dịch thành công, nhận tài khoản nhanh chóng.'
           };
         });
 
-  const completedSalesCount = seller?.completedSales || sellerInfo?.completedSales || activeListings.length || 0;
-  const averageRating = seller?.rating || sellerInfo?.averageRating || 5.0;
+  const completedSalesCount = fetchedSeller?.completedSales ?? (seller?.completedSales || sellerInfo?.completedSales || activeListings.length || 0);
+  const averageRating = fetchedSeller?.rating ?? (seller?.rating || sellerInfo?.averageRating || 5.0);
 
   const formatJoinDate = (dateStr?: string) => {
     if (!dateStr) return 'Mới tham gia sàn';
