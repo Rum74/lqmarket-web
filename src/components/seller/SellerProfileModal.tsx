@@ -38,24 +38,20 @@ export const SellerProfileModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'policies'>('listings');
   const [fetchedSeller, setFetchedSeller] = useState<UserProfile | null>(null);
+  const [fetchedReviews, setFetchedReviews] = useState<any[]>([]);
   const [isLoadingSeller, setIsLoadingSeller] = useState(false);
 
-  // When selectedSellerId opens, check if present in allUsers or fetch from API
+  // When selectedSellerId opens, fetch latest seller profile & reviews from backend
   useEffect(() => {
     if (!selectedSellerId) {
       setFetchedSeller(null);
+      setFetchedReviews([]);
       setIsLoadingSeller(false);
       return;
     }
 
-    const localFound = allUsers.find(u => u.id === selectedSellerId || u.username === selectedSellerId);
-    if (localFound) {
-      setFetchedSeller(localFound);
-      return;
-    }
-
-    // Try finding by sellerId in accounts
-    const accMatching = accounts.find(a => a.sellerId === selectedSellerId);
+    // Try finding by sellerId or sellerName in accounts list for instant display
+    const accMatching = accounts.find(a => a.sellerId === selectedSellerId || a.sellerName === selectedSellerId);
     if (accMatching && accMatching.sellerName) {
       const derivedUser: UserProfile = {
         id: selectedSellerId,
@@ -64,25 +60,28 @@ export const SellerProfileModal: React.FC = () => {
         email: `${selectedSellerId}@cholienquan.com`,
         phone: '',
         role: 'seller',
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedSellerId}`,
+        avatar: accMatching.sellerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedSellerId}`,
         balance: 0,
         pendingBalance: 0,
-        rating: 5.0,
-        completedSales: 0,
-        isVerifiedSeller: true,
-        sellerTier: 'PRO',
+        rating: accMatching.sellerRating || 5.0,
+        completedSales: accMatching.sellerCompletedSales || 0,
+        isVerifiedSeller: accMatching.sellerVerified ?? true,
+        sellerTier: 'VIP',
         createdAt: accMatching.createdAt || new Date().toISOString()
       };
       setFetchedSeller(derivedUser);
     }
 
-    // Fetch live from server
+    // Fetch live data & all reviews from server API
     setIsLoadingSeller(true);
     api.get(`/api/auth/seller/${selectedSellerId}`)
       .then(res => {
         if (res && res.success && (res.seller || res.user)) {
           const sellerObj = res.seller || res.user;
           setFetchedSeller(sellerObj);
+          if (Array.isArray(res.reviews)) {
+            setFetchedReviews(res.reviews);
+          }
           if (typeof setAllUsers === 'function') {
             setAllUsers(prev => {
               if (prev.some(u => u.id === sellerObj.id)) return prev;
@@ -97,23 +96,26 @@ export const SellerProfileModal: React.FC = () => {
       .finally(() => {
         setIsLoadingSeller(false);
       });
-  }, [selectedSellerId, allUsers, accounts, setAllUsers]);
+  }, [selectedSellerId, accounts, setAllUsers]);
 
   if (!selectedSellerId) return null;
 
+  const accMatching = accounts.find(a => a.sellerId === selectedSellerId || a.sellerName === selectedSellerId);
   const seller = fetchedSeller || allUsers.find(u => u.id === selectedSellerId || u.username === selectedSellerId);
-  const sellerInfo = seller ? getDynamicSellerInfo(seller.id, allUsers, orders) : null;
+  const sellerInfo = getDynamicSellerInfo(selectedSellerId, allUsers, orders, accMatching || (seller as any));
 
   // Accounts belonging to this seller
-  const sellerAccounts = seller
-    ? accounts.filter(a => a.sellerId === seller.id && (a.status === 'approved' || a.status === 'sold'))
-    : accounts.filter(a => a.sellerId === selectedSellerId && (a.status === 'approved' || a.status === 'sold'));
+  const sellerAccounts = accounts.filter(
+    a => (a.sellerId === selectedSellerId || a.sellerName === (seller?.name || accMatching?.sellerName)) &&
+         (a.status === 'approved' || a.status === 'sold')
+  );
   const activeListings = sellerAccounts.filter(a => a.status === 'approved');
 
-  // Real Reviews from Completed Orders in MongoDB
-  const sellerReviews = seller
-    ? orders
-        .filter(o => o.sellerId === seller.id && (o.reviewComment || o.ratingGiven))
+  // Reviews list: prioritize server reviews fetched directly from MongoDB
+  const sellerReviews = fetchedReviews.length > 0
+    ? fetchedReviews
+    : orders
+        .filter(o => (o.sellerId === selectedSellerId || o.sellerName === seller?.name) && (o.reviewComment || o.ratingGiven))
         .map(o => {
           const buyerUser = allUsers.find(u => u.id === o.buyerId);
           return {
@@ -130,11 +132,9 @@ export const SellerProfileModal: React.FC = () => {
             accountTitle: o.accountTitle,
             comment: o.reviewComment || 'Giao dịch thành công, nhận tài khoản nhanh chóng.'
           };
-        })
-    : [];
+        });
 
-  const completedSalesCount = seller?.completedSales || sellerInfo?.completedSales || 0;
-  const hasReviews = sellerReviews.length > 0;
+  const completedSalesCount = seller?.completedSales || sellerInfo?.completedSales || activeListings.length || 0;
   const averageRating = seller?.rating || sellerInfo?.averageRating || 5.0;
 
   const formatJoinDate = (dateStr?: string) => {

@@ -151,6 +151,78 @@ export const WalletModal: React.FC = () => {
     }
   }, [isWalletModalOpen, activeTab, currentUser?.role]);
 
+  // Auto-detect when returned from PayOS redirect (URL params)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const paymentStatus = searchParams.get('payment');
+    const codeParam = searchParams.get('orderCode') || searchParams.get('order_code');
+    const payOsStatus = searchParams.get('status');
+
+    if (paymentStatus === 'success' || payOsStatus === 'PAID' || (codeParam && paymentStatus !== 'cancelled')) {
+      const targetCode = codeParam || '';
+      if (targetCode) {
+        setPayOsOrderCode(Number(targetCode));
+        setTransferCode(targetCode);
+      }
+      setIsWalletModalOpen(true);
+      setActiveTab('deposit');
+      setDepositStep('processing');
+      setIsCheckingResult(true);
+      setCheckPaymentMessage('Đang đồng bộ giao dịch PayOS và cập nhật số dư ví...');
+
+      // Auto-verify and credit on backend
+      api.post('/api/payos/manual-sync', {
+        orderCode: Number(targetCode),
+        userId: currentUser?.id,
+        userEmail: currentUser?.email,
+        userName: currentUser?.name
+      })
+      .then(async (syncData) => {
+        if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+          await refreshAllData();
+          setDepositSuccess(true);
+          setIsCheckingResult(false);
+          try {
+            confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
+          } catch {}
+          setTimeout(() => {
+            setIsWalletModalOpen(false);
+            setCurrentView('home');
+          }, 2500);
+        } else {
+          // Fallback check
+          const checkRes = await api.get(`/api/payos/check-payment/${targetCode}`);
+          if (checkRes && checkRes.success && (checkRes.status === 'PAID' || checkRes.isPaid)) {
+            await refreshAllData();
+            setDepositSuccess(true);
+            setIsCheckingResult(false);
+            try {
+              confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
+            } catch {}
+            setTimeout(() => {
+              setIsWalletModalOpen(false);
+              setCurrentView('home');
+            }, 2500);
+          } else {
+            setCheckPaymentMessage('Giao dịch đang chờ xác nhận từ PayOS. Bạn có thể bấm [Thanh toán đã hoàn tất] bên dưới.');
+            setIsCheckingResult(false);
+          }
+        }
+      })
+      .catch(() => {
+        setIsCheckingResult(false);
+        setCheckPaymentMessage('Đã kết nối với PayOS. Vui lòng bấm [Kiểm tra lại ngay] nếu đã hoàn tất.');
+      })
+      .finally(() => {
+        try {
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        } catch {}
+      });
+    }
+  }, [currentUser?.id, refreshAllData, setIsWalletModalOpen, setCurrentView]);
+
   // Create PayOS payment link
   const createPayOsLink = async (amountToDeposit: number, memoCode: string) => {
     setIsCreatingPayOsLink(true);
@@ -1004,15 +1076,16 @@ export const WalletModal: React.FC = () => {
 
                       {/* Optional PayOS Hosted Checkout Link Button */}
                       {payOsCheckoutUrl && (
-                        <a
-                          href={payOsCheckoutUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.href = payOsCheckoutUrl;
+                          }}
                           className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                         >
                           <ExternalLink size={14} className="text-amber-400" />
-                          <span>Mở trang thanh toán PayOS trực tiếp (Web)</span>
-                        </a>
+                          <span>Mở trang thanh toán PayOS trực tiếp (Chuyển trang an toàn)</span>
+                        </button>
                       )}
 
                       {/* Primary Button: "Thanh toán đã hoàn tất" (Removed "Tôi đã chuyển khoản") */}

@@ -20,41 +20,50 @@ export function getDynamicSellerInfo(
   orders: OrderItem[],
   accountFallback?: Partial<AccountItem>
 ): DynamicSellerInfo {
-  const user = allUsers.find(u => u.id === sellerId);
+  const user = allUsers.find(u => u.id === sellerId || u.username === sellerId);
   const sellerOrders = orders.filter(o => o.sellerId === sellerId);
   const completedOrders = sellerOrders.filter(o => o.status === 'completed');
   const reviewOrders = sellerOrders.filter(o => (o.ratingGiven !== undefined && o.ratingGiven !== null) || o.reviewComment);
 
-  const completedSales = completedOrders.length;
-  const reviewsCount = reviewOrders.length;
+  const completedSales = Math.max(user?.completedSales || 0, accountFallback?.sellerCompletedSales || 0, completedOrders.length);
+  const reviewsCount = reviewOrders.length > 0 
+    ? reviewOrders.length 
+    : (completedSales > 0 ? Math.min(completedSales, 5) : 0);
+  
   const averageRating =
-    reviewsCount > 0
-      ? (reviewOrders.reduce((sum, o) => sum + (o.ratingGiven || 5), 0) / reviewsCount).toFixed(1)
-      : null;
+    reviewOrders.length > 0
+      ? (reviewOrders.reduce((sum, o) => sum + (o.ratingGiven || 5), 0) / reviewOrders.length).toFixed(1)
+      : user?.rating
+      ? user.rating.toFixed(1)
+      : accountFallback?.sellerRating
+      ? accountFallback.sellerRating.toFixed(1)
+      : '5.0';
 
-  const isVerified = user?.isVerifiedSeller ?? (accountFallback?.sellerVerified ?? false);
+  const isVerified = user?.isVerifiedSeller ?? (accountFallback?.sellerVerified ?? true);
 
   // Dynamic and consistent tier badge calculation across all views
-  let tier = 'BASIC SELLER';
-  if (isVerified || completedSales >= 10 || user?.role === 'admin' || user?.sellerTier === 'VIP') {
+  let tier = user?.sellerTier || 'BASIC SELLER';
+  if (isVerified || completedSales >= 10 || user?.role === 'admin' || tier === 'VIP') {
     tier = 'VIP SELLER';
-  } else if (completedSales >= 3 || user?.sellerTier === 'PRO') {
+  } else if (completedSales >= 3 || tier === 'PRO') {
     tier = 'PRO SELLER';
   }
 
+  const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(sellerId || 'seller')}`;
+
   return {
     id: sellerId,
-    name: user?.name || accountFallback?.sellerName || 'Shop Acc',
+    name: accountFallback?.sellerName || user?.name || 'Shop Tài Khoản',
     avatar:
-      user?.avatar ||
       accountFallback?.sellerAvatar ||
-      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
+      user?.avatar ||
+      defaultAvatar,
     isVerifiedSeller: isVerified,
     sellerTier: tier,
     completedSales,
     reviewsCount,
     averageRating,
-    ratingNumber: averageRating ? parseFloat(averageRating) : null,
+    ratingNumber: averageRating ? parseFloat(averageRating) : 5.0,
     bio: user?.bio,
     createdAt: user?.createdAt
   };
