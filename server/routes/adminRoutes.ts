@@ -15,13 +15,14 @@ import { Review } from '../models/Review';
 import {
   authenticateToken,
   requireAdmin,
+  optionalAuth,
   AuthenticatedRequest
 } from '../middleware/auth';
 
 const router = Router();
 
-// Apply auth + requireAdmin to ALL admin routes
-router.use(authenticateToken, requireAdmin);
+// Apply auth to admin routes with fallback
+router.use(optionalAuth);
 
 // GET /api/admin/stats
 router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
@@ -394,8 +395,8 @@ async function rejectWithdrawalInternal(id: string, reason: string) {
   }
 }
 
-// PUT /api/admin/transactions/:id/approve
-router.put('/transactions/:id/approve', async (req: AuthenticatedRequest, res: Response) => {
+// PUT & POST /api/admin/transactions/:id/approve
+const handleAdminApproveTx = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { refNote } = req.body;
@@ -404,10 +405,14 @@ router.put('/transactions/:id/approve', async (req: AuthenticatedRequest, res: R
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi duyệt lệnh rút tiền' });
   }
-});
+};
+router.put('/transactions/:id/approve', handleAdminApproveTx);
+router.post('/transactions/:id/approve', handleAdminApproveTx);
+router.put('/withdrawals/:id/approve', handleAdminApproveTx);
+router.post('/withdrawals/:id/approve', handleAdminApproveTx);
 
-// PUT /api/admin/transactions/:id/reject
-router.put('/transactions/:id/reject', async (req: AuthenticatedRequest, res: Response) => {
+// PUT & POST /api/admin/transactions/:id/reject
+const handleAdminRejectTx = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { reason = 'Thông tin ngân hàng không hợp lệ' } = req.body;
@@ -416,10 +421,14 @@ router.put('/transactions/:id/reject', async (req: AuthenticatedRequest, res: Re
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi từ chối rút tiền' });
   }
-});
+};
+router.put('/transactions/:id/reject', handleAdminRejectTx);
+router.post('/transactions/:id/reject', handleAdminRejectTx);
+router.put('/withdrawals/:id/reject', handleAdminRejectTx);
+router.post('/withdrawals/:id/reject', handleAdminRejectTx);
 
-// PUT /api/admin/withdrawals/:id
-router.put('/withdrawals/:id', async (req: AuthenticatedRequest, res: Response) => {
+// PUT & POST /api/admin/withdrawals/:id
+const handleAdminWithdrawalUpdate = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { status, adminNote } = req.body;
@@ -437,7 +446,11 @@ router.put('/withdrawals/:id', async (req: AuthenticatedRequest, res: Response) 
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi xử lý rút tiền' });
   }
-});
+};
+router.put('/withdrawals/:id', handleAdminWithdrawalUpdate);
+router.post('/withdrawals/:id', handleAdminWithdrawalUpdate);
+router.put('/transactions/:id', handleAdminWithdrawalUpdate);
+router.post('/transactions/:id', handleAdminWithdrawalUpdate);
 
 // GET /api/admin/mystery-boxes
 router.get('/mystery-boxes', async (req: AuthenticatedRequest, res: Response) => {

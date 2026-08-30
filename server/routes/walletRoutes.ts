@@ -279,8 +279,8 @@ router.get('/withdrawals', optionalAuth, async (req: AuthenticatedRequest, res: 
   }
 });
 
-// PUT /api/wallet/transactions/:id/approve (Admin approves withdrawal)
-router.put('/transactions/:id/approve', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+// PUT & POST /api/wallet/transactions/:id/approve (Admin approves withdrawal)
+const handleWalletApprove = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { refNote } = req.body;
@@ -348,10 +348,14 @@ router.put('/transactions/:id/approve', optionalAuth, async (req: AuthenticatedR
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi khi duyệt lệnh rút tiền' });
   }
-});
+};
+router.put('/transactions/:id/approve', optionalAuth, handleWalletApprove);
+router.post('/transactions/:id/approve', optionalAuth, handleWalletApprove);
+router.put('/withdrawals/:id/approve', optionalAuth, handleWalletApprove);
+router.post('/withdrawals/:id/approve', optionalAuth, handleWalletApprove);
 
-// PUT /api/wallet/transactions/:id/reject (Admin rejects withdrawal & refunds)
-router.put('/transactions/:id/reject', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+// PUT & POST /api/wallet/transactions/:id/reject (Admin rejects withdrawal & refunds)
+const handleWalletReject = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { reason = 'Thông tin ngân hàng không hợp lệ' } = req.body;
@@ -431,7 +435,31 @@ router.put('/transactions/:id/reject', optionalAuth, async (req: AuthenticatedRe
 
     return res.json({ success: true, message: 'Đã từ chối lệnh rút tiền và hoàn tiền vào ví thành viên.' });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi khi từ chối lệnh rút tiền' });
+    return res.status(500).json({ success: false, message: 'Lỗi khi từ chối rút tiền' });
+  }
+};
+router.put('/transactions/:id/reject', optionalAuth, handleWalletReject);
+router.post('/transactions/:id/reject', optionalAuth, handleWalletReject);
+router.put('/withdrawals/:id/reject', optionalAuth, handleWalletReject);
+router.post('/withdrawals/:id/reject', optionalAuth, handleWalletReject);
+
+// PUT & POST /api/wallet/withdrawals/:id
+router.put('/withdrawals/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const { status, adminNote } = req.body;
+  if (status === 'completed' || status === 'approved') {
+    return handleWalletApprove(req, res);
+  } else {
+    req.body.reason = adminNote;
+    return handleWalletReject(req, res);
+  }
+});
+router.post('/withdrawals/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const { status, adminNote } = req.body;
+  if (status === 'completed' || status === 'approved') {
+    return handleWalletApprove(req, res);
+  } else {
+    req.body.reason = adminNote;
+    return handleWalletReject(req, res);
   }
 });
 

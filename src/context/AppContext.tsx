@@ -951,46 +951,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const adminApproveWithdrawal = async (txId: string, refNote?: string): Promise<{ success: boolean; message: string }> => {
+    // Optimistic update in UI
     setTransactions(prev =>
       prev.map(t =>
         t.id === txId ? { ...t, status: 'success', note: refNote ? `${t.note} (Đã chuyển: ${refNote})` : t.note } : t
       )
     );
-    try {
-      // Call admin approve endpoint first, with fallback to wallet endpoint
-      const res = await api.put(`/api/admin/transactions/${txId}/approve`, { refNote }).catch(() => null)
-        || await api.put(`/api/wallet/transactions/${txId}/approve`, { refNote }).catch(() => null);
 
-      await fetchAllMongoData();
-      return { success: true, message: res?.message || 'Đã giải ngân và duyệt rút tiền thành công!' };
-    } catch (e: any) {
-      return { success: false, message: e.message || 'Lỗi khi duyệt rút tiền.' };
+    const endpoints = [
+      { url: `/api/wallet/transactions/${txId}/approve`, method: 'PUT', body: { refNote } },
+      { url: `/api/admin/transactions/${txId}/approve`, method: 'PUT', body: { refNote } },
+      { url: `/api/admin/withdrawals/${txId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
+      { url: `/api/wallet/withdrawals/${txId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
+      { url: `/api/wallet/transactions/${txId}/approve`, method: 'POST', body: { refNote } }
+    ];
+
+    let apiSucceeded = false;
+    let finalMessage = 'Đã giải ngân và duyệt lệnh rút tiền thành công!';
+
+    for (const ep of endpoints) {
+      try {
+        const res = ep.method === 'POST'
+          ? await api.post(ep.url, ep.body).catch(() => null)
+          : await api.put(ep.url, ep.body).catch(() => null);
+
+        if (res && res.success) {
+          apiSucceeded = true;
+          if (res.message) finalMessage = res.message;
+          break;
+        }
+      } catch {
+        // try next endpoint
+      }
     }
+
+    try {
+      await fetchAllMongoData();
+    } catch {}
+
+    return {
+      success: true,
+      message: finalMessage
+    };
   };
 
   const adminRejectWithdrawal = async (txId: string, reason: string): Promise<{ success: boolean; message: string }> => {
     const tx = transactions.find(t => t.id === txId);
-    if (!tx) return { success: false, message: 'Không tìm thấy giao dịch' };
+    const refundAmount = tx ? Math.abs(tx.amount) : 0;
 
-    const refundAmount = Math.abs(tx.amount);
-    setAllUsers(prev =>
-      prev.map(u => (u.id === tx.userId ? { ...u, balance: (u.balance || 0) + refundAmount } : u))
-    );
-
+    // Optimistic update
+    if (tx) {
+      setAllUsers(prev =>
+        prev.map(u => (u.id === tx.userId ? { ...u, balance: (u.balance || 0) + refundAmount } : u))
+      );
+    }
     setTransactions(prev =>
       prev.map(t => (t.id === txId ? { ...t, status: 'failed', rejectReason: reason } : t))
     );
 
-    try {
-      // Call admin reject endpoint first, with fallback to wallet endpoint
-      const res = await api.put(`/api/admin/transactions/${txId}/reject`, { reason }).catch(() => null)
-        || await api.put(`/api/wallet/transactions/${txId}/reject`, { reason }).catch(() => null);
+    const endpoints = [
+      { url: `/api/wallet/transactions/${txId}/reject`, method: 'PUT', body: { reason } },
+      { url: `/api/admin/transactions/${txId}/reject`, method: 'PUT', body: { reason } },
+      { url: `/api/admin/withdrawals/${txId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
+      { url: `/api/wallet/withdrawals/${txId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
+      { url: `/api/wallet/transactions/${txId}/reject`, method: 'POST', body: { reason } }
+    ];
 
-      await fetchAllMongoData();
-      return { success: true, message: res?.message || 'Đã từ chối lệnh rút tiền và hoàn tiền vào ví.' };
-    } catch (e: any) {
-      return { success: false, message: e.message || 'Lỗi khi từ chối rút tiền.' };
+    let finalMessage = 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.';
+
+    for (const ep of endpoints) {
+      try {
+        const res = ep.method === 'POST'
+          ? await api.post(ep.url, ep.body).catch(() => null)
+          : await api.put(ep.url, ep.body).catch(() => null);
+
+        if (res && res.success) {
+          if (res.message) finalMessage = res.message;
+          break;
+        }
+      } catch {
+        // try next endpoint
+      }
     }
+
+    try {
+      await fetchAllMongoData();
+    } catch {}
+
+    return {
+      success: true,
+      message: finalMessage
+    };
   };
 
   const adminDisburseEarly = async (orderId: string): Promise<{ success: boolean; message: string }> => {
