@@ -403,10 +403,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // Fetch Wallet Transactions
-        const txRes = await api.get('/api/wallet/transactions').catch(() => null);
+        // Fetch Wallet Transactions (For admin, request all=true so all user withdrawals are visible)
+        const isAdmin = meRes?.user?.role === 'admin';
+        const txUrl = isAdmin ? '/api/wallet/transactions?all=true' : '/api/wallet/transactions';
+        const txRes = await api.get(txUrl).catch(() => null);
         if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
-          setTransactions(txRes.data || txRes.transactions);
+          const list = txRes.data || txRes.transactions;
+          setTransactions(prev => {
+            if (isAdmin && prev.length > list.length) {
+              return prev; // keep the richer list from admin api
+            }
+            return list;
+          });
         }
 
         // Fetch Notifications
@@ -900,11 +908,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser.balance < amount) return false;
 
     setAllUsers(prev =>
-      prev.map(u => (u.id === currentUser.id ? { ...u, balance: u.balance - amount } : u))
+      prev.map(u => (u.id === currentUser.id ? { ...u, balance: Math.max(0, u.balance - amount), pendingBalance: (u.pendingBalance || 0) + amount } : u))
     );
 
     const newTx: WalletTransaction = {
-      id: `tx_${Date.now()}`,
+      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       userId: currentUser.id,
       userName: currentUser.name,
       userEmail: currentUser.email,
@@ -921,10 +929,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTransactions(prev => [newTx, ...prev]);
 
     api.post('/api/wallet/withdraw', {
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      userName: currentUser.name,
       amount,
       bankName: bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Ngân hàng',
+      bankCode: bankDetails?.bankCode || '970422',
       bankAccount: bankDetails?.bankAccount || '',
       bankAccountName: bankDetails?.bankAccountName || currentUser.name
+    }).then((res) => {
+      if (res && res.transaction) {
+        setTransactions(prev => prev.map(t => t.id === newTx.id ? res.transaction : t));
+      }
+      fetchAllMongoData();
     }).catch(err => console.warn('MongoDB withdraw notice:', err));
 
     return true;

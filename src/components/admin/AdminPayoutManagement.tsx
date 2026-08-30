@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { WalletTransaction, OrderItem } from '../../types';
 import confetti from '../../utils/confetti';
@@ -72,8 +72,24 @@ export const AdminPayoutManagement: React.FC = () => {
     adminApproveWithdrawal,
     adminRejectWithdrawal,
     adminDisburseEarly,
-    withdrawBalance
+    withdrawBalance,
+    refreshAllData
   } = useApp();
+
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+
+  useEffect(() => {
+    refreshAllData();
+  }, []);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshingData(true);
+    await refreshAllData();
+    setTimeout(() => {
+      setIsRefreshingData(false);
+      showToast('Đã đồng bộ dữ liệu rút tiền mới nhất từ hệ thống!');
+    }, 400);
+  };
 
   const [activeSubTab, setActiveSubTab] = useState<'withdrawals' | 'escrow'>('withdrawals');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'success' | 'failed'>('all');
@@ -238,6 +254,16 @@ export const AdminPayoutManagement: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshingData}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-60"
+              title="Đồng bộ lại danh sách lệnh rút tiền mới nhất"
+            >
+              <RefreshCw size={14} className={`text-cyan-400 ${isRefreshingData ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingData ? 'Đang tải...' : 'Làm Mới'}</span>
+            </button>
+
             <button
               onClick={handleCreateDemoWithdrawal}
               className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 cursor-pointer transition-all"

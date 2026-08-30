@@ -191,7 +191,45 @@ router.get('/orders', async (req: AuthenticatedRequest, res: Response) => {
 router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const transactions = await WalletTransaction.find().sort({ createdAt: -1 }).lean();
-    return res.json({ success: true, data: transactions, transactions });
+    const withdrawals = await WithdrawalRequest.find().sort({ createdAt: -1 }).lean();
+
+    // Map existing transaction IDs & keys
+    const existingTxIds = new Set(transactions.map(t => t.id));
+
+    // If any withdrawal request is missing from transactions list, include it
+    const mergedList = [...transactions];
+    for (const w of withdrawals) {
+      if (!existingTxIds.has(w.id)) {
+        // Check if there is already a transaction matching this withdrawal
+        const hasMatching = transactions.some(
+          t => t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount && Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 60000
+        );
+        if (!hasMatching) {
+          mergedList.push({
+            id: w.id,
+            userId: w.userId,
+            userName: w.userName || 'Người dùng',
+            userEmail: w.userEmail || '',
+            type: 'withdraw',
+            amount: -w.amount,
+            status: w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending',
+            note: `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
+            bankName: w.bankName,
+            bankCode: w.bankCode || '970422',
+            bankAccount: w.bankAccount,
+            bankAccountName: w.bankAccountName,
+            rejectReason: w.rejectionReason,
+            processedAt: w.processedAt,
+            createdAt: w.createdAt
+          } as any);
+        }
+      }
+    }
+
+    // Sort descending by createdAt
+    mergedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.json({ success: true, data: mergedList, transactions: mergedList });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi tải biến động số dư' });
   }
@@ -207,83 +245,185 @@ router.get('/withdrawals', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// PUT /api/admin/withdrawals/:id
-router.put('/withdrawals/:id', async (req: AuthenticatedRequest, res: Response) => {
+// PUT /api/admin/transactions/:id/approve
+router.put('/transactions/:id/approve', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, adminNote } = req.body;
-    const adminUser = req.user;
+    const { refNote } = req.body;
 
-    const request = await WithdrawalRequest.findOne({ id });
-    if (!request) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu rút tiền' });
-    }
+    const tx = await WalletTransaction.findOne({ id });
+    if (tx) {
+      tx.status = 'success';
+      tx.processedAt = new Date().toISOString();
+      if (refNote) {
+        tx.note = `${tx.note} (Mã GD giải ngân: ${refNote})`;
+      }
+      await tx.save();
 
-    const previousStatus = request.status;
-    request.status = status;
-    if (adminNote !== undefined) {
-      if (status === 'rejected') {
-        request.rejectionReason = adminNote;
-      } else {
-        request.referenceNote = adminNote;
+      const user = await User.findOne({ id: tx.userId });
+      if (user) {
+        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - Math.abs(tx.amount));
+        await user.save();
       }
     }
-    request.processedAt = new Date().toISOString();
-    await request.save();
 
-    const user = await User.findOne({ id: request.userId });
+    const wdr = await WithdrawalRequest.findOne({
+      $or: [{ id }, { userId: tx?.userId, amount: tx ? Math.abs(tx.amount) : undefined }]
+    });
+    if (wdr) {
+      wdr.status = 'approved';
+      wdr.referenceNote = refNote;
+      wdr.processedAt = new Date().toISOString();
+      await wdr.save();
+    }
 
-    if (user) {
-      if (status === 'completed' && previousStatus === 'pending') {
-        // Complete withdrawal: reduce pending balance
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
+    return res.json({ success: true, message: 'Đã giải ngân và duyệt lệnh rút tiền thành công!' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi duyệt lệnh rút tiền' });
+  }
+});
+
+// PUT /api/admin/transactions/:id/reject
+router.put('/transactions/:id/reject', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason = 'Thông tin ngân hàng không hợp lệ' } = req.body;
+
+    const tx = await WalletTransaction.findOne({ id });
+    if (tx) {
+      tx.status = 'failed';
+      tx.rejectReason = reason;
+      tx.processedAt = new Date().toISOString();
+      await tx.save();
+
+      const refundAmount = Math.abs(tx.amount);
+      const user = await User.findOne({ id: tx.userId });
+      if (user) {
+        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - refundAmount);
+        user.balance = (user.balance || 0) + refundAmount;
         await user.save();
 
-        const notif = new Notification({
-          id: `notif_${Date.now()}`,
-          userId: user.id,
-          title: 'Rút tiền thành công',
-          message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng ${request.bankName} (${request.bankAccount}) đã được chuyển khoản thành công.`,
-          type: 'wallet',
-          createdAt: new Date().toISOString()
-        });
-        await notif.save();
-      } else if (status === 'rejected' && previousStatus === 'pending') {
-        // Reject withdrawal: return money to user balance
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
-        user.balance += request.amount;
-        await user.save();
-
-        // Record refund tx
         const refundTx = new WalletTransaction({
           id: `tx_${Date.now()}_refund`,
           userId: user.id,
           userName: user.name,
           userEmail: user.email,
           type: 'refund',
-          amount: request.amount,
+          amount: refundAmount,
           status: 'success',
-          note: `Hoàn tiền yêu cầu rút không thành công: ${adminNote || 'Sai thông tin STK'}`,
+          note: `Hoàn tiền yêu cầu rút không thành công: ${reason}`,
           createdAt: new Date().toISOString()
         });
         await refundTx.save();
-
-        const notif = new Notification({
-          id: `notif_${Date.now()}`,
-          userId: user.id,
-          title: 'Yêu cầu rút tiền bị từ chối',
-          message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ đã bị từ chối (${adminNote || 'Thông tin ngân hàng không hợp lệ'}). Tiền đã được hoàn lại vào số dư ví của bạn.`,
-          type: 'wallet',
-          createdAt: new Date().toISOString()
-        });
-        await notif.save();
       }
+    }
+
+    const wdr = await WithdrawalRequest.findOne({
+      $or: [{ id }, { userId: tx?.userId, amount: tx ? Math.abs(tx.amount) : undefined }]
+    });
+    if (wdr) {
+      wdr.status = 'rejected';
+      wdr.rejectionReason = reason;
+      wdr.processedAt = new Date().toISOString();
+      await wdr.save();
+    }
+
+    return res.json({ success: true, message: 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi từ chối rút tiền' });
+  }
+});
+
+// PUT /api/admin/withdrawals/:id
+router.put('/withdrawals/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNote } = req.body;
+
+    const request = await WithdrawalRequest.findOne({
+      $or: [{ id }, { id: id.replace('tx_', 'wdr_') }]
+    });
+
+    if (request) {
+      const previousStatus = request.status;
+      request.status = status === 'completed' ? 'approved' : status;
+      if (adminNote !== undefined) {
+        if (status === 'rejected') {
+          request.rejectionReason = adminNote;
+        } else {
+          request.referenceNote = adminNote;
+        }
+      }
+      request.processedAt = new Date().toISOString();
+      await request.save();
+
+      const user = await User.findOne({ id: request.userId });
+
+      if (user) {
+        if ((status === 'completed' || status === 'approved') && previousStatus === 'pending') {
+          user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
+          await user.save();
+
+          const notif = new Notification({
+            id: `notif_${Date.now()}`,
+            userId: user.id,
+            title: 'Rút tiền thành công',
+            message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng ${request.bankName} (${request.bankAccount}) đã được chuyển khoản thành công.`,
+            type: 'wallet',
+            createdAt: new Date().toISOString()
+          });
+          await notif.save();
+        } else if (status === 'rejected' && previousStatus === 'pending') {
+          user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
+          user.balance = (user.balance || 0) + request.amount;
+          await user.save();
+
+          const refundTx = new WalletTransaction({
+            id: `tx_${Date.now()}_refund`,
+            userId: user.id,
+            userName: user.name,
+            userEmail: user.email,
+            type: 'refund',
+            amount: request.amount,
+            status: 'success',
+            note: `Hoàn tiền yêu cầu rút không thành công: ${adminNote || 'Sai thông tin STK'}`,
+            createdAt: new Date().toISOString()
+          });
+          await refundTx.save();
+
+          const notif = new Notification({
+            id: `notif_${Date.now()}`,
+            userId: user.id,
+            title: 'Yêu cầu rút tiền bị từ chối',
+            message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ đã bị từ chối (${adminNote || 'Thông tin ngân hàng không hợp lệ'}). Tiền đã được hoàn lại vào số dư ví của bạn.`,
+            type: 'wallet',
+            createdAt: new Date().toISOString()
+          });
+          await notif.save();
+        }
+      }
+    }
+
+    // Also update WalletTransaction
+    const tx = await WalletTransaction.findOne({
+      $or: [{ id }, { id: id.replace('wdr_', 'tx_') }]
+    });
+    if (tx) {
+      tx.status = (status === 'completed' || status === 'approved') ? 'success' : status === 'rejected' ? 'failed' : 'pending';
+      tx.processedAt = new Date().toISOString();
+      if (adminNote) {
+        if (status === 'rejected') {
+          tx.rejectReason = adminNote;
+        } else {
+          tx.note = `${tx.note} (Mã GD giải ngân: ${adminNote})`;
+        }
+      }
+      await tx.save();
     }
 
     return res.json({
       success: true,
-      message: 'Xử lý yêu cầu rút tiền thành công',
-      withdrawal: request.toJSON()
+      message: 'Xử lý yêu cầu rút tiền thành công'
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi xử lý rút tiền' });
