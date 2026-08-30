@@ -194,30 +194,30 @@ router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => 
     const transactions = await WalletTransaction.find().sort({ createdAt: -1 }).lean();
     const withdrawals = await WithdrawalRequest.find().sort({ createdAt: -1 }).lean();
 
-    // Map of existing transactions by their id and other identifiers
-    const txMap = new Map<string, any>();
-    for (const t of transactions) {
-      txMap.set(t.id, t);
-    }
-
-    // Merge withdrawals into transactions if they aren't already represented
     const mergedList: any[] = [...transactions];
+
     for (const w of withdrawals) {
-      const existingTx = mergedList.find(
-        t => t.id === w.id ||
-             (t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount && Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 60000)
+      const wTs = w.id.match(/\d{10,}/)?.[0];
+
+      // Check if existing transaction already exists in mergedList
+      const existingTx = mergedList.find(t => 
+        t.id === w.id ||
+        (wTs && t.id.includes(wTs)) ||
+        (t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount)
       );
 
       if (existingTx) {
-        // Synchronize status if withdrawal record is approved/rejected
-        if (w.status === 'approved' && existingTx.status === 'pending') {
+        // Synchronize statuses seamlessly
+        if (w.status === 'approved' || existingTx.status === 'success') {
           existingTx.status = 'success';
-          existingTx.processedAt = w.processedAt || existingTx.processedAt;
-          if (w.referenceNote) existingTx.note = `${existingTx.note} (Mã GD: ${w.referenceNote})`;
-        } else if (w.status === 'rejected' && existingTx.status === 'pending') {
+          existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
+          if (w.referenceNote && !existingTx.note?.includes(w.referenceNote)) {
+            existingTx.note = `${existingTx.note || 'Rút tiền'} (Mã GD: ${w.referenceNote})`;
+          }
+        } else if (w.status === 'rejected' || existingTx.status === 'failed') {
           existingTx.status = 'failed';
-          existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason;
-          existingTx.processedAt = w.processedAt || existingTx.processedAt;
+          existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason || 'Bị từ chối';
+          existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
         }
       } else {
         mergedList.push({
@@ -228,7 +228,7 @@ router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => 
           type: 'withdraw',
           amount: -w.amount,
           status: w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending',
-          note: `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
+          note: w.referenceNote ? `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount}) (Mã GD: ${w.referenceNote})` : `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
           bankName: w.bankName,
           bankCode: w.bankCode || '970422',
           bankAccount: w.bankAccount,
@@ -261,85 +261,136 @@ router.get('/withdrawals', async (req: AuthenticatedRequest, res: Response) => {
 
 // Helper to approve withdrawal in both models
 async function approveWithdrawalInternal(id: string, refNote?: string) {
-  let matched = false;
-  const tx = await WalletTransaction.findOne({
-    $or: [{ id }, { id: id.replace('wdr_', 'tx_') }, { id: id.replace('tx_', 'wdr_') }]
-  });
+  const now = new Date().toISOString();
+  const cleanId = String(id || '').trim();
+  const timestampNum = cleanId.match(/\d{10,}/)?.[0] || '';
 
-  if (tx) {
-    matched = true;
-    tx.status = 'success';
-    tx.processedAt = new Date().toISOString();
-    if (refNote) {
-      tx.note = `${tx.note} (Mã GD giải ngân: ${refNote})`;
+  const idConditions: any[] = [
+    { id: cleanId },
+    { id: cleanId.replace('wdr_', 'tx_') },
+    { id: cleanId.replace('tx_', 'wdr_') }
+  ];
+  if (timestampNum) {
+    idConditions.push({ id: { $regex: timestampNum } });
+  }
+
+  // 1. Find matching transactions & withdrawals
+  const matchedTxs = await WalletTransaction.find({ $or: idConditions }).lean();
+  const matchedWdrs = await WithdrawalRequest.find({ $or: idConditions }).lean();
+
+  let targetUserId = matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
+  let targetAmount = matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0);
+
+  // If not found by ID alone, try to find any pending withdrawal by target userId/amount
+  if (!targetUserId) {
+    const fallbackWdr = await WithdrawalRequest.findOne({ status: 'pending' }).lean();
+    if (fallbackWdr) {
+      targetUserId = fallbackWdr.userId;
+      targetAmount = fallbackWdr.amount;
     }
-    await tx.save();
+  }
 
-    const user = await User.findOne({ id: tx.userId });
+  const queryConditions: any[] = [...idConditions];
+  if (targetUserId && targetAmount > 0) {
+    queryConditions.push({ userId: targetUserId, amount: -targetAmount, type: 'withdraw' });
+    queryConditions.push({ userId: targetUserId, amount: targetAmount });
+  }
+
+  // 2. Update ALL matching WalletTransaction records to success
+  await WalletTransaction.updateMany(
+    { $or: queryConditions },
+    {
+      $set: {
+        status: 'success',
+        processedAt: now,
+        ...(refNote ? { note: `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})` } : {})
+      }
+    }
+  );
+
+  // 3. Update ALL matching WithdrawalRequest records to approved
+  await WithdrawalRequest.updateMany(
+    { $or: queryConditions },
+    {
+      $set: {
+        status: 'approved',
+        processedAt: now,
+        referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
+      }
+    }
+  );
+
+  // 4. Deduct pendingBalance from User account
+  if (targetUserId && targetAmount > 0) {
+    const user = await User.findOne({ id: targetUserId });
     if (user) {
-      user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - Math.abs(tx.amount));
+      user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
       await user.save();
     }
   }
 
-  const wdr = await WithdrawalRequest.findOne({
-    $or: [
-      { id },
-      { id: id.replace('tx_', 'wdr_') },
-      { id: id.replace('wdr_', 'tx_') },
-      ...(tx ? [{ userId: tx.userId, amount: Math.abs(tx.amount) }] : [])
-    ]
-  });
-
-  if (wdr) {
-    matched = true;
-    wdr.status = 'approved';
-    wdr.referenceNote = refNote;
-    wdr.processedAt = new Date().toISOString();
-    await wdr.save();
-
-    if (!tx) {
-      const user = await User.findOne({ id: wdr.userId });
-      if (user) {
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - wdr.amount);
-        await user.save();
-      }
-    }
-  }
-
-  // Also check if id is a generic custom id
-  if (!matched) {
-    await WalletTransaction.findOneAndUpdate(
-      { id },
-      { $set: { status: 'success', processedAt: new Date().toISOString() } }
-    );
-    await WithdrawalRequest.findOneAndUpdate(
-      { id },
-      { $set: { status: 'approved', processedAt: new Date().toISOString(), referenceNote: refNote } }
-    );
-  }
+  return { success: true, message: 'Đã giải ngân và chuyển trạng thái sang đã duyệt thành công!' };
 }
 
 // Helper to reject withdrawal in both models
-async function rejectWithdrawalInternal(id: string, reason: string) {
-  let refundProcessed = false;
-  const tx = await WalletTransaction.findOne({
-    $or: [{ id }, { id: id.replace('wdr_', 'tx_') }, { id: id.replace('tx_', 'wdr_') }]
-  });
+async function rejectWithdrawalInternal(id: string, reason: string = 'Thông tin ngân hàng không hợp lệ') {
+  const now = new Date().toISOString();
+  const cleanId = String(id || '').trim();
+  const timestampNum = cleanId.match(/\d{10,}/)?.[0] || '';
 
-  if (tx) {
-    tx.status = 'failed';
-    tx.rejectReason = reason;
-    tx.processedAt = new Date().toISOString();
-    await tx.save();
+  const idConditions: any[] = [
+    { id: cleanId },
+    { id: cleanId.replace('wdr_', 'tx_') },
+    { id: cleanId.replace('tx_', 'wdr_') }
+  ];
+  if (timestampNum) {
+    idConditions.push({ id: { $regex: timestampNum } });
+  }
 
-    const refundAmount = Math.abs(tx.amount);
-    const user = await User.findOne({ id: tx.userId });
+  // 1. Find matching transactions & withdrawals
+  const matchedTxs = await WalletTransaction.find({ $or: idConditions }).lean();
+  const matchedWdrs = await WithdrawalRequest.find({ $or: idConditions }).lean();
+
+  const targetUserId = matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
+  const targetAmount = matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0);
+
+  const queryConditions: any[] = [...idConditions];
+  if (targetUserId && targetAmount > 0) {
+    queryConditions.push({ userId: targetUserId, amount: -targetAmount, type: 'withdraw' });
+    queryConditions.push({ userId: targetUserId, amount: targetAmount });
+  }
+
+  // 2. Update ALL matching WalletTransaction records to failed
+  await WalletTransaction.updateMany(
+    { $or: queryConditions },
+    {
+      $set: {
+        status: 'failed',
+        rejectReason: reason,
+        processedAt: now
+      }
+    }
+  );
+
+  // 3. Update ALL matching WithdrawalRequest records to rejected
+  await WithdrawalRequest.updateMany(
+    { $or: queryConditions },
+    {
+      $set: {
+        status: 'rejected',
+        rejectionReason: reason,
+        processedAt: now
+      }
+    }
+  );
+
+  // 4. Refund balance to User
+  if (targetUserId && targetAmount > 0) {
+    const user = await User.findOne({ id: targetUserId });
     if (user) {
-      user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - refundAmount);
-      user.balance = (user.balance || 0) + refundAmount;
+      user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
+      user.balance = (user.balance || 0) + targetAmount;
       await user.save();
-      refundProcessed = true;
 
       const refundTx = new WalletTransaction({
         id: `tx_${Date.now()}_refund`,
@@ -347,52 +398,16 @@ async function rejectWithdrawalInternal(id: string, reason: string) {
         userName: user.name,
         userEmail: user.email,
         type: 'refund',
-        amount: refundAmount,
+        amount: targetAmount,
         status: 'success',
-        note: `Hoàn tiền yêu cầu rút không thành công: ${reason}`,
-        createdAt: new Date().toISOString()
+        note: `Hoàn tiền lệnh rút tiền bị từ chối (${reason})`,
+        createdAt: now
       });
       await refundTx.save();
     }
   }
 
-  const wdr = await WithdrawalRequest.findOne({
-    $or: [
-      { id },
-      { id: id.replace('tx_', 'wdr_') },
-      { id: id.replace('wdr_', 'tx_') },
-      ...(tx ? [{ userId: tx.userId, amount: Math.abs(tx.amount) }] : [])
-    ]
-  });
-
-  if (wdr) {
-    wdr.status = 'rejected';
-    wdr.rejectionReason = reason;
-    wdr.processedAt = new Date().toISOString();
-    await wdr.save();
-
-    if (!refundProcessed) {
-      const user = await User.findOne({ id: wdr.userId });
-      if (user) {
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - wdr.amount);
-        user.balance = (user.balance || 0) + wdr.amount;
-        await user.save();
-
-        const refundTx = new WalletTransaction({
-          id: `tx_${Date.now()}_refund`,
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          type: 'refund',
-          amount: wdr.amount,
-          status: 'success',
-          note: `Hoàn tiền yêu cầu rút không thành công: ${reason}`,
-          createdAt: new Date().toISOString()
-        });
-        await refundTx.save();
-      }
-    }
-  }
+  return { success: true, message: 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.' };
 }
 
 // PUT & POST /api/admin/transactions/:id/approve
