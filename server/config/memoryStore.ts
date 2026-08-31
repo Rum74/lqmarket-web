@@ -26,7 +26,7 @@ function matchesQuery(doc: any, query: any): boolean {
     }
 
     const val = query[key];
-    const docVal = doc[key];
+    const docVal = doc[key] !== undefined ? doc[key] : (key === 'id' ? doc._id : key === '_id' ? doc.id : undefined);
 
     if (val !== null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof RegExp)) {
       // Comparison operators

@@ -939,6 +939,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTransactions(prev => [newTx, ...prev]);
 
     api.post('/api/wallet/withdraw', {
+      id: newTx.id,
+      txId: newTx.id,
       userId: currentUser.id,
       userEmail: currentUser.email,
       userName: currentUser.name,
@@ -965,15 +967,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const adminApproveWithdrawal = async (txId: string, refNote?: string): Promise<{ success: boolean; message: string }> => {
+  const adminApproveWithdrawal = async (txId: string, refNote?: string, extraContext?: any): Promise<{ success: boolean; message: string }> => {
     const cleanId = String(txId || '').trim();
     const matchedTx = transactions.find(t => 
       t.id === cleanId || 
       t.id === cleanId.replace('wdr_', 'tx_') || 
       t.id === cleanId.replace('tx_', 'wdr_')
     );
-    const targetUserId = matchedTx?.userId;
-    const targetAmount = matchedTx ? Math.abs(matchedTx.amount) : 0;
+    const targetUserId = extraContext?.userId || matchedTx?.userId;
+    const targetAmount = extraContext?.amount ? Math.abs(extraContext.amount) : (matchedTx ? Math.abs(matchedTx.amount) : 0);
+    const targetBankAccount = extraContext?.bankAccount || matchedTx?.bankAccount;
+    const targetBankName = extraContext?.bankName || matchedTx?.bankName;
 
     // 1. Optimistic update in UI for all matching transactions
     setTransactions(prev =>
@@ -981,7 +985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const isMatch = t.id === cleanId || 
           t.id === cleanId.replace('wdr_', 'tx_') || 
           t.id === cleanId.replace('tx_', 'wdr_') ||
-          (matchedTx && t.userId === matchedTx.userId && Math.abs(t.amount) === targetAmount && t.status === 'pending');
+          (targetUserId && t.userId === targetUserId && Math.abs(t.amount) === targetAmount && t.status === 'pending');
         if (isMatch) {
           return {
             ...t,
@@ -1005,12 +1009,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    const payload = {
+      id: cleanId,
+      txId: cleanId,
+      refNote,
+      adminNote: refNote,
+      userId: targetUserId,
+      amount: targetAmount,
+      bankAccount: targetBankAccount,
+      bankName: targetBankName,
+      status: 'approved'
+    };
+
     const endpoints = [
-      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'PUT', body: { refNote } },
-      { url: `/api/admin/transactions/${cleanId}/approve`, method: 'PUT', body: { refNote } },
-      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
-      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
-      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'POST', body: { refNote } }
+      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
+      { url: `/api/admin/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
+      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload },
+      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: payload },
+      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'POST', body: payload }
     ];
 
     let apiSucceeded = false;
@@ -1042,15 +1058,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const adminRejectWithdrawal = async (txId: string, reason: string): Promise<{ success: boolean; message: string }> => {
+  const adminRejectWithdrawal = async (txId: string, reason: string, extraContext?: any): Promise<{ success: boolean; message: string }> => {
     const cleanId = String(txId || '').trim();
     const matchedTx = transactions.find(t => 
       t.id === cleanId || 
       t.id === cleanId.replace('wdr_', 'tx_') || 
       t.id === cleanId.replace('tx_', 'wdr_')
     );
-    const targetUserId = matchedTx?.userId;
-    const refundAmount = matchedTx ? Math.abs(matchedTx.amount) : 0;
+    const targetUserId = extraContext?.userId || matchedTx?.userId;
+    const refundAmount = extraContext?.amount ? Math.abs(extraContext.amount) : (matchedTx ? Math.abs(matchedTx.amount) : 0);
+    const targetBankAccount = extraContext?.bankAccount || matchedTx?.bankAccount;
+    const targetBankName = extraContext?.bankName || matchedTx?.bankName;
 
     // Optimistic update
     if (targetUserId && refundAmount > 0) {
@@ -1068,7 +1086,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const isMatch = t.id === cleanId || 
           t.id === cleanId.replace('wdr_', 'tx_') || 
           t.id === cleanId.replace('tx_', 'wdr_') ||
-          (matchedTx && t.userId === matchedTx.userId && Math.abs(t.amount) === refundAmount && t.status === 'pending');
+          (targetUserId && t.userId === targetUserId && Math.abs(t.amount) === refundAmount && t.status === 'pending');
         if (isMatch) {
           return {
             ...t,
@@ -1081,12 +1099,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    const payload = {
+      id: cleanId,
+      txId: cleanId,
+      reason,
+      adminNote: reason,
+      userId: targetUserId,
+      amount: refundAmount,
+      bankAccount: targetBankAccount,
+      bankName: targetBankName,
+      status: 'rejected'
+    };
+
     const endpoints = [
-      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'PUT', body: { reason } },
-      { url: `/api/admin/transactions/${cleanId}/reject`, method: 'PUT', body: { reason } },
-      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
-      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
-      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'POST', body: { reason } }
+      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
+      { url: `/api/admin/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
+      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload },
+      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: payload },
+      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'POST', body: payload }
     ];
 
     let finalMessage = 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.';

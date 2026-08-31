@@ -126,7 +126,7 @@ export const AdminPayoutManagement: React.FC = () => {
   const handleConfirmApprove = async () => {
     if (!selectedTxForApprove) return;
     setIsApproving(true);
-    const res = await adminApproveWithdrawal(selectedTxForApprove.id, approveRefNote.trim());
+    const res = await adminApproveWithdrawal(selectedTxForApprove.id, approveRefNote.trim(), selectedTxForApprove);
     setIsApproving(false);
     setSelectedTxForApprove(null);
     setApproveRefNote('');
@@ -149,7 +149,7 @@ export const AdminPayoutManagement: React.FC = () => {
   const handleConfirmReject = async () => {
     if (!selectedTxForReject || !rejectReason.trim()) return;
     setIsRejecting(true);
-    const res = await adminRejectWithdrawal(selectedTxForReject.id, rejectReason.trim());
+    const res = await adminRejectWithdrawal(selectedTxForReject.id, rejectReason.trim(), selectedTxForReject);
     setIsRejecting(false);
     setSelectedTxForReject(null);
     setRejectReason('');

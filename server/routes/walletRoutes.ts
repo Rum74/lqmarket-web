@@ -9,6 +9,7 @@ import {
   requireAdmin,
   AuthenticatedRequest
 } from '../middleware/auth';
+import { approveWithdrawalService, rejectWithdrawalService } from '../services/payoutService';
 
 const router = Router();
 
@@ -243,8 +244,8 @@ router.post('/withdraw', optionalAuth, async (req: AuthenticatedRequest, res: Re
       await user.save();
     }
 
-    const withdrawTxId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const withdrawReqId = `wdr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const withdrawTxId = req.body.txId || req.body.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const withdrawReqId = req.body.wdrId || `wdr_${withdrawTxId.replace('tx_', '')}`;
 
     const effectiveUserId = user?.id || targetUserId || 'user_guest';
     const effectiveUserName = user?.name || targetName || bankAccountName || 'Người dùng';
@@ -338,129 +339,9 @@ router.get('/withdrawals', optionalAuth, async (req: AuthenticatedRequest, res: 
 const handleWalletApprove = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { refNote } = req.body;
-    const now = new Date().toISOString();
-    const cleanId = String(id || '').trim();
-    const timestampNum = cleanId.match(/\d{10,}/)?.[0] || '';
-
-    const idConditions: any[] = [
-      { id: cleanId },
-      { id: cleanId.replace('wdr_', 'tx_') },
-      { id: cleanId.replace('tx_', 'wdr_') }
-    ];
-    if (timestampNum) {
-      idConditions.push({ id: { $regex: timestampNum } });
-    }
-
-    const matchedTxs = await WalletTransaction.find({ $or: idConditions }).lean();
-    const matchedWdrs = await WithdrawalRequest.find({ $or: idConditions }).lean();
-
-    let targetUserId = matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
-    let targetAmount = matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0);
-
-    // 1. Direct update by ID first to guarantee immediate persistence in DB
-    await WalletTransaction.updateMany(
-      { $or: idConditions },
-      {
-        $set: {
-          status: 'success',
-          processedAt: now,
-          ...(refNote ? { note: `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})` } : {})
-        }
-      }
-    );
-
-    await WithdrawalRequest.updateMany(
-      { $or: idConditions },
-      {
-        $set: {
-          status: 'approved',
-          processedAt: now,
-          referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
-        }
-      }
-    );
-
-    // 2. Specific matching IDs
-    const txIds = matchedTxs.map(t => t.id).filter(Boolean);
-    const wdrIds = matchedWdrs.map(w => w.id).filter(Boolean);
-    if (txIds.length > 0) {
-      await WalletTransaction.updateMany(
-        { id: { $in: txIds } },
-        {
-          $set: {
-            status: 'success',
-            processedAt: now,
-            ...(refNote ? { note: `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})` } : {})
-          }
-        }
-      );
-    }
-    if (wdrIds.length > 0) {
-      await WithdrawalRequest.updateMany(
-        { id: { $in: wdrIds } },
-        {
-          $set: {
-            status: 'approved',
-            processedAt: now,
-            referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
-          }
-        }
-      );
-    }
-
-    // 3. Fallback for user pending balance
-    if (targetUserId) {
-      await WalletTransaction.updateMany(
-        { userId: targetUserId, type: 'withdraw', status: 'pending' },
-        {
-          $set: {
-            status: 'success',
-            processedAt: now,
-            ...(refNote ? { note: `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})` } : {})
-          }
-        }
-      );
-      await WithdrawalRequest.updateMany(
-        { userId: targetUserId, status: 'pending' },
-        {
-          $set: {
-            status: 'approved',
-            processedAt: now,
-            referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
-          }
-        }
-      );
-
-      const user = await User.findOne({ id: targetUserId });
-      if (user) {
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
-        await user.save();
-      }
-    } else {
-      const fallbackPendingWdr = await WithdrawalRequest.findOne({ status: 'pending' });
-      if (fallbackPendingWdr) {
-        fallbackPendingWdr.status = 'approved';
-        fallbackPendingWdr.processedAt = now;
-        fallbackPendingWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
-        await fallbackPendingWdr.save();
-
-        const u = await User.findOne({ id: fallbackPendingWdr.userId });
-        if (u) {
-          u.pendingBalance = Math.max(0, (u.pendingBalance || 0) - fallbackPendingWdr.amount);
-          await u.save();
-        }
-      }
-      const fallbackPendingTx = await WalletTransaction.findOne({ type: 'withdraw', status: 'pending' });
-      if (fallbackPendingTx) {
-        fallbackPendingTx.status = 'success';
-        fallbackPendingTx.processedAt = now;
-        if (refNote) fallbackPendingTx.note = `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})`;
-        await fallbackPendingTx.save();
-      }
-    }
-
-    return res.json({ success: true, message: 'Đã giải ngân và duyệt lệnh rút tiền thành công!' });
+    const { refNote, userId, amount, bankAccount, bankName } = req.body;
+    const result = await approveWithdrawalService(id, refNote, { userId, amount, bankAccount, bankName, refNote });
+    return res.json(result);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi khi duyệt lệnh rút tiền' });
   }
@@ -474,72 +355,9 @@ router.post('/withdrawals/:id/approve', optionalAuth, handleWalletApprove);
 const handleWalletReject = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { reason = 'Thông tin ngân hàng không hợp lệ' } = req.body;
-    const now = new Date().toISOString();
-    const cleanId = String(id || '').trim();
-    const timestampNum = cleanId.match(/\d{10,}/)?.[0] || '';
-
-    const idConditions: any[] = [
-      { id: cleanId },
-      { id: cleanId.replace('wdr_', 'tx_') },
-      { id: cleanId.replace('tx_', 'wdr_') }
-    ];
-    if (timestampNum) {
-      idConditions.push({ id: { $regex: timestampNum } });
-    }
-
-    const matchedTxs = await WalletTransaction.find({ $or: idConditions }).lean();
-    const matchedWdrs = await WithdrawalRequest.find({ $or: idConditions }).lean();
-
-    const targetUserId = matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
-    const targetAmount = matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0);
-
-    // Direct update by ID
-    await WalletTransaction.updateMany(
-      { $or: idConditions },
-      {
-        $set: {
-          status: 'failed',
-          rejectReason: reason,
-          processedAt: now
-        }
-      }
-    );
-
-    await WithdrawalRequest.updateMany(
-      { $or: idConditions },
-      {
-        $set: {
-          status: 'rejected',
-          rejectionReason: reason,
-          processedAt: now
-        }
-      }
-    );
-
-    if (targetUserId && targetAmount > 0) {
-      const user = await User.findOne({ id: targetUserId });
-      if (user) {
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
-        user.balance = (user.balance || 0) + targetAmount;
-        await user.save();
-
-        const refundTx = new WalletTransaction({
-          id: `tx_${Date.now()}_refund`,
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          type: 'refund',
-          amount: targetAmount,
-          status: 'success',
-          note: `Hoàn tiền lệnh rút tiền bị từ chối (${reason})`,
-          createdAt: now
-        });
-        await refundTx.save();
-      }
-    }
-
-    return res.json({ success: true, message: 'Đã từ chối lệnh rút tiền và hoàn tiền thành công!' });
+    const { reason = 'Thông tin ngân hàng không hợp lệ', userId, amount, bankAccount, bankName } = req.body;
+    const result = await rejectWithdrawalService(id, reason, { userId, amount, bankAccount, bankName, reason });
+    return res.json(result);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi khi từ chối lệnh rút tiền' });
   }
@@ -551,21 +369,23 @@ router.post('/withdrawals/:id/reject', optionalAuth, handleWalletReject);
 
 // PUT & POST /api/wallet/withdrawals/:id
 router.put('/withdrawals/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const { status, adminNote } = req.body;
+  const { status, adminNote, reason, userId, amount, bankAccount, bankName } = req.body;
   if (status === 'completed' || status === 'approved') {
-    return handleWalletApprove(req, res);
+    const result = await approveWithdrawalService(req.params.id, adminNote || '', { userId, amount, bankAccount, bankName, refNote: adminNote });
+    return res.json(result);
   } else {
-    req.body.reason = adminNote;
-    return handleWalletReject(req, res);
+    const result = await rejectWithdrawalService(req.params.id, reason || adminNote || 'Thông tin ngân hàng không hợp lệ', { userId, amount, bankAccount, bankName, reason: reason || adminNote });
+    return res.json(result);
   }
 });
 router.post('/withdrawals/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const { status, adminNote } = req.body;
+  const { status, adminNote, reason, userId, amount, bankAccount, bankName } = req.body;
   if (status === 'completed' || status === 'approved') {
-    return handleWalletApprove(req, res);
+    const result = await approveWithdrawalService(req.params.id, adminNote || '', { userId, amount, bankAccount, bankName, refNote: adminNote });
+    return res.json(result);
   } else {
-    req.body.reason = adminNote;
-    return handleWalletReject(req, res);
+    const result = await rejectWithdrawalService(req.params.id, reason || adminNote || 'Thông tin ngân hàng không hợp lệ', { userId, amount, bankAccount, bankName, reason: reason || adminNote });
+    return res.json(result);
   }
 });
 
