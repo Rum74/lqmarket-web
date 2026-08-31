@@ -6,7 +6,7 @@ mongoose.set('bufferCommands', false);
 let isConnected = false;
 
 export async function connectDB(): Promise<boolean> {
-  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://huynhvanphong7402_db_user:rum7402@lqmarketcluster.hf9awbe.mongodb.net/?appName=LQMarketCluster';
+  const MONGODB_URI = process.env.MONGODB_URI || '';
 
   if (isConnected || mongoose.connection.readyState === 1) {
     isConnected = true;
