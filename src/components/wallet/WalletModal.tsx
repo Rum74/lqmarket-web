@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { api } from '../../lib/apiClient';
 import confetti from '../../utils/confetti';
 import { LQMARKET_LOGO } from '../../assets/logo';
+import { VIETQR_BANKS, getBankBinCode, getBankInfo } from '../../utils/vietqrBanks';
 import {
   Wallet,
   X,
@@ -38,19 +39,10 @@ const DENOMINATIONS: number[] = [
   2000000
 ];
 
-const POPULAR_BANKS = [
-  { value: 'MB Bank (Ngân Hàng Quân Đội)', label: 'MB Bank (Ngân Hàng Quân Đội)' },
-  { value: 'Vietcombank (Ngoại Thương VN)', label: 'Vietcombank (Ngoại Thương VN)' },
-  { value: 'Techcombank (Kỹ Thương VN)', label: 'Techcombank (Kỹ Thương VN)' },
-  { value: 'ACB (Á Châu)', label: 'ACB (Á Châu)' },
-  { value: 'VPBank (Việt Nam Thịnh Vượng)', label: 'VPBank (Việt Nam Thịnh Vượng)' },
-  { value: 'BIDV (Đầu Tư & Phát Triển)', label: 'BIDV (Đầu Tư & Phát Triển)' },
-  { value: 'VietinBank (Công Thương VN)', label: 'VietinBank (Công Thương VN)' },
-  { value: 'TPBank (Tiên Phong)', label: 'TPBank (Tiên Phong)' },
-  { value: 'Sacombank (Sài Gòn Thương Tín)', label: 'Sacombank (Sài Gòn Thương Tín)' },
-  { value: 'Agribank (Nông Nghiệp VN)', label: 'Agribank (Nông Nghiệp VN)' },
-  { value: 'Ví MoMo (Số điện thoại)', label: 'Ví MoMo (Số điện thoại)' }
-];
+const POPULAR_BANKS = VIETQR_BANKS.map(b => ({
+  value: `${b.shortName} - ${b.name}`,
+  label: `${b.shortName} (${b.name})`
+}));
 
 type PaymentMethodType = 'qr_pay' | 'banking_app' | 'e_wallet';
 
@@ -542,11 +534,13 @@ export const WalletModal: React.FC = () => {
       setWithdrawError('Số dư khả dụng không đủ để thực hiện lệnh rút!');
       return;
     }
+    const bankBin = getBankBinCode(userWithdrawBank);
     const success = withdrawBalance(
       withdrawAmount,
       `${userWithdrawBank} - ${userWithdrawAccount} (${userWithdrawAccountName})`,
       {
         bankName: userWithdrawBank,
+        bankCode: bankBin,
         bankAccount: userWithdrawAccount,
         bankAccountName: userWithdrawAccountName
       }

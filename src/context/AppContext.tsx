@@ -26,6 +26,7 @@ import {
   getCurrentUserFromBackend
 } from '../lib/authService';
 import api, { getAuthToken, setAuthToken } from '../lib/apiClient';
+import { getBankBinCode } from '../utils/vietqrBanks';
 
 interface AppContextType {
   // Auth & User State
@@ -438,6 +439,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (favRes && favRes.success && Array.isArray(favRes.data || favRes.favorites)) {
           const fList = favRes.data || favRes.favorites;
           setWishlistIds(fList.map((f: any) => (typeof f === 'string' ? f : f.accountId || f.id)));
+        }
+      } else {
+        // Fallback for public/demo state: fetch transactions anyway
+        const txRes = await api.get('/api/wallet/transactions?all=true').catch(() => null);
+        if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
+          const txList = txRes.data || txRes.transactions;
+          if (txList.length > 0) {
+            setTransactions(txList);
+          }
         }
       }
 
@@ -906,6 +916,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(u => (u.id === currentUser.id ? { ...u, balance: Math.max(0, u.balance - amount), pendingBalance: (u.pendingBalance || 0) + amount } : u))
     );
 
+    const targetBankName = bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Vietcombank';
+    const targetBankCode = bankDetails?.bankCode || getBankBinCode(targetBankName);
+    const targetAccount = bankDetails?.bankAccount || '';
+    const targetAccountName = bankDetails?.bankAccountName || currentUser.name;
+
     const newTx: WalletTransaction = {
       id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       userId: currentUser.id,
@@ -915,10 +930,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       amount: -amount,
       status: 'pending',
       note: `Yêu cầu rút tiền về ${bankInfo}`,
-      bankName: bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Ngân hàng',
-      bankCode: bankDetails?.bankCode || '970422',
-      bankAccount: bankDetails?.bankAccount || '',
-      bankAccountName: bankDetails?.bankAccountName || currentUser.name,
+      bankName: targetBankName,
+      bankCode: targetBankCode,
+      bankAccount: targetAccount,
+      bankAccountName: targetAccountName,
       createdAt: new Date().toISOString()
     };
     setTransactions(prev => [newTx, ...prev]);
@@ -928,10 +943,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userEmail: currentUser.email,
       userName: currentUser.name,
       amount,
-      bankName: bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Ngân hàng',
-      bankCode: bankDetails?.bankCode || '970422',
-      bankAccount: bankDetails?.bankAccount || '',
-      bankAccountName: bankDetails?.bankAccountName || currentUser.name
+      bankName: targetBankName,
+      bankCode: targetBankCode,
+      bankAccount: targetAccount,
+      bankAccountName: targetAccountName
     }).then((res) => {
       if (res && res.transaction) {
         setTransactions(prev => prev.map(t => t.id === newTx.id ? res.transaction : t));
@@ -951,19 +966,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const adminApproveWithdrawal = async (txId: string, refNote?: string): Promise<{ success: boolean; message: string }> => {
-    // Optimistic update in UI
+    const cleanId = String(txId || '').trim();
+    const matchedTx = transactions.find(t => 
+      t.id === cleanId || 
+      t.id === cleanId.replace('wdr_', 'tx_') || 
+      t.id === cleanId.replace('tx_', 'wdr_')
+    );
+    const targetUserId = matchedTx?.userId;
+    const targetAmount = matchedTx ? Math.abs(matchedTx.amount) : 0;
+
+    // 1. Optimistic update in UI for all matching transactions
     setTransactions(prev =>
-      prev.map(t =>
-        t.id === txId ? { ...t, status: 'success', note: refNote ? `${t.note} (Đã chuyển: ${refNote})` : t.note } : t
-      )
+      prev.map(t => {
+        const isMatch = t.id === cleanId || 
+          t.id === cleanId.replace('wdr_', 'tx_') || 
+          t.id === cleanId.replace('tx_', 'wdr_') ||
+          (matchedTx && t.userId === matchedTx.userId && Math.abs(t.amount) === targetAmount && t.status === 'pending');
+        if (isMatch) {
+          return {
+            ...t,
+            status: 'success',
+            processedAt: new Date().toISOString(),
+            note: refNote ? `${t.note} (Mã GD: ${refNote})` : t.note
+          };
+        }
+        return t;
+      })
     );
 
+    // Deduct pendingBalance from User account
+    if (targetUserId && targetAmount > 0) {
+      setAllUsers(prev =>
+        prev.map(u =>
+          u.id === targetUserId
+            ? { ...u, pendingBalance: Math.max(0, (u.pendingBalance || 0) - targetAmount) }
+            : u
+        )
+      );
+    }
+
     const endpoints = [
-      { url: `/api/wallet/transactions/${txId}/approve`, method: 'PUT', body: { refNote } },
-      { url: `/api/admin/transactions/${txId}/approve`, method: 'PUT', body: { refNote } },
-      { url: `/api/admin/withdrawals/${txId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
-      { url: `/api/wallet/withdrawals/${txId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
-      { url: `/api/wallet/transactions/${txId}/approve`, method: 'POST', body: { refNote } }
+      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'PUT', body: { refNote } },
+      { url: `/api/admin/transactions/${cleanId}/approve`, method: 'PUT', body: { refNote } },
+      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
+      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'approved', adminNote: refNote } },
+      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'POST', body: { refNote } }
     ];
 
     let apiSucceeded = false;
@@ -996,25 +1043,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const adminRejectWithdrawal = async (txId: string, reason: string): Promise<{ success: boolean; message: string }> => {
-    const tx = transactions.find(t => t.id === txId);
-    const refundAmount = tx ? Math.abs(tx.amount) : 0;
+    const cleanId = String(txId || '').trim();
+    const matchedTx = transactions.find(t => 
+      t.id === cleanId || 
+      t.id === cleanId.replace('wdr_', 'tx_') || 
+      t.id === cleanId.replace('tx_', 'wdr_')
+    );
+    const targetUserId = matchedTx?.userId;
+    const refundAmount = matchedTx ? Math.abs(matchedTx.amount) : 0;
 
     // Optimistic update
-    if (tx) {
+    if (targetUserId && refundAmount > 0) {
       setAllUsers(prev =>
-        prev.map(u => (u.id === tx.userId ? { ...u, balance: (u.balance || 0) + refundAmount } : u))
+        prev.map(u => (u.id === targetUserId ? {
+          ...u,
+          balance: (u.balance || 0) + refundAmount,
+          pendingBalance: Math.max(0, (u.pendingBalance || 0) - refundAmount)
+        } : u))
       );
     }
+
     setTransactions(prev =>
-      prev.map(t => (t.id === txId ? { ...t, status: 'failed', rejectReason: reason } : t))
+      prev.map(t => {
+        const isMatch = t.id === cleanId || 
+          t.id === cleanId.replace('wdr_', 'tx_') || 
+          t.id === cleanId.replace('tx_', 'wdr_') ||
+          (matchedTx && t.userId === matchedTx.userId && Math.abs(t.amount) === refundAmount && t.status === 'pending');
+        if (isMatch) {
+          return {
+            ...t,
+            status: 'failed',
+            rejectReason: reason,
+            processedAt: new Date().toISOString()
+          };
+        }
+        return t;
+      })
     );
 
     const endpoints = [
-      { url: `/api/wallet/transactions/${txId}/reject`, method: 'PUT', body: { reason } },
-      { url: `/api/admin/transactions/${txId}/reject`, method: 'PUT', body: { reason } },
-      { url: `/api/admin/withdrawals/${txId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
-      { url: `/api/wallet/withdrawals/${txId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
-      { url: `/api/wallet/transactions/${txId}/reject`, method: 'POST', body: { reason } }
+      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'PUT', body: { reason } },
+      { url: `/api/admin/transactions/${cleanId}/reject`, method: 'PUT', body: { reason } },
+      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
+      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: { status: 'rejected', adminNote: reason } },
+      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'POST', body: { reason } }
     ];
 
     let finalMessage = 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.';

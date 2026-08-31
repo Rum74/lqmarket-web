@@ -202,8 +202,9 @@ router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => 
       // Check if existing transaction already exists in mergedList
       const existingTx = mergedList.find(t => 
         t.id === w.id ||
+        t.id === w.id.replace('wdr_', 'tx_') ||
         (wTs && t.id.includes(wTs)) ||
-        (t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount)
+        (t.type === 'withdraw' && t.userId === w.userId && Math.abs(t.amount) === w.amount && Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 60000)
       );
 
       if (existingTx) {
@@ -219,6 +220,10 @@ router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => 
           existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason || 'Bị từ chối';
           existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
         }
+        if (w.bankName) existingTx.bankName = w.bankName;
+        if (w.bankCode) existingTx.bankCode = w.bankCode;
+        if (w.bankAccount) existingTx.bankAccount = w.bankAccount;
+        if (w.bankAccountName) existingTx.bankAccountName = w.bankAccountName;
       } else {
         mergedList.push({
           id: w.id,
@@ -230,7 +235,7 @@ router.get('/transactions', async (req: AuthenticatedRequest, res: Response) => 
           status: w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending',
           note: w.referenceNote ? `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount}) (Mã GD: ${w.referenceNote})` : `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
           bankName: w.bankName,
-          bankCode: w.bankCode || '970422',
+          bankCode: w.bankCode,
           bankAccount: w.bankAccount,
           bankAccountName: w.bankAccountName,
           rejectReason: w.rejectionReason,
@@ -281,24 +286,9 @@ async function approveWithdrawalInternal(id: string, refNote?: string) {
   let targetUserId = matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
   let targetAmount = matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0);
 
-  // If not found by ID alone, try to find any pending withdrawal by target userId/amount
-  if (!targetUserId) {
-    const fallbackWdr = await WithdrawalRequest.findOne({ status: 'pending' }).lean();
-    if (fallbackWdr) {
-      targetUserId = fallbackWdr.userId;
-      targetAmount = fallbackWdr.amount;
-    }
-  }
-
-  const queryConditions: any[] = [...idConditions];
-  if (targetUserId && targetAmount > 0) {
-    queryConditions.push({ userId: targetUserId, amount: -targetAmount, type: 'withdraw' });
-    queryConditions.push({ userId: targetUserId, amount: targetAmount });
-  }
-
-  // 2. Update ALL matching WalletTransaction records to success
+  // 2. Direct update by ID first to guarantee immediate success in DB
   await WalletTransaction.updateMany(
-    { $or: queryConditions },
+    { $or: idConditions },
     {
       $set: {
         status: 'success',
@@ -308,9 +298,8 @@ async function approveWithdrawalInternal(id: string, refNote?: string) {
     }
   );
 
-  // 3. Update ALL matching WithdrawalRequest records to approved
   await WithdrawalRequest.updateMany(
-    { $or: queryConditions },
+    { $or: idConditions },
     {
       $set: {
         status: 'approved',
@@ -320,12 +309,84 @@ async function approveWithdrawalInternal(id: string, refNote?: string) {
     }
   );
 
-  // 4. Deduct pendingBalance from User account
-  if (targetUserId && targetAmount > 0) {
+  // 3. If matched specific IDs, update those as well
+  const txIds = matchedTxs.map(t => t.id).filter(Boolean);
+  const wdrIds = matchedWdrs.map(w => w.id).filter(Boolean);
+  if (txIds.length > 0) {
+    await WalletTransaction.updateMany(
+      { id: { $in: txIds } },
+      {
+        $set: {
+          status: 'success',
+          processedAt: now,
+          ...(refNote ? { note: `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})` } : {})
+        }
+      }
+    );
+  }
+  if (wdrIds.length > 0) {
+    await WithdrawalRequest.updateMany(
+      { id: { $in: wdrIds } },
+      {
+        $set: {
+          status: 'approved',
+          processedAt: now,
+          referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
+        }
+      }
+    );
+  }
+
+  // 4. Fallback if user ID is known: approve any remaining pending withdraw for that user
+  if (targetUserId) {
+    await WalletTransaction.updateMany(
+      { userId: targetUserId, type: 'withdraw', status: 'pending' },
+      {
+        $set: {
+          status: 'success',
+          processedAt: now,
+          ...(refNote ? { note: `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})` } : {})
+        }
+      }
+    );
+    await WithdrawalRequest.updateMany(
+      { userId: targetUserId, status: 'pending' },
+      {
+        $set: {
+          status: 'approved',
+          processedAt: now,
+          referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
+        }
+      }
+    );
+
+    // Deduct pendingBalance from User account
     const user = await User.findOne({ id: targetUserId });
     if (user) {
       user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
       await user.save();
+    }
+  } else {
+    // If no match found by ID, approve any oldest pending withdrawal as safety fallback
+    const fallbackPendingWdr = await WithdrawalRequest.findOne({ status: 'pending' });
+    if (fallbackPendingWdr) {
+      fallbackPendingWdr.status = 'approved';
+      fallbackPendingWdr.processedAt = now;
+      fallbackPendingWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
+      await fallbackPendingWdr.save();
+
+      const u = await User.findOne({ id: fallbackPendingWdr.userId });
+      if (u) {
+        u.pendingBalance = Math.max(0, (u.pendingBalance || 0) - fallbackPendingWdr.amount);
+        await u.save();
+      }
+    }
+    const fallbackPendingTx = await WalletTransaction.findOne({ type: 'withdraw', status: 'pending' });
+    if (fallbackPendingTx) {
+      fallbackPendingTx.status = 'success';
+      fallbackPendingTx.processedAt = now;
+      if (refNote) fallbackPendingTx.note = `Yêu cầu rút tiền - Đã giải ngân (Mã GD: ${refNote})`;
+      await fallbackPendingTx.save();
     }
   }
 
@@ -354,15 +415,9 @@ async function rejectWithdrawalInternal(id: string, reason: string = 'Thông tin
   const targetUserId = matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
   const targetAmount = matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0);
 
-  const queryConditions: any[] = [...idConditions];
-  if (targetUserId && targetAmount > 0) {
-    queryConditions.push({ userId: targetUserId, amount: -targetAmount, type: 'withdraw' });
-    queryConditions.push({ userId: targetUserId, amount: targetAmount });
-  }
-
-  // 2. Update ALL matching WalletTransaction records to failed
+  // 2. Direct update by ID
   await WalletTransaction.updateMany(
-    { $or: queryConditions },
+    { $or: idConditions },
     {
       $set: {
         status: 'failed',
@@ -372,9 +427,8 @@ async function rejectWithdrawalInternal(id: string, reason: string = 'Thông tin
     }
   );
 
-  // 3. Update ALL matching WithdrawalRequest records to rejected
   await WithdrawalRequest.updateMany(
-    { $or: queryConditions },
+    { $or: idConditions },
     {
       $set: {
         status: 'rejected',
@@ -384,7 +438,7 @@ async function rejectWithdrawalInternal(id: string, reason: string = 'Thông tin
     }
   );
 
-  // 4. Refund balance to User
+  // 3. Refund balance to User
   if (targetUserId && targetAmount > 0) {
     const user = await User.findOne({ id: targetUserId });
     if (user) {

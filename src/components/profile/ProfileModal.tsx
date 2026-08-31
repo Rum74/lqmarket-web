@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { compressAvatar } from '../../utils/imageCompressor';
 import { changeUserPassword } from '../../lib/authService';
+import { VIETQR_BANKS, getBankBinCode } from '../../utils/vietqrBanks';
 import {
   User,
   Shield,
@@ -37,21 +38,7 @@ const PRESET_AVATARS = [
   { name: 'Lauriel', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
 ];
 
-const VIETNAM_BANKS = [
-  'MB Bank (Quân Đội)',
-  'Vietcombank',
-  'Techcombank',
-  'VPBank',
-  'ACB (Á Châu)',
-  'BIDV',
-  'VietinBank',
-  'TPBank',
-  'Sacombank',
-  'Agribank',
-  'HDBank',
-  'Ví Điện Tử MoMo',
-  'Ví ZaloPay'
-];
+const VIETNAM_BANKS = VIETQR_BANKS.map(b => `${b.shortName} - ${b.name}`);
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -186,8 +173,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
     setIsSaving(true);
     try {
+      const bankBin = getBankBinCode(bankName);
       await updateUserProfile({
         bankName,
+        bankCode: bankBin,
         bankAccount: bankAccount.trim(),
         bankAccountName: bankAccountName.trim().toUpperCase()
       });

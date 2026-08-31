@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { WalletTransaction, OrderItem } from '../../types';
 import confetti from '../../utils/confetti';
+import { VIETQR_BANKS, getBankInfo, getBankBinCode, buildVietQrUrl } from '../../utils/vietqrBanks';
 import {
   Wallet,
   CheckCircle2,
@@ -24,45 +25,9 @@ import {
   Sparkles,
   Phone,
   Mail,
-  RefreshCw
+  RefreshCw,
+  ChevronDown
 } from 'lucide-react';
-
-const BANK_CODE_MAPPING: Record<string, string> = {
-  'MB': '970422',
-  'MBBANK': '970422',
-  'MB BANK': '970422',
-  'VIETCOMBANK': '970436',
-  'VCB': '970436',
-  'TECHCOMBANK': '970407',
-  'TCB': '970407',
-  'VIETINBANK': '970415',
-  'CTG': '970415',
-  'BIDV': '970418',
-  'ACB': '970416',
-  'VPBANK': '970432',
-  'VPB': '970432',
-  'TPBANK': '970423',
-  'TPB': '970423',
-  'SACOMBANK': '970403',
-  'STB': '970403',
-  'VIB': '970441',
-  'HDBANK': '970437',
-  'SHB': '970443',
-  'MOMO': '970422'
-};
-
-function getBankBinCode(bankName?: string, bankCode?: string): string {
-  if (bankCode && bankCode.trim().length >= 4) return bankCode.trim();
-  if (!bankName) return '970422'; // Default MBBank
-
-  const upper = bankName.toUpperCase();
-  for (const [key, code] of Object.entries(BANK_CODE_MAPPING)) {
-    if (upper.includes(key)) {
-      return code;
-    }
-  }
-  return '970422';
-}
 
 export const AdminPayoutManagement: React.FC = () => {
   const {
@@ -97,6 +62,7 @@ export const AdminPayoutManagement: React.FC = () => {
 
   // Modals state
   const [selectedTxForQr, setSelectedTxForQr] = useState<WalletTransaction | null>(null);
+  const [qrCustomBankBin, setQrCustomBankBin] = useState<string>('970436');
   const [selectedTxForApprove, setSelectedTxForApprove] = useState<WalletTransaction | null>(null);
   const [approveRefNote, setApproveRefNote] = useState('');
   const [isApproving, setIsApproving] = useState(false);
@@ -649,7 +615,11 @@ export const AdminPayoutManagement: React.FC = () => {
                           <div className="flex flex-col gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setSelectedTxForQr(tx)}
+                              onClick={() => {
+                                const initialBin = getBankBinCode(tx.bankName, tx.bankCode);
+                                setQrCustomBankBin(initialBin);
+                                setSelectedTxForQr(tx);
+                              }}
                               className="w-full py-2 px-3 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-600/20 cursor-pointer"
                             >
                               <QrCode size={14} />
@@ -769,113 +739,154 @@ export const AdminPayoutManagement: React.FC = () => {
       )}
 
       {/* MODAL 1: VIETQR NAPAS 24/7 QUICK SCAN */}
-      {selectedTxForQr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
-                <QrCode size={18} />
-                <span>Mã VietQR Chuyển Tiền Giải Ngân 24/7</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTxForQr(null)}
-                className="text-slate-400 hover:text-white p-1 cursor-pointer"
-              >
-                <XCircle size={18} />
-              </button>
-            </div>
+      {selectedTxForQr && (() => {
+        const currentBankInfo = getBankInfo(qrCustomBankBin) || getBankInfo(selectedTxForQr.bankName) || {
+          bin: qrCustomBankBin,
+          shortName: selectedTxForQr.bankName || 'Ngân Hàng',
+          name: selectedTxForQr.bankName || 'Ngân Hàng Thụ Hưởng'
+        };
+        const memo = `LQMARKET GIAI NGAN ${selectedTxForQr.id.slice(-6)}`;
+        const accountName = selectedTxForQr.bankAccountName || selectedTxForQr.userName || '';
+        const qrUrl = buildVietQrUrl(
+          qrCustomBankBin,
+          selectedTxForQr.bankAccount,
+          Math.abs(selectedTxForQr.amount),
+          memo,
+          accountName
+        );
 
-            {/* QR Image Container */}
-            <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center shadow-inner">
-              <img
-                src={`https://img.vietqr.io/image/${getBankBinCode(
-                  selectedTxForQr.bankName,
-                  selectedTxForQr.bankCode
-                )}-${(selectedTxForQr.bankAccount || '').trim()}-compact2.png?amount=${Math.abs(
-                  selectedTxForQr.amount
-                )}&addInfo=${encodeURIComponent(
-                  `LQMARKET GIAI NGAN ${selectedTxForQr.id.slice(-6)}`
-                )}&accountName=${encodeURIComponent(
-                  (selectedTxForQr.bankAccountName || selectedTxForQr.userName || '').trim()
-                )}`}
-                alt="VietQR Napas 24/7"
-                className="w-64 h-64 object-contain"
-                onError={e => {
-                  // Fallback if image proxy is unavailable
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-              <span className="text-[11px] text-slate-800 font-bold mt-1 text-center block">
-                Napas 24/7 Chuyển Tiền Nhanh Miễn Phí
-              </span>
-            </div>
-
-            {/* Recipient Details & Copy Buttons */}
-            <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Ngân hàng:</span>
-                <strong className="text-white">{selectedTxForQr.bankName || 'Ngân hàng thụ hưởng'}</strong>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in overflow-y-auto">
+            <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-5 sm:p-6 max-w-md w-full space-y-4 shadow-2xl my-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                  <QrCode size={18} />
+                  <span>Mã VietQR Chuyển Tiền Giải Ngân 24/7</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxForQr(null)}
+                  className="text-slate-400 hover:text-white p-1 cursor-pointer"
+                >
+                  <XCircle size={18} />
+                </button>
               </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Số tài khoản:</span>
-                <div className="flex items-center gap-1 font-mono font-bold text-amber-300">
-                  <span>{selectedTxForQr.bankAccount}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(selectedTxForQr.bankAccount || '', 'modal_acc')}
-                    className="p-1 text-slate-400 hover:text-white cursor-pointer"
-                  >
-                    {copiedKey === 'modal_acc' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  </button>
+              {/* Bank Selector & Change Bank Option */}
+              <div className="space-y-1.5 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>Ngân hàng thụ hưởng:</span>
+                  <span className="text-[10px] font-mono text-cyan-400 font-bold">BIN: {qrCustomBankBin}</span>
+                </div>
+                <select
+                  value={qrCustomBankBin}
+                  onChange={e => setQrCustomBankBin(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 text-white font-bold text-xs rounded-xl p-2.5 focus:outline-none focus:border-amber-500"
+                >
+                  {VIETQR_BANKS.map(b => (
+                    <option key={b.bin} value={b.bin}>
+                      {b.shortName} - {b.name} (BIN: {b.bin})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* QR Image Container */}
+              <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center shadow-inner">
+                <img
+                  src={qrUrl}
+                  alt={`VietQR ${currentBankInfo.shortName}`}
+                  className="w-60 h-60 sm:w-64 sm:h-64 object-contain"
+                  onError={e => {
+                    // Fallback
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <div className="text-[11px] text-slate-800 font-bold mt-1 text-center">
+                  <span>{currentBankInfo.shortName} • Napas 24/7 Chuyển Tiền Miễn Phí</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Chủ tài khoản:</span>
-                <strong className="text-white uppercase">{selectedTxForQr.bankAccountName || selectedTxForQr.userName}</strong>
-              </div>
+              {/* Recipient Details & Copy Buttons */}
+              <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Ngân hàng:</span>
+                  <strong className="text-white text-right">{currentBankInfo.shortName} ({currentBankInfo.name})</strong>
+                </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Số tiền:</span>
-                <div className="flex items-center gap-1 font-mono font-black text-amber-400 text-sm">
-                  <span>{Math.abs(selectedTxForQr.amount).toLocaleString('vi-VN')}đ</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(String(Math.abs(selectedTxForQr.amount)), 'modal_amt')}
-                    className="p-1 text-slate-400 hover:text-white cursor-pointer"
-                  >
-                    {copiedKey === 'modal_amt' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  </button>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Số tài khoản:</span>
+                  <div className="flex items-center gap-1 font-mono font-bold text-amber-300">
+                    <span>{selectedTxForQr.bankAccount}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(selectedTxForQr.bankAccount || '', 'modal_acc')}
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {copiedKey === 'modal_acc' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Chủ tài khoản:</span>
+                  <strong className="text-white uppercase">{selectedTxForQr.bankAccountName || selectedTxForQr.userName}</strong>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Số tiền giải ngân:</span>
+                  <div className="flex items-center gap-1 font-mono font-black text-amber-400 text-sm">
+                    <span>{Math.abs(selectedTxForQr.amount).toLocaleString('vi-VN')}đ</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(String(Math.abs(selectedTxForQr.amount)), 'modal_amt')}
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {copiedKey === 'modal_amt' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Nội dung chuyển:</span>
+                  <div className="flex items-center gap-1 font-mono font-bold text-cyan-300 text-[11px]">
+                    <span>{memo}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(memo, 'modal_memo')}
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {copiedKey === 'modal_memo' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedTxForQr(null)}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const tx = selectedTxForQr;
-                  setSelectedTxForQr(null);
-                  setSelectedTxForApprove(tx);
-                }}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer"
-              >
-                <Check size={14} />
-                <span>Tôi Đã Chuyển Tiền Thành Công</span>
-              </button>
+              <div className="flex gap-2 justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxForQr(null)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tx = selectedTxForQr;
+                    setSelectedTxForQr(null);
+                    setSelectedTxForApprove(tx);
+                  }}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Xác Nhận Đã Chuyển Tiền</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL 2: CONFIRM APPROVAL MODAL */}
       {selectedTxForApprove && (
