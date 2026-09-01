@@ -154,17 +154,37 @@ export class MemoryCollection<T extends { id?: string; _id?: any }> {
   }
 
   findOne(query: any = {}): any {
-    let matchDoc: any = null;
+    const matching: any[] = [];
     for (const item of this.items.values()) {
       if (matchesQuery(item, query)) {
-        matchDoc = this.wrapDoc(item);
-        break;
+        matching.push(this.wrapDoc(item));
       }
     }
 
+    let matchDoc = matching.length > 0 ? matching[0] : null;
     const queryPromise: any = Promise.resolve(matchDoc);
+
+    queryPromise.sort = (sortObj: any) => {
+      const keys = Object.keys(sortObj || {});
+      if (keys.length > 0 && matching.length > 0) {
+        const sortKey = keys[0];
+        const sortDir = sortObj[sortKey] === -1 || sortObj[sortKey] === 'desc' ? -1 : 1;
+        matching.sort((a, b) => {
+          const valA = a[sortKey];
+          const valB = b[sortKey];
+          if (valA < valB) return -1 * sortDir;
+          if (valA > valB) return 1 * sortDir;
+          return 0;
+        });
+        matchDoc = matching[0];
+      }
+      return queryPromise;
+    };
+
     queryPromise.select = () => queryPromise;
     queryPromise.populate = () => queryPromise;
+    queryPromise.skip = () => queryPromise;
+    queryPromise.limit = () => queryPromise;
     queryPromise.exec = () => queryPromise;
     queryPromise.lean = () => Promise.resolve(matchDoc ? (matchDoc.toJSON ? matchDoc.toJSON() : matchDoc) : null);
     return queryPromise;

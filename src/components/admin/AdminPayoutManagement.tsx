@@ -92,7 +92,9 @@ export const AdminPayoutManagement: React.FC = () => {
   const withdrawalTransactions = transactions.filter(t => t.type === 'withdraw');
 
   const filteredWithdrawals = withdrawalTransactions.filter(t => {
-    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+    if (statusFilter === 'pending' && t.status !== 'pending') return false;
+    if (statusFilter === 'success' && (t.status !== 'success' && t.status !== 'approved' && t.status !== 'completed')) return false;
+    if (statusFilter === 'failed' && (t.status !== 'failed' && t.status !== 'rejected' && t.status !== 'cancelled')) return false;
 
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
@@ -455,8 +457,8 @@ export const AdminPayoutManagement: React.FC = () => {
               {filteredWithdrawals.map(tx => {
                 const user = allUsers.find(u => u.id === tx.userId);
                 const isPending = tx.status === 'pending';
-                const isSuccess = tx.status === 'success';
-                const isFailed = tx.status === 'failed';
+                const isSuccess = tx.status === 'success' || tx.status === 'approved' || tx.status === 'completed';
+                const isFailed = tx.status === 'failed' || tx.status === 'rejected' || tx.status === 'cancelled';
                 const cleanAmount = Math.abs(tx.amount);
 
                 const bankBin = getBankBinCode(tx.bankName, tx.bankCode);
