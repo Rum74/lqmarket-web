@@ -271,9 +271,12 @@ const handleAdminApproveTx = async (req: AuthenticatedRequest, res: Response) =>
     const { id } = req.params;
     const { refNote, userId, amount, bankAccount, bankName } = req.body;
     const result = await approveWithdrawalService(id, refNote, { userId, amount, bankAccount, bankName, refNote });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     return res.json(result);
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi duyệt lệnh rút tiền' });
+    return res.status(500).json({ success: false, message: 'Lỗi duyệt lệnh rút tiền: ' + (error?.message || '') });
   }
 };
 router.put('/transactions/:id/approve', handleAdminApproveTx);
@@ -287,9 +290,12 @@ const handleAdminRejectTx = async (req: AuthenticatedRequest, res: Response) => 
     const { id } = req.params;
     const { reason = 'Thông tin ngân hàng không hợp lệ', userId, amount, bankAccount, bankName } = req.body;
     const result = await rejectWithdrawalService(id, reason, { userId, amount, bankAccount, bankName, reason });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     return res.json(result);
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi từ chối rút tiền' });
+    return res.status(500).json({ success: false, message: 'Lỗi từ chối rút tiền: ' + (error?.message || '') });
   }
 };
 router.put('/transactions/:id/reject', handleAdminRejectTx);
@@ -305,9 +311,15 @@ const handleAdminWithdrawalUpdate = async (req: AuthenticatedRequest, res: Respo
 
     if (status === 'completed' || status === 'approved') {
       const result = await approveWithdrawalService(id, adminNote || '', { userId, amount, bankAccount, bankName, refNote: adminNote });
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
       return res.json(result);
     } else if (status === 'rejected' || status === 'failed') {
       const result = await rejectWithdrawalService(id, reason || adminNote || 'Thông tin ngân hàng không hợp lệ', { userId, amount, bankAccount, bankName, reason: reason || adminNote });
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
       return res.json(result);
     }
 
@@ -316,7 +328,7 @@ const handleAdminWithdrawalUpdate = async (req: AuthenticatedRequest, res: Respo
       message: 'Xử lý yêu cầu rút tiền thành công'
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi xử lý rút tiền' });
+    return res.status(500).json({ success: false, message: 'Lỗi xử lý rút tiền: ' + (error?.message || '') });
   }
 };
 router.put('/withdrawals/:id', handleAdminWithdrawalUpdate);

@@ -989,36 +989,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetBankAccount = extraContext?.bankAccount || matchedTx?.bankAccount;
     const targetBankName = extraContext?.bankName || matchedTx?.bankName;
 
-    // 1. Optimistic update in UI for all matching transactions
-    setTransactions(prev =>
-      prev.map(t => {
-        const isMatch = t.id === cleanId || 
-          t.id === cleanId.replace('wdr_', 'tx_') || 
-          t.id === cleanId.replace('tx_', 'wdr_') ||
-          (targetUserId && t.userId === targetUserId && Math.abs(t.amount) === targetAmount && t.status === 'pending');
-        if (isMatch) {
-          return {
-            ...t,
-            status: 'success',
-            processedAt: new Date().toISOString(),
-            note: refNote ? `${t.note} (Mã GD: ${refNote})` : t.note
-          };
-        }
-        return t;
-      })
-    );
-
-    // Deduct pendingBalance from User account
-    if (targetUserId && targetAmount > 0) {
-      setAllUsers(prev =>
-        prev.map(u =>
-          u.id === targetUserId
-            ? { ...u, pendingBalance: Math.max(0, (u.pendingBalance || 0) - targetAmount) }
-            : u
-        )
-      );
-    }
-
     const payload = {
       id: cleanId,
       txId: cleanId,
@@ -1032,39 +1002,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const endpoints = [
-      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
       { url: `/api/admin/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
+      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
       { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload },
       { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: payload },
-      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'POST', body: payload }
+      { url: `/api/admin/transactions/${cleanId}/approve`, method: 'POST', body: payload }
     ];
 
     let apiSucceeded = false;
-    let finalMessage = 'Đã giải ngân và duyệt lệnh rút tiền thành công!';
+    let finalMessage = '';
+    let lastErrorMessage = '';
 
     for (const ep of endpoints) {
       try {
         const res = ep.method === 'POST'
-          ? await api.post(ep.url, ep.body).catch(() => null)
-          : await api.put(ep.url, ep.body).catch(() => null);
+          ? await api.post(ep.url, ep.body).catch((err: any) => ({ success: false, message: err?.message }))
+          : await api.put(ep.url, ep.body).catch((err: any) => ({ success: false, message: err?.message }));
 
         if (res && res.success) {
           apiSucceeded = true;
-          if (res.message) finalMessage = res.message;
+          finalMessage = res.message || 'Đã giải ngân và cập nhật cơ sở dữ liệu MongoDB thành công!';
           break;
+        } else if (res && res.message) {
+          lastErrorMessage = res.message;
         }
-      } catch {
-        // try next endpoint
+      } catch (err: any) {
+        lastErrorMessage = err?.message || 'Lỗi kết nối';
       }
     }
 
+    if (!apiSucceeded) {
+      return {
+        success: false,
+        message: lastErrorMessage || 'Lỗi cập nhật MongoDB: Không thể xác nhận giải ngân.'
+      };
+    }
+
+    // Refresh state directly from MongoDB after confirmed successful DB update
     try {
       await fetchAllMongoData();
     } catch {}
 
     return {
       success: true,
-      message: finalMessage
+      message: finalMessage || 'Đã giải ngân và duyệt lệnh rút tiền thành công!'
     };
   };
 
@@ -1080,35 +1061,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetBankAccount = extraContext?.bankAccount || matchedTx?.bankAccount;
     const targetBankName = extraContext?.bankName || matchedTx?.bankName;
 
-    // Optimistic update
-    if (targetUserId && refundAmount > 0) {
-      setAllUsers(prev =>
-        prev.map(u => (u.id === targetUserId ? {
-          ...u,
-          balance: (u.balance || 0) + refundAmount,
-          pendingBalance: Math.max(0, (u.pendingBalance || 0) - refundAmount)
-        } : u))
-      );
-    }
-
-    setTransactions(prev =>
-      prev.map(t => {
-        const isMatch = t.id === cleanId || 
-          t.id === cleanId.replace('wdr_', 'tx_') || 
-          t.id === cleanId.replace('tx_', 'wdr_') ||
-          (targetUserId && t.userId === targetUserId && Math.abs(t.amount) === refundAmount && t.status === 'pending');
-        if (isMatch) {
-          return {
-            ...t,
-            status: 'failed',
-            rejectReason: reason,
-            processedAt: new Date().toISOString()
-          };
-        }
-        return t;
-      })
-    );
-
     const payload = {
       id: cleanId,
       txId: cleanId,
@@ -1122,37 +1074,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const endpoints = [
-      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
       { url: `/api/admin/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
+      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
       { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload },
       { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: payload },
-      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'POST', body: payload }
+      { url: `/api/admin/transactions/${cleanId}/reject`, method: 'POST', body: payload }
     ];
 
-    let finalMessage = 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.';
+    let apiSucceeded = false;
+    let finalMessage = '';
+    let lastErrorMessage = '';
 
     for (const ep of endpoints) {
       try {
         const res = ep.method === 'POST'
-          ? await api.post(ep.url, ep.body).catch(() => null)
-          : await api.put(ep.url, ep.body).catch(() => null);
+          ? await api.post(ep.url, ep.body).catch((err: any) => ({ success: false, message: err?.message }))
+          : await api.put(ep.url, ep.body).catch((err: any) => ({ success: false, message: err?.message }));
 
         if (res && res.success) {
-          if (res.message) finalMessage = res.message;
+          apiSucceeded = true;
+          finalMessage = res.message || 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.';
           break;
+        } else if (res && res.message) {
+          lastErrorMessage = res.message;
         }
-      } catch {
-        // try next endpoint
+      } catch (err: any) {
+        lastErrorMessage = err?.message || 'Lỗi kết nối';
       }
     }
 
+    if (!apiSucceeded) {
+      return {
+        success: false,
+        message: lastErrorMessage || 'Lỗi cập nhật MongoDB: Không thể từ chối lệnh rút tiền.'
+      };
+    }
+
+    // Refresh state directly from MongoDB after confirmed successful DB update
     try {
       await fetchAllMongoData();
     } catch {}
 
     return {
       success: true,
-      message: finalMessage
+      message: finalMessage || 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.'
     };
   };
 

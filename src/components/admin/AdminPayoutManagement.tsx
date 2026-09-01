@@ -75,11 +75,11 @@ export const AdminPayoutManagement: React.FC = () => {
   const [isDisbursingEarly, setIsDisbursingEarly] = useState(false);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToastInfo({ message: msg, type });
+    setTimeout(() => setToastInfo(null), 4000);
   };
 
   const handleCopy = (text: string, key: string) => {
@@ -110,11 +110,11 @@ export const AdminPayoutManagement: React.FC = () => {
     return true;
   });
 
-  // Calculate Metrics
+  // Calculate Metrics from direct database records
   const pendingWithdrawals = withdrawalTransactions.filter(t => t.status === 'pending');
   const totalPendingAmount = pendingWithdrawals.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  const successWithdrawals = withdrawalTransactions.filter(t => t.status === 'success');
+  const successWithdrawals = withdrawalTransactions.filter(t => t.status === 'success' || t.status === 'approved' || t.status === 'completed');
   const totalSuccessAmount = successWithdrawals.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
   const escrowOrders = orders.filter(
@@ -139,9 +139,9 @@ export const AdminPayoutManagement: React.FC = () => {
           origin: { y: 0.6 }
         });
       } catch {}
-      showToast(res.message);
+      showToast(res.message, 'success');
     } else {
-      showToast(res.message);
+      showToast(res.message, 'error');
     }
   };
 
@@ -153,7 +153,12 @@ export const AdminPayoutManagement: React.FC = () => {
     setIsRejecting(false);
     setSelectedTxForReject(null);
     setRejectReason('');
-    showToast(res.message);
+    
+    if (res.success) {
+      showToast(res.message, 'success');
+    } else {
+      showToast(res.message, 'error');
+    }
   };
 
   // Disburse early action
@@ -195,10 +200,20 @@ export const AdminPayoutManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Toast alert */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs font-bold shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
-          <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
+      {toastInfo && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 p-4 rounded-2xl border text-xs font-bold shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 ${
+            toastInfo.type === 'error'
+              ? 'bg-rose-950/95 border-rose-500/60 text-rose-200 shadow-rose-950/50'
+              : 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200 shadow-emerald-950/50'
+          }`}
+        >
+          {toastInfo.type === 'error' ? (
+            <XCircle size={18} className="text-rose-400 shrink-0" />
+          ) : (
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+          )}
+          <span>{toastInfo.message}</span>
         </div>
       )}
 
