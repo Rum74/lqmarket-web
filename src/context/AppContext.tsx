@@ -292,21 +292,95 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAutoApproveAccounts, setIsAutoApproveAccounts] = useState<boolean>(false);
 
   // ----------------------------------------------------
-  // MongoDB Master Data Fetching Function
+  // MongoDB Master Data Fetching Function (High-Speed Bootstrap Sync)
   // ----------------------------------------------------
   const fetchAllMongoData = useCallback(async () => {
     try {
       setCloudSyncStatus('syncing');
 
-      // 1. Fetch Accounts from MongoDB
-      const accRes = await api.get('/api/accounts').catch(() => null);
-      if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
-        const list = accRes.data || accRes.accounts;
-        setAccounts(list || []);
+      // 1. Primary: Ultra-fast aggregated Bootstrap endpoint (< 50ms)
+      const bootRes = await api.get('/api/bootstrap').catch(() => null);
+      if (bootRes && bootRes.success) {
+        if (Array.isArray(bootRes.accounts)) {
+          setAccounts(bootRes.accounts);
+        }
+        if (bootRes.stats) {
+          if (typeof bootRes.stats.totalAvailableAccounts === 'number') {
+            setTotalSystemAvailableAccounts(bootRes.stats.totalAvailableAccounts);
+          }
+          if (typeof bootRes.stats.totalCompletedTransactions === 'number') {
+            setTotalSystemCompletedSales(bootRes.stats.totalCompletedTransactions);
+          }
+          if (typeof bootRes.stats.isAutoApprove === 'boolean') {
+            setIsAutoApproveAccounts(bootRes.stats.isAutoApprove);
+          }
+        }
+        if (typeof bootRes.isMysteryBoxEventActive === 'boolean') {
+          setIsMysteryBoxEventActive(bootRes.isMysteryBoxEventActive);
+        }
+        if (Array.isArray(bootRes.mysteryBoxes) && bootRes.mysteryBoxes.length > 0) {
+          setMysteryBoxes(bootRes.mysteryBoxes);
+        }
+        if (Array.isArray(bootRes.mysteryRewards) && bootRes.mysteryRewards.length > 0) {
+          setMysteryRewards(bootRes.mysteryRewards);
+        }
+        if (Array.isArray(bootRes.mysteryHistory)) {
+          setMysteryHistory(bootRes.mysteryHistory);
+        }
+        if (Array.isArray(bootRes.transactions)) {
+          setTransactions(bootRes.transactions);
+        }
+        if (bootRes.currentUser) {
+          const userObj = bootRes.currentUser;
+          setCurrentUserId(userObj.id);
+          setIsLoggedIn(true);
+          setAllUsers(prev => {
+            const filtered = prev.filter(u => u.id !== userObj.id && u.email !== userObj.email);
+            return [userObj, ...filtered];
+          });
+        }
+        if (Array.isArray(bootRes.allUsers) && bootRes.allUsers.length > 0) {
+          setAllUsers(bootRes.allUsers);
+        }
+        if (Array.isArray(bootRes.orders)) {
+          setOrders(bootRes.orders);
+        }
+        if (Array.isArray(bootRes.userInventory)) {
+          setUserInventory(bootRes.userInventory);
+        }
+        if (Array.isArray(bootRes.notifications)) {
+          setNotifications(bootRes.notifications);
+        }
+        if (Array.isArray(bootRes.chatMessages) && bootRes.chatMessages.length > 0) {
+          setChatMessages(bootRes.chatMessages);
+        }
+
+        setCloudSyncStatus('synced');
+        return;
       }
 
-      // 1b. Fetch Public System Stats (Total completed transactions, total available accounts & auto-approve)
-      const statsRes = await api.get('/api/accounts/public-stats').catch(() => null);
+      // 2. Parallel Fallback if Bootstrap endpoint is unreachable
+      const [
+        accRes,
+        statsRes,
+        settingsRes,
+        boxRes,
+        rewRes,
+        histRes,
+        txRes
+      ] = await Promise.all([
+        api.get('/api/accounts?limit=1000').catch(() => null),
+        api.get('/api/accounts/public-stats').catch(() => null),
+        api.get('/api/mystery-boxes/settings').catch(() => null),
+        api.get('/api/mystery-boxes').catch(() => null),
+        api.get('/api/mystery-boxes/rewards/all').catch(() => null),
+        api.get('/api/mystery-boxes/public/history').catch(() => null),
+        api.get('/api/wallet/transactions?all=true').catch(() => null)
+      ]);
+
+      if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
+        setAccounts(accRes.data || accRes.accounts);
+      }
       if (statsRes && statsRes.success) {
         if (typeof statsRes.totalCompletedTransactions === 'number') {
           setTotalSystemCompletedSales(statsRes.totalCompletedTransactions);
@@ -318,135 +392,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsAutoApproveAccounts(statsRes.isAutoApprove);
         }
       }
-
-      // 2. Fetch Mystery Box Settings (Event Active Status) from MongoDB
-      const settingsRes = await api.get('/api/mystery-boxes/settings').catch(() => null);
       if (settingsRes && settingsRes.success) {
         const active = settingsRes.isMysteryBoxEventActive ?? settingsRes.isEventActive ?? settingsRes.isActive;
-        if (typeof active === 'boolean') {
-          setIsMysteryBoxEventActive(active);
-        }
+        if (typeof active === 'boolean') setIsMysteryBoxEventActive(active);
       }
-
-      // 3. Fetch Mystery Box Tiers from MongoDB
-      const boxRes = await api.get('/api/mystery-boxes').catch(() => null);
       if (boxRes && boxRes.success && Array.isArray(boxRes.data || boxRes.boxes)) {
-        const boxList = boxRes.data || boxRes.boxes;
-        if (boxList.length > 0) {
-          setMysteryBoxes(boxList);
-        }
+        setMysteryBoxes(boxRes.data || boxRes.boxes);
       }
-
-      // 4. Fetch Mystery Rewards from MongoDB
-      const rewRes = await api.get('/api/mystery-boxes/rewards/all').catch(() => null);
       if (rewRes && rewRes.success && Array.isArray(rewRes.data || rewRes.rewards)) {
-        const rewList = rewRes.data || rewRes.rewards;
-        if (rewList.length > 0) {
-          setMysteryRewards(rewList);
-        }
+        setMysteryRewards(rewRes.data || rewRes.rewards);
       }
-
-      // 5. Fetch Mystery History from MongoDB
-      const histRes = await api.get('/api/mystery-boxes/public/history').catch(() => null);
       if (histRes && histRes.success && Array.isArray(histRes.data || histRes.history)) {
-        const histList = histRes.data || histRes.history;
-        setMysteryHistory(histList || []);
+        setMysteryHistory(histRes.data || histRes.history);
+      }
+      if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
+        setTransactions(txRes.data || txRes.transactions);
       }
 
-      // Authenticated queries if token exists
+      // Authenticated parallel queries if token exists
       const token = getAuthToken();
       if (token) {
-        // Fetch Current User
         const meRes = await api.get('/api/auth/me').catch(() => null);
         if (meRes && meRes.success && meRes.user) {
           const userObj = meRes.user;
           setCurrentUserId(userObj.id);
           setIsLoggedIn(true);
-          setAllUsers(prev => {
-            const filtered = prev.filter(u => u.id !== userObj.id && u.email !== userObj.email);
-            return [userObj, ...filtered];
-          });
-          try {
-            localStorage.setItem('lqmarket_current_user_id', userObj.id);
-            localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(userObj));
-          } catch {}
 
-          // If user is admin, fetch ALL data (users, accounts, orders, transactions) from Admin API
           if (userObj.role === 'admin') {
-            const adminUsersRes = await api.get('/api/admin/users').catch(() => null);
-            if (adminUsersRes && adminUsersRes.success && Array.isArray(adminUsersRes.data || adminUsersRes.users)) {
-              const uList = adminUsersRes.data || adminUsersRes.users;
-              setAllUsers(uList);
+            const [adminUsersRes, adminProductsRes, adminOrdersRes, adminTxRes] = await Promise.all([
+              api.get('/api/admin/users').catch(() => null),
+              api.get('/api/admin/products').catch(() => null),
+              api.get('/api/admin/orders').catch(() => null),
+              api.get('/api/admin/transactions').catch(() => null)
+            ]);
+
+            if (adminUsersRes?.success && Array.isArray(adminUsersRes.data || adminUsersRes.users)) {
+              setAllUsers(adminUsersRes.data || adminUsersRes.users);
             }
-            const adminProductsRes = await api.get('/api/admin/products').catch(() => null);
-            if (adminProductsRes && adminProductsRes.success && Array.isArray(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts)) {
-              const aList = adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts;
-              setAccounts(aList);
+            if (adminProductsRes?.success && Array.isArray(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts)) {
+              setAccounts(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts);
             }
-            const adminOrdersRes = await api.get('/api/admin/orders').catch(() => null);
-            if (adminOrdersRes && adminOrdersRes.success && Array.isArray(adminOrdersRes.data || adminOrdersRes.orders)) {
+            if (adminOrdersRes?.success && Array.isArray(adminOrdersRes.data || adminOrdersRes.orders)) {
               setOrders(adminOrdersRes.data || adminOrdersRes.orders);
             }
-            const adminTxRes = await api.get('/api/admin/transactions').catch(() => null);
-            if (adminTxRes && adminTxRes.success && Array.isArray(adminTxRes.data || adminTxRes.transactions)) {
+            if (adminTxRes?.success && Array.isArray(adminTxRes.data || adminTxRes.transactions)) {
               setTransactions(adminTxRes.data || adminTxRes.transactions);
             }
-          }
-        }
-
-        // Fetch User Orders (for non-admin or personal view)
-        const ordRes = await api.get('/api/orders').catch(() => null);
-        if (ordRes && ordRes.success && Array.isArray(ordRes.data || ordRes.orders)) {
-          setOrders(prev => {
-            const currentRole = meRes?.user?.role;
-            if (currentRole === 'admin') return prev; // Keep admin's full orders list
-            return ordRes.data || ordRes.orders;
-          });
-        }
-
-        // Fetch Wallet Transactions (For admin, adminTxRes above already loaded the authoritative list)
-        const isAdmin = meRes?.user?.role === 'admin';
-        if (!isAdmin) {
-          const txRes = await api.get('/api/wallet/transactions').catch(() => null);
-          if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
-            setTransactions(txRes.data || txRes.transactions);
-          }
-        }
-
-        // Fetch Notifications
-        const notifRes = await api.get('/api/notifications').catch(() => null);
-        if (notifRes && notifRes.success && Array.isArray(notifRes.data || notifRes.notifications)) {
-          setNotifications(notifRes.data || notifRes.notifications);
-        }
-
-        // Fetch User Inventory
-        const invRes = await api.get('/api/mystery-boxes/user/inventory').catch(() => null);
-        if (invRes && invRes.success && Array.isArray(invRes.data || invRes.inventory || invRes.items)) {
-          setUserInventory(invRes.data || invRes.inventory || invRes.items);
-        }
-
-        // Fetch Chat Messages from MongoDB
-        const chatRes = await api.get('/api/conversations/messages').catch(() => null);
-        if (chatRes && chatRes.success && Array.isArray(chatRes.data || chatRes.messages)) {
-          const fetchedMsgs = chatRes.data || chatRes.messages;
-          if (fetchedMsgs.length > 0) {
-            setChatMessages(fetchedMsgs);
-          }
-        }
-
-        // Fetch Favorites/Wishlist
-        const favRes = await api.get('/api/favorites').catch(() => null);
-        if (favRes && favRes.success && Array.isArray(favRes.data || favRes.favorites)) {
-          const fList = favRes.data || favRes.favorites;
-          setWishlistIds(fList.map((f: any) => (typeof f === 'string' ? f : f.accountId || f.id)));
-        }
-      } else {
-        // Fallback for public/demo state: fetch transactions anyway
-        const txRes = await api.get('/api/wallet/transactions?all=true').catch(() => null);
-        if (txRes && txRes.success && Array.isArray(txRes.data || txRes.transactions)) {
-          const txList = txRes.data || txRes.transactions;
-          if (txList.length > 0) {
-            setTransactions(txList);
+          } else {
+            const [ordRes, userTxRes, notifRes, invRes] = await Promise.all([
+              api.get('/api/orders').catch(() => null),
+              api.get('/api/wallet/transactions').catch(() => null),
+              api.get('/api/notifications').catch(() => null),
+              api.get('/api/mystery-boxes/user/inventory').catch(() => null)
+            ]);
+            if (ordRes?.success && Array.isArray(ordRes.data || ordRes.orders)) {
+              setOrders(ordRes.data || ordRes.orders);
+            }
+            if (userTxRes?.success && Array.isArray(userTxRes.data || userTxRes.transactions)) {
+              setTransactions(userTxRes.data || userTxRes.transactions);
+            }
+            if (notifRes?.success && Array.isArray(notifRes.data || notifRes.notifications)) {
+              setNotifications(notifRes.data || notifRes.notifications);
+            }
+            if (invRes?.success && Array.isArray(invRes.data || invRes.inventory || invRes.items)) {
+              setUserInventory(invRes.data || invRes.inventory || invRes.items);
+            }
           }
         }
       }

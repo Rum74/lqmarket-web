@@ -39,7 +39,8 @@ import {
   Key,
   BadgeCheck,
   PackageOpen,
-  Database
+  Database,
+  Gamepad2
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -77,6 +78,10 @@ export const AdminDashboardView: React.FC = () => {
   const [isSeedingData, setIsSeedingData] = useState(false);
   const [isTogglingAutoApprove, setIsTogglingAutoApprove] = useState(false);
   const [showWipeConfirmModal, setShowWipeConfirmModal] = useState(false);
+
+  // Accounts Management State
+  const [accountSearchTerm, setAccountSearchTerm] = useState('');
+  const [accountStatusFilter, setAccountStatusFilter] = useState<'all' | 'approved' | 'pending' | 'sold' | 'rejected'>('all');
 
   // User Management State
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -670,74 +675,172 @@ export const AdminDashboardView: React.FC = () => {
       )}
 
       {/* TAB 2: ALL ACCOUNTS MANAGER */}
-      {activeTab === 'accounts' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-          <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">Quản Lý Toàn Bộ {accounts.length} Tài Khoản</h3>
-          </div>
+      {activeTab === 'accounts' && (() => {
+        const filteredAccounts = accounts.filter(acc => {
+          const matchesStatus = accountStatusFilter === 'all' || acc.status === accountStatusFilter;
+          const search = accountSearchTerm.toLowerCase().trim();
+          const matchesSearch = !search || 
+            (acc.title && acc.title.toLowerCase().includes(search)) ||
+            (acc.code && acc.code.toLowerCase().includes(search)) ||
+            (acc.sellerName && acc.sellerName.toLowerCase().includes(search)) ||
+            (acc.rank && acc.rank.toLowerCase().includes(search));
+          return matchesStatus && matchesSearch;
+        });
 
-          <div className="divide-y divide-slate-800">
-            {accounts.map(acc => (
-              <div
-                key={acc.id}
-                className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <img
-                    src={acc.images[0]}
-                    alt={acc.title}
-                    className="w-16 h-12 rounded-xl object-cover border border-slate-800 shrink-0"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-amber-400">#{acc.code}</span>
-                      <RankBadge rank={acc.rank} size="sm" />
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          acc.status === 'approved'
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : acc.status === 'pending'
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : acc.status === 'sold'
-                            ? 'bg-purple-500/20 text-purple-300'
-                            : 'bg-rose-500/20 text-rose-300'
-                        }`}
-                      >
-                        {acc.status}
-                      </span>
+        return (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-5">
+            {/* Header & Stats Bar */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Gamepad2 size={18} className="text-amber-400" />
+                  <span>Quản Lý Toàn Bộ Tài Khoản ({accounts.length})</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Đang hiển thị {filteredAccounts.length} / {accounts.length} acc trên hệ thống
+                </p>
+              </div>
+
+              {/* Status Filters */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 text-xs">
+                {[
+                  { id: 'all', label: `Tất Cả (${accounts.length})` },
+                  { id: 'approved', label: `Đang Bán (${approvedAccounts.length})`, color: 'text-emerald-400' },
+                  { id: 'pending', label: `Chờ Duyệt (${pendingAccounts.length})`, color: 'text-amber-400' },
+                  { id: 'sold', label: `Đã Bán (${soldAccounts.length})`, color: 'text-purple-400' },
+                  { id: 'rejected', label: `Bị Từ Chối (${accounts.filter(a => a.status === 'rejected').length})`, color: 'text-rose-400' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setAccountStatusFilter(tab.id as any)}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                      accountStatusFilter === tab.id
+                        ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <span className={accountStatusFilter === tab.id ? '' : tab.color}>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                value={accountSearchTerm}
+                onChange={e => setAccountSearchTerm(e.target.value)}
+                placeholder="Tìm theo Mã Acc (#1024), Tiêu đề, Tên Seller, Bậc Rank..."
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+              />
+              {accountSearchTerm && (
+                <button
+                  onClick={() => setAccountSearchTerm('')}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Accounts List */}
+            {filteredAccounts.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 space-y-2 bg-slate-950/50 rounded-2xl border border-slate-800/50">
+                <Gamepad2 size={36} className="mx-auto text-slate-600 mb-2 opacity-50" />
+                <p className="text-sm font-bold text-slate-300">Không tìm thấy tài khoản nào phù hợp.</p>
+                <p className="text-xs text-slate-500">Thử tìm với từ khóa khác hoặc chuyển bộ lọc trạng thái.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-800/80 rounded-2xl bg-slate-950/40 border border-slate-800/60 overflow-hidden">
+                {filteredAccounts.map(acc => (
+                  <div
+                    key={acc.id}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-slate-800/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <img
+                        src={acc.images?.[0] || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=200'}
+                        alt={acc.title}
+                        className="w-16 h-12 sm:w-20 sm:h-14 rounded-xl object-cover border border-slate-800 shrink-0 shadow-sm"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono font-bold text-amber-400">#{acc.code}</span>
+                          <RankBadge rank={acc.rank} size="sm" />
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              acc.status === 'approved'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : acc.status === 'pending'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : acc.status === 'sold'
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            }`}
+                          >
+                            {acc.status === 'approved' ? 'Đang Bán' : acc.status === 'pending' ? 'Chờ Duyệt' : acc.status === 'sold' ? 'Đã Bán' : 'Từ Chối'}
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {acc.championsCount || 0} Tướng • {acc.skinsCount || 0} Trang Phục
+                          </span>
+                        </div>
+                        <h4 className="text-xs sm:text-sm font-bold text-white mt-1 truncate">{acc.title}</h4>
+                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>Seller: <strong className="text-slate-300">{acc.sellerName}</strong></span>
+                          <span>•</span>
+                          <span className="text-amber-400 font-bold">Giá: {acc.price.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      </div>
                     </div>
-                    <h4 className="text-xs font-bold text-white mt-1 line-clamp-1">{acc.title}</h4>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Seller: {acc.sellerName} • Giá: {acc.price.toLocaleString('vi-VN')}đ
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                      {acc.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(acc.id)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-md"
+                          >
+                            <CheckCircle2 size={12} />
+                            <span>Duyệt</span>
+                          </button>
+                          <button
+                            onClick={() => setRejectionModalAccId(acc.id)}
+                            className="px-3 py-1.5 bg-rose-900/80 hover:bg-rose-800 text-rose-200 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-all"
+                          >
+                            <XCircle size={12} />
+                            <span>Từ Chối</span>
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => setSelectedAccountId(acc.id)}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-all"
+                      >
+                        <Eye size={12} />
+                        <span>Xem</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          deleteAccount(acc.id);
+                          showNotification(`Đã xóa tài khoản #${acc.code}`);
+                        }}
+                        className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-all"
+                      >
+                        <Trash2 size={12} />
+                        <span>Xóa</span>
+                      </button>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                  <button
-                    onClick={() => setSelectedAccountId(acc.id)}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer"
-                  >
-                    <Eye size={12} />
-                    <span>Xem</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      deleteAccount(acc.id);
-                      showNotification(`Đã xóa tài khoản #${acc.code}`);
-                    }}
-                    className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 size={12} />
-                    <span>Xóa</span>
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 3: DISPUTES RESOLVER (ESCROW ARBITRATION CENTER) */}
       {activeTab === 'disputes' && (

@@ -18,6 +18,7 @@ import chatRoutes from './server/routes/chatRoutes';
 import notificationRoutes from './server/routes/notificationRoutes';
 import adminRoutes from './server/routes/adminRoutes';
 import uploadRoutes from './server/routes/uploadRoutes';
+import bootstrapRoutes from './server/routes/bootstrapRoutes';
 
 async function startServer() {
   const app = express();
@@ -96,6 +97,8 @@ async function startServer() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
+  app.use('/api/bootstrap', bootstrapRoutes);
+  app.use('/api/sync', bootstrapRoutes);
 
   // Global Webhook listeners (PayOS IPN)
   app.all('/webhook', (req, res, next) => {

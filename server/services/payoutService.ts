@@ -14,9 +14,9 @@ export interface PayoutContextData {
 }
 
 /**
- * Builds query condition for finding transactions/withdrawals across MongoDB and Memory Store
+ * Builds safe query condition for finding transactions/withdrawals without throwing CastErrors
  */
-function buildIdConditions(id: string, contextData?: PayoutContextData): any[] {
+function buildSafeConditions(id: string, contextData?: PayoutContextData): any[] {
   const cleanId = String(id || '').trim();
   const conditions: any[] = [];
 
@@ -25,16 +25,15 @@ function buildIdConditions(id: string, contextData?: PayoutContextData): any[] {
     conditions.push({ id: cleanId.replace('wdr_', 'tx_') });
     conditions.push({ id: cleanId.replace('tx_', 'wdr_') });
 
-    // If MongoDB ObjectId is valid
-    if (mongoose.Types.ObjectId.isValid(cleanId)) {
+    // Only add _id condition if it is a strict 24-character hexadecimal ObjectId
+    if (/^[0-9a-fA-F]{24}$/.test(cleanId) && mongoose.Types.ObjectId.isValid(cleanId)) {
       try {
         conditions.push({ _id: new mongoose.Types.ObjectId(cleanId) });
       } catch {}
-      conditions.push({ _id: cleanId });
     }
 
     const timestampNum = cleanId.match(/\d{10,}/)?.[0];
-    if (timestampNum) {
+    if (timestampNum && timestampNum.length >= 8) {
       conditions.push({ id: { $regex: timestampNum } });
     }
   }
@@ -61,95 +60,86 @@ export async function approveWithdrawalService(
 ): Promise<{ success: boolean; message: string }> {
   const now = new Date().toISOString();
   const cleanId = String(id || '').trim();
-  const conditions = buildIdConditions(cleanId, contextData);
+  const conditions = buildSafeConditions(cleanId, contextData);
 
-  // 1. Find all matching transactions and withdrawal requests
-  const matchedTxs = await WalletTransaction.find({ $or: conditions }).lean();
-  const matchedWdrs = await WithdrawalRequest.find({ $or: conditions }).lean();
-
-  const targetUserId = contextData?.userId || matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
-  const targetAmount = contextData?.amount || (matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0));
-  const targetBankName = contextData?.bankName || matchedTxs[0]?.bankName || matchedWdrs[0]?.bankName || 'Ngân hàng';
-  const targetBankAccount = contextData?.bankAccount || matchedTxs[0]?.bankAccount || matchedWdrs[0]?.bankAccount || '';
-
-  // Extract explicit IDs
-  const txIds = matchedTxs.map((t: any) => t.id).filter(Boolean);
-  const wdrIds = matchedWdrs.map((w: any) => w.id).filter(Boolean);
+  // 1. Find matching WithdrawalRequest document
+  let targetWdr: any = null;
   if (cleanId) {
-    txIds.push(cleanId, cleanId.replace('wdr_', 'tx_'));
-    wdrIds.push(cleanId, cleanId.replace('tx_', 'wdr_'));
+    targetWdr = await WithdrawalRequest.findOne({ id: cleanId });
+    if (!targetWdr) {
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
+    }
+    if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+      try {
+        targetWdr = await WithdrawalRequest.findById(cleanId);
+      } catch {}
+    }
   }
+
+  if (!targetWdr && contextData?.userId) {
+    targetWdr = await WithdrawalRequest.findOne({
+      userId: contextData.userId,
+      status: 'pending'
+    }).sort({ createdAt: -1 });
+  }
+
+  if (!targetWdr) {
+    // Try finding via conditions
+    targetWdr = await WithdrawalRequest.findOne({ $or: conditions }).sort({ createdAt: -1 });
+  }
+
+  // Find matching WalletTransaction
+  let targetTx: any = null;
+  if (cleanId) {
+    targetTx = await WalletTransaction.findOne({ id: cleanId });
+    if (!targetTx) {
+      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
+    }
+  }
+  if (!targetTx && contextData?.userId) {
+    targetTx = await WalletTransaction.findOne({
+      userId: contextData.userId,
+      type: 'withdraw',
+      status: 'pending'
+    }).sort({ createdAt: -1 });
+  }
+
+  // Resolve target details
+  const targetUserId =
+    contextData?.userId || targetWdr?.userId || targetTx?.userId || '';
+  const targetAmount =
+    contextData?.amount ||
+    (targetWdr ? targetWdr.amount : targetTx ? Math.abs(targetTx.amount) : 0);
+  const targetBankName =
+    contextData?.bankName || targetWdr?.bankName || targetTx?.bankName || 'Ngân hàng';
+  const targetBankAccount =
+    contextData?.bankAccount || targetWdr?.bankAccount || targetTx?.bankAccount || '';
 
   const noteMsg = refNote
     ? `Yêu cầu rút tiền về ${targetBankName} (${targetBankAccount}) - Đã giải ngân (Mã GD: ${refNote})`
     : `Yêu cầu rút tiền về ${targetBankName} (${targetBankAccount}) - Đã giải ngân thành công`;
 
-  // 2. Direct update by ID conditions in both collections
-  await Promise.all([
-    WalletTransaction.updateMany(
-      { $or: conditions },
-      {
-        $set: {
-          status: 'success',
-          processedAt: now,
-          note: noteMsg
-        }
-      }
-    ),
-    WithdrawalRequest.updateMany(
-      { $or: conditions },
-      {
-        $set: {
-          status: 'approved',
-          processedAt: now,
-          referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
-        }
-      }
-    )
-  ]);
-
-  // 3. Update by explicit ID array
-  if (txIds.length > 0) {
-    await WalletTransaction.updateMany(
-      { id: { $in: txIds } },
-      {
-        $set: {
-          status: 'success',
-          processedAt: now,
-          note: noteMsg
-        }
-      }
-    );
-  }
-  if (wdrIds.length > 0) {
-    await WithdrawalRequest.updateMany(
-      { id: { $in: wdrIds } },
-      {
-        $set: {
-          status: 'approved',
-          processedAt: now,
-          referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
-        }
-      }
-    );
+  // 2. Directly update target WithdrawalRequest document if found
+  if (targetWdr) {
+    targetWdr.status = 'approved';
+    targetWdr.processedAt = now;
+    targetWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
+    await targetWdr.save();
   }
 
-  // 4. Update user pendingBalance
-  if (targetUserId) {
-    // Also resolve any remaining pending withdrawal for this specific user & amount
-    if (targetAmount > 0) {
-      await WalletTransaction.updateMany(
-        { userId: targetUserId, type: 'withdraw', amount: -targetAmount, status: 'pending' },
-        {
-          $set: {
-            status: 'success',
-            processedAt: now,
-            note: noteMsg
-          }
-        }
-      );
-      await WithdrawalRequest.updateMany(
-        { userId: targetUserId, amount: targetAmount, status: 'pending' },
+  // 3. Directly update target WalletTransaction document if found
+  if (targetTx) {
+    targetTx.status = 'success';
+    targetTx.processedAt = now;
+    targetTx.note = noteMsg;
+    await targetTx.save();
+  }
+
+  // 4. Also perform comprehensive updateMany across both collections to ensure all related entries are updated
+  try {
+    await Promise.all([
+      WithdrawalRequest.updateMany(
+        { $or: conditions },
         {
           $set: {
             status: 'approved',
@@ -157,7 +147,49 @@ export async function approveWithdrawalService(
             referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
           }
         }
-      );
+      ),
+      WalletTransaction.updateMany(
+        { $or: conditions },
+        {
+          $set: {
+            status: 'success',
+            processedAt: now,
+            note: noteMsg
+          }
+        }
+      )
+    ]);
+  } catch (updateErr) {
+    console.warn('Payout updateMany notice:', updateErr);
+  }
+
+  // 5. Update user pendingBalance & send notification
+  if (targetUserId) {
+    if (targetAmount > 0) {
+      try {
+        await Promise.all([
+          WithdrawalRequest.updateMany(
+            { userId: targetUserId, amount: targetAmount, status: 'pending' },
+            {
+              $set: {
+                status: 'approved',
+                processedAt: now,
+                referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
+              }
+            }
+          ),
+          WalletTransaction.updateMany(
+            { userId: targetUserId, type: 'withdraw', amount: -targetAmount, status: 'pending' },
+            {
+              $set: {
+                status: 'success',
+                processedAt: now,
+                note: noteMsg
+              }
+            }
+          )
+        ]);
+      } catch {}
     }
 
     const user = await User.findOne({ id: targetUserId });
@@ -182,7 +214,7 @@ export async function approveWithdrawalService(
       console.warn('Approve notif notice:', notifErr);
     }
   } else {
-    // If no matching user was linked by ID, update the oldest pending record
+    // If no target user resolved, update the oldest pending record as fallback
     const fallbackPendingWdr = await WithdrawalRequest.findOne({ status: 'pending' });
     if (fallbackPendingWdr) {
       fallbackPendingWdr.status = 'approved';
@@ -196,7 +228,6 @@ export async function approveWithdrawalService(
         await u.save();
       }
     }
-
     const fallbackPendingTx = await WalletTransaction.findOne({ type: 'withdraw', status: 'pending' });
     if (fallbackPendingTx) {
       fallbackPendingTx.status = 'success';
@@ -219,98 +250,128 @@ export async function rejectWithdrawalService(
 ): Promise<{ success: boolean; message: string }> {
   const now = new Date().toISOString();
   const cleanId = String(id || '').trim();
-  const conditions = buildIdConditions(cleanId, contextData);
+  const conditions = buildSafeConditions(cleanId, contextData);
 
-  // 1. Find all matching transactions and withdrawal requests
-  const matchedTxs = await WalletTransaction.find({ $or: conditions }).lean();
-  const matchedWdrs = await WithdrawalRequest.find({ $or: conditions }).lean();
-
-  const targetUserId = contextData?.userId || matchedTxs[0]?.userId || matchedWdrs[0]?.userId;
-  const targetAmount = contextData?.amount || (matchedTxs[0] ? Math.abs(matchedTxs[0].amount) : (matchedWdrs[0]?.amount || 0));
-  const targetBankName = contextData?.bankName || matchedTxs[0]?.bankName || matchedWdrs[0]?.bankName || 'Ngân hàng';
-  const targetBankAccount = contextData?.bankAccount || matchedTxs[0]?.bankAccount || matchedWdrs[0]?.bankAccount || '';
-
-  // Extract explicit IDs
-  const txIds = matchedTxs.map((t: any) => t.id).filter(Boolean);
-  const wdrIds = matchedWdrs.map((w: any) => w.id).filter(Boolean);
+  // 1. Find matching WithdrawalRequest document
+  let targetWdr: any = null;
   if (cleanId) {
-    txIds.push(cleanId, cleanId.replace('wdr_', 'tx_'));
-    wdrIds.push(cleanId, cleanId.replace('tx_', 'wdr_'));
+    targetWdr = await WithdrawalRequest.findOne({ id: cleanId });
+    if (!targetWdr) {
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
+    }
+    if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+      try {
+        targetWdr = await WithdrawalRequest.findById(cleanId);
+      } catch {}
+    }
   }
 
-  // 2. Direct update by ID conditions in both collections
-  await Promise.all([
-    WalletTransaction.updateMany(
-      { $or: conditions },
-      {
-        $set: {
-          status: 'failed',
-          rejectReason: reason,
-          processedAt: now
-        }
-      }
-    ),
-    WithdrawalRequest.updateMany(
-      { $or: conditions },
-      {
-        $set: {
-          status: 'rejected',
-          rejectionReason: reason,
-          processedAt: now
-        }
-      }
-    )
-  ]);
-
-  // 3. Update by explicit ID array
-  if (txIds.length > 0) {
-    await WalletTransaction.updateMany(
-      { id: { $in: txIds } },
-      {
-        $set: {
-          status: 'failed',
-          rejectReason: reason,
-          processedAt: now
-        }
-      }
-    );
-  }
-  if (wdrIds.length > 0) {
-    await WithdrawalRequest.updateMany(
-      { id: { $in: wdrIds } },
-      {
-        $set: {
-          status: 'rejected',
-          rejectionReason: reason,
-          processedAt: now
-        }
-      }
-    );
+  if (!targetWdr && contextData?.userId) {
+    targetWdr = await WithdrawalRequest.findOne({
+      userId: contextData.userId,
+      status: 'pending'
+    }).sort({ createdAt: -1 });
   }
 
-  // 4. Refund balance to User
+  if (!targetWdr) {
+    targetWdr = await WithdrawalRequest.findOne({ $or: conditions }).sort({ createdAt: -1 });
+  }
+
+  // Find matching WalletTransaction
+  let targetTx: any = null;
+  if (cleanId) {
+    targetTx = await WalletTransaction.findOne({ id: cleanId });
+    if (!targetTx) {
+      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
+    }
+  }
+  if (!targetTx && contextData?.userId) {
+    targetTx = await WalletTransaction.findOne({
+      userId: contextData.userId,
+      type: 'withdraw',
+      status: 'pending'
+    }).sort({ createdAt: -1 });
+  }
+
+  // Resolve target details
+  const targetUserId =
+    contextData?.userId || targetWdr?.userId || targetTx?.userId || '';
+  const targetAmount =
+    contextData?.amount ||
+    (targetWdr ? targetWdr.amount : targetTx ? Math.abs(targetTx.amount) : 0);
+  const targetBankName =
+    contextData?.bankName || targetWdr?.bankName || targetTx?.bankName || 'Ngân hàng';
+  const targetBankAccount =
+    contextData?.bankAccount || targetWdr?.bankAccount || targetTx?.bankAccount || '';
+
+  // 2. Update target documents
+  if (targetWdr) {
+    targetWdr.status = 'rejected';
+    targetWdr.rejectionReason = reason;
+    targetWdr.processedAt = now;
+    await targetWdr.save();
+  }
+  if (targetTx) {
+    targetTx.status = 'failed';
+    targetTx.rejectReason = reason;
+    targetTx.processedAt = now;
+    await targetTx.save();
+  }
+
+  // 3. Comprehensive updateMany
+  try {
+    await Promise.all([
+      WithdrawalRequest.updateMany(
+        { $or: conditions },
+        {
+          $set: {
+            status: 'rejected',
+            rejectionReason: reason,
+            processedAt: now
+          }
+        }
+      ),
+      WalletTransaction.updateMany(
+        { $or: conditions },
+        {
+          $set: {
+            status: 'failed',
+            rejectReason: reason,
+            processedAt: now
+          }
+        }
+      )
+    ]);
+  } catch (updateErr) {
+    console.warn('Payout reject updateMany notice:', updateErr);
+  }
+
+  // 4. Refund balance to User & Send Notification
   if (targetUserId && targetAmount > 0) {
-    // Also mark pending withdrawal as rejected
-    await WalletTransaction.updateMany(
-      { userId: targetUserId, type: 'withdraw', amount: -targetAmount, status: 'pending' },
-      {
-        $set: {
-          status: 'failed',
-          rejectReason: reason,
-          processedAt: now
-        }
-      }
-    );
-    await WithdrawalRequest.updateMany(
-      { userId: targetUserId, amount: targetAmount, status: 'pending' },
-      {
-        $set: {
-          status: 'rejected',
-          rejectionReason: reason,
-          processedAt: now
-        }
-      }
-    );
+    try {
+      await Promise.all([
+        WithdrawalRequest.updateMany(
+          { userId: targetUserId, amount: targetAmount, status: 'pending' },
+          {
+            $set: {
+              status: 'rejected',
+              rejectionReason: reason,
+              processedAt: now
+            }
+          }
+        ),
+        WalletTransaction.updateMany(
+          { userId: targetUserId, type: 'withdraw', amount: -targetAmount, status: 'pending' },
+          {
+            $set: {
+              status: 'failed',
+              rejectReason: reason,
+              processedAt: now
+            }
+          }
+        )
+      ]);
+    } catch {}
 
     const user = await User.findOne({ id: targetUserId });
     if (user) {
@@ -318,7 +379,7 @@ export async function rejectWithdrawalService(
       user.balance = (user.balance || 0) + targetAmount;
       await user.save();
 
-      // Create refund transaction
+      // Create refund transaction record
       const refundTx = new WalletTransaction({
         id: `tx_${Date.now()}_refund_${Math.random().toString(36).substring(2, 6)}`,
         userId: user.id,
@@ -332,14 +393,14 @@ export async function rejectWithdrawalService(
       });
       await refundTx.save();
 
-      // Create notification to user
+      // Send refund notification
       try {
         const notif = new Notification({
           id: `notif_reject_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           userId: user.id,
           type: 'wallet',
           title: 'Lệnh rút tiền bị từ chối - Đã hoàn tiền',
-          message: `Lệnh rút ${targetAmount.toLocaleString('vi-VN')}đ về ${targetBankName} (${targetBankAccount}) bị từ chối. Lý do: ${reason}. Số tiền đã được hoàn trả lại 100% vào ví của bạn.`,
+          message: `Lệnh rút ${targetAmount.toLocaleString('vi-VN')}đ về ${targetBankName} (${targetBankAccount}) bị từ chối. Lý do: ${reason}. Số tiền đã được hoàn trả lại 100% vào số dư khả dụng của bạn.`,
           read: false,
           createdAt: now
         });
