@@ -992,8 +992,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const payload = {
       id: cleanId,
       txId: cleanId,
-      refNote,
-      adminNote: refNote,
+      refNote: refNote || '',
+      adminNote: refNote || '',
       userId: targetUserId,
       amount: targetAmount,
       bankAccount: targetBankAccount,
@@ -1002,11 +1002,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const endpoints = [
+      { url: `/api/admin/transactions/${cleanId}/approve`, method: 'POST', body: payload },
       { url: `/api/admin/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
-      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'PUT', body: payload },
-      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload },
-      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: payload },
-      { url: `/api/admin/transactions/${cleanId}/approve`, method: 'POST', body: payload }
+      { url: `/api/wallet/transactions/${cleanId}/approve`, method: 'POST', body: payload },
+      { url: `/api/admin/withdrawals/${cleanId}/approve`, method: 'POST', body: payload },
+      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload }
     ];
 
     let apiSucceeded = false;
@@ -1074,11 +1074,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const endpoints = [
+      { url: `/api/admin/transactions/${cleanId}/reject`, method: 'POST', body: payload },
       { url: `/api/admin/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
-      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'PUT', body: payload },
-      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload },
-      { url: `/api/wallet/withdrawals/${cleanId}`, method: 'PUT', body: payload },
-      { url: `/api/admin/transactions/${cleanId}/reject`, method: 'POST', body: payload }
+      { url: `/api/wallet/transactions/${cleanId}/reject`, method: 'POST', body: payload },
+      { url: `/api/admin/withdrawals/${cleanId}/reject`, method: 'POST', body: payload },
+      { url: `/api/admin/withdrawals/${cleanId}`, method: 'PUT', body: payload }
     ];
 
     let apiSucceeded = false;

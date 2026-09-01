@@ -13,6 +13,12 @@ export interface PayoutContextData {
   reason?: string;
 }
 
+export interface PayoutResult {
+  success: boolean;
+  message: string;
+  notFound?: boolean;
+}
+
 /**
  * Builds safe query condition for finding transactions/withdrawals without throwing CastErrors
  */
@@ -31,20 +37,6 @@ function buildSafeConditions(id: string, contextData?: PayoutContextData): any[]
         conditions.push({ _id: new mongoose.Types.ObjectId(cleanId) });
       } catch {}
     }
-
-    const timestampNum = cleanId.match(/\d{10,}/)?.[0];
-    if (timestampNum && timestampNum.length >= 8) {
-      conditions.push({ id: { $regex: timestampNum } });
-    }
-  }
-
-  // If context user & amount are provided, match pending record
-  if (contextData?.userId) {
-    const userCond: any = { userId: contextData.userId, status: 'pending' };
-    if (contextData.amount && contextData.amount > 0) {
-      userCond.amount = { $in: [contextData.amount, -contextData.amount] };
-    }
-    conditions.push(userCond);
   }
 
   return conditions.length > 0 ? conditions : [{ id: cleanId }];
@@ -57,69 +49,60 @@ export async function approveWithdrawalService(
   id: string,
   refNote: string = '',
   contextData?: PayoutContextData
-): Promise<{ success: boolean; message: string }> {
+): Promise<PayoutResult> {
   try {
     const now = new Date().toISOString();
     const cleanId = String(id || '').trim();
+    if (!cleanId) {
+      return {
+        success: false,
+        notFound: true,
+        message: 'Mã lệnh rút tiền không hợp lệ hoặc để trống.'
+      };
+    }
+
     const conditions = buildSafeConditions(cleanId, contextData);
 
-    // 1. Find matching WithdrawalRequest document
-    let targetWdr: any = null;
-    if (cleanId) {
-      targetWdr = await WithdrawalRequest.findOne({ id: cleanId });
-      if (!targetWdr) {
-        targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
-      }
-      if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
-        try {
-          targetWdr = await WithdrawalRequest.findById(cleanId);
-        } catch {}
-      }
-    }
-
-    if (!targetWdr && contextData?.userId) {
-      targetWdr = await WithdrawalRequest.findOne({
-        userId: contextData.userId,
-        status: 'pending'
-      }).sort({ createdAt: -1 });
-    }
-
+    // 1. Find matching WithdrawalRequest document by ID
+    let targetWdr: any = await WithdrawalRequest.findOne({ id: cleanId });
     if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ $or: conditions }).sort({ createdAt: -1 });
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
+    }
+    if (!targetWdr) {
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('wdr_', 'tx_') });
+    }
+    if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+      try {
+        targetWdr = await WithdrawalRequest.findById(cleanId);
+      } catch {}
+    }
+    if (!targetWdr) {
+      targetWdr = await WithdrawalRequest.findOne({ $or: conditions });
     }
 
-    // Find matching WalletTransaction
-    let targetTx: any = null;
-    if (cleanId) {
-      targetTx = await WalletTransaction.findOne({ id: cleanId });
-      if (!targetTx) {
-        targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
-      }
-    }
-    if (!targetTx && contextData?.userId) {
-      targetTx = await WalletTransaction.findOne({
-        userId: contextData.userId,
-        type: 'withdraw',
-        status: 'pending'
-      }).sort({ createdAt: -1 });
+    // Find matching WalletTransaction by ID
+    let targetTx: any = await WalletTransaction.findOne({ id: cleanId });
+    if (!targetTx) {
+      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
     }
     if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ $or: conditions }).sort({ createdAt: -1 });
+      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('tx_', 'wdr_') });
+    }
+    if (!targetTx && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+      try {
+        targetTx = await WalletTransaction.findById(cleanId);
+      } catch {}
+    }
+    if (!targetTx) {
+      targetTx = await WalletTransaction.findOne({ $or: conditions });
     }
 
-    // If still neither exists, try to find any pending record matching fallback criteria
-    if (!targetWdr && !targetTx) {
-      if (contextData?.userId) {
-        targetWdr = await WithdrawalRequest.findOne({ userId: contextData.userId, status: 'pending' });
-        targetTx = await WalletTransaction.findOne({ userId: contextData.userId, type: 'withdraw', status: 'pending' });
-      }
-    }
-
-    // If strictly no record exists in database, FAIL and do not pretend success
+    // If strictly neither exists in DB, return 404 notFound
     if (!targetWdr && !targetTx) {
       return {
         success: false,
-        message: 'Không tìm thấy lệnh rút tiền tương ứng trong cơ sở dữ liệu MongoDB để giải ngân.'
+        notFound: true,
+        message: `Không tìm thấy lệnh rút tiền với mã "${cleanId}" trong cơ sở dữ liệu MongoDB.`
       };
     }
 
@@ -145,6 +128,7 @@ export async function approveWithdrawalService(
       targetWdr.status = 'approved';
       targetWdr.processedAt = now;
       targetWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
+      targetWdr.updatedAt = now;
       await targetWdr.save();
       hasPersistedAny = true;
     }
@@ -154,11 +138,12 @@ export async function approveWithdrawalService(
       targetTx.status = 'success';
       targetTx.processedAt = now;
       targetTx.note = noteMsg;
+      targetTx.updatedAt = now;
       await targetTx.save();
       hasPersistedAny = true;
     }
 
-    // 4. Also perform comprehensive updateMany across both collections to ensure all related entries are updated
+    // 4. Also perform comprehensive updateMany across conditions to ensure both records are synchronized
     try {
       const [wdrRes, txRes] = await Promise.all([
         WithdrawalRequest.updateMany(
@@ -167,7 +152,8 @@ export async function approveWithdrawalService(
             $set: {
               status: 'approved',
               processedAt: now,
-              referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
+              referenceNote: refNote || 'Đã giải ngân VietQR 24/7',
+              updatedAt: now
             }
           }
         ),
@@ -177,12 +163,13 @@ export async function approveWithdrawalService(
             $set: {
               status: 'success',
               processedAt: now,
-              note: noteMsg
+              note: noteMsg,
+              updatedAt: now
             }
           }
         )
       ]);
-      if (wdrRes?.modifiedCount > 0 || txRes?.modifiedCount > 0) {
+      if ((wdrRes as any)?.modifiedCount > 0 || (txRes as any)?.modifiedCount > 0) {
         hasPersistedAny = true;
       }
     } catch (updateErr) {
@@ -200,7 +187,8 @@ export async function approveWithdrawalService(
                 $set: {
                   status: 'approved',
                   processedAt: now,
-                  referenceNote: refNote || 'Đã giải ngân VietQR 24/7'
+                  referenceNote: refNote || 'Đã giải ngân VietQR 24/7',
+                  updatedAt: now
                 }
               }
             ),
@@ -210,7 +198,8 @@ export async function approveWithdrawalService(
                 $set: {
                   status: 'success',
                   processedAt: now,
-                  note: noteMsg
+                  note: noteMsg,
+                  updatedAt: now
                 }
               }
             )
@@ -248,7 +237,10 @@ export async function approveWithdrawalService(
       };
     }
 
-    return { success: true, message: 'Đã giải ngân và cập nhật trạng thái thành công trong cơ sở dữ liệu MongoDB!' };
+    return {
+      success: true,
+      message: 'Đã giải ngân và cập nhật trạng thái thành công trong cơ sở dữ liệu MongoDB!'
+    };
   } catch (error: any) {
     console.error('approveWithdrawalService error:', error);
     return {
@@ -265,60 +257,59 @@ export async function rejectWithdrawalService(
   id: string,
   reason: string = 'Thông tin ngân hàng không hợp lệ',
   contextData?: PayoutContextData
-): Promise<{ success: boolean; message: string }> {
+): Promise<PayoutResult> {
   try {
     const now = new Date().toISOString();
     const cleanId = String(id || '').trim();
+    if (!cleanId) {
+      return {
+        success: false,
+        notFound: true,
+        message: 'Mã lệnh rút tiền không hợp lệ hoặc để trống.'
+      };
+    }
+
     const conditions = buildSafeConditions(cleanId, contextData);
 
     // 1. Find matching WithdrawalRequest document
-    let targetWdr: any = null;
-    if (cleanId) {
-      targetWdr = await WithdrawalRequest.findOne({ id: cleanId });
-      if (!targetWdr) {
-        targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
-      }
-      if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
-        try {
-          targetWdr = await WithdrawalRequest.findById(cleanId);
-        } catch {}
-      }
-    }
-
-    if (!targetWdr && contextData?.userId) {
-      targetWdr = await WithdrawalRequest.findOne({
-        userId: contextData.userId,
-        status: 'pending'
-      }).sort({ createdAt: -1 });
-    }
-
+    let targetWdr: any = await WithdrawalRequest.findOne({ id: cleanId });
     if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ $or: conditions }).sort({ createdAt: -1 });
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
+    }
+    if (!targetWdr) {
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('wdr_', 'tx_') });
+    }
+    if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+      try {
+        targetWdr = await WithdrawalRequest.findById(cleanId);
+      } catch {}
+    }
+    if (!targetWdr) {
+      targetWdr = await WithdrawalRequest.findOne({ $or: conditions });
     }
 
     // Find matching WalletTransaction
-    let targetTx: any = null;
-    if (cleanId) {
-      targetTx = await WalletTransaction.findOne({ id: cleanId });
-      if (!targetTx) {
-        targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
-      }
-    }
-    if (!targetTx && contextData?.userId) {
-      targetTx = await WalletTransaction.findOne({
-        userId: contextData.userId,
-        type: 'withdraw',
-        status: 'pending'
-      }).sort({ createdAt: -1 });
+    let targetTx: any = await WalletTransaction.findOne({ id: cleanId });
+    if (!targetTx) {
+      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
     }
     if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ $or: conditions }).sort({ createdAt: -1 });
+      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('tx_', 'wdr_') });
+    }
+    if (!targetTx && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+      try {
+        targetTx = await WalletTransaction.findById(cleanId);
+      } catch {}
+    }
+    if (!targetTx) {
+      targetTx = await WalletTransaction.findOne({ $or: conditions });
     }
 
     if (!targetWdr && !targetTx) {
       return {
         success: false,
-        message: 'Không tìm thấy lệnh rút tiền tương ứng trong cơ sở dữ liệu MongoDB để từ chối.'
+        notFound: true,
+        message: `Không tìm thấy lệnh rút tiền với mã "${cleanId}" trong cơ sở dữ liệu MongoDB để từ chối.`
       };
     }
 
@@ -338,12 +329,14 @@ export async function rejectWithdrawalService(
       targetWdr.status = 'rejected';
       targetWdr.rejectionReason = reason;
       targetWdr.processedAt = now;
+      targetWdr.updatedAt = now;
       await targetWdr.save();
     }
     if (targetTx) {
       targetTx.status = 'failed';
       targetTx.rejectReason = reason;
       targetTx.processedAt = now;
+      targetTx.updatedAt = now;
       await targetTx.save();
     }
 
@@ -356,7 +349,8 @@ export async function rejectWithdrawalService(
             $set: {
               status: 'rejected',
               rejectionReason: reason,
-              processedAt: now
+              processedAt: now,
+              updatedAt: now
             }
           }
         ),
@@ -366,7 +360,8 @@ export async function rejectWithdrawalService(
             $set: {
               status: 'failed',
               rejectReason: reason,
-              processedAt: now
+              processedAt: now,
+              updatedAt: now
             }
           }
         )
@@ -385,7 +380,8 @@ export async function rejectWithdrawalService(
               $set: {
                 status: 'rejected',
                 rejectionReason: reason,
-                processedAt: now
+                processedAt: now,
+                updatedAt: now
               }
             }
           ),
@@ -395,7 +391,8 @@ export async function rejectWithdrawalService(
               $set: {
                 status: 'failed',
                 rejectReason: reason,
-                processedAt: now
+                processedAt: now,
+                updatedAt: now
               }
             }
           )
@@ -440,7 +437,10 @@ export async function rejectWithdrawalService(
       }
     }
 
-    return { success: true, message: 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.' };
+    return {
+      success: true,
+      message: 'Đã từ chối lệnh rút tiền và hoàn lại tiền vào ví thành viên.'
+    };
   } catch (error: any) {
     console.error('rejectWithdrawalService error:', error);
     return {

@@ -342,7 +342,8 @@ const handleWalletApprove = async (req: AuthenticatedRequest, res: Response) => 
     const { refNote, userId, amount, bankAccount, bankName } = req.body;
     const result = await approveWithdrawalService(id, refNote, { userId, amount, bankAccount, bankName, refNote });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   } catch (error: any) {
@@ -361,7 +362,8 @@ const handleWalletReject = async (req: AuthenticatedRequest, res: Response) => {
     const { reason = 'Thông tin ngân hàng không hợp lệ', userId, amount, bankAccount, bankName } = req.body;
     const result = await rejectWithdrawalService(id, reason, { userId, amount, bankAccount, bankName, reason });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   } catch (error: any) {
@@ -379,13 +381,15 @@ router.put('/withdrawals/:id', optionalAuth, async (req: AuthenticatedRequest, r
   if (status === 'completed' || status === 'approved') {
     const result = await approveWithdrawalService(req.params.id, adminNote || '', { userId, amount, bankAccount, bankName, refNote: adminNote });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   } else {
     const result = await rejectWithdrawalService(req.params.id, reason || adminNote || 'Thông tin ngân hàng không hợp lệ', { userId, amount, bankAccount, bankName, reason: reason || adminNote });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   }
@@ -395,13 +399,15 @@ router.post('/withdrawals/:id', optionalAuth, async (req: AuthenticatedRequest, 
   if (status === 'completed' || status === 'approved') {
     const result = await approveWithdrawalService(req.params.id, adminNote || '', { userId, amount, bankAccount, bankName, refNote: adminNote });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   } else {
     const result = await rejectWithdrawalService(req.params.id, reason || adminNote || 'Thông tin ngân hàng không hợp lệ', { userId, amount, bankAccount, bankName, reason: reason || adminNote });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   }

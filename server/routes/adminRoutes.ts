@@ -272,7 +272,8 @@ const handleAdminApproveTx = async (req: AuthenticatedRequest, res: Response) =>
     const { refNote, userId, amount, bankAccount, bankName } = req.body;
     const result = await approveWithdrawalService(id, refNote, { userId, amount, bankAccount, bankName, refNote });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   } catch (error: any) {
@@ -291,7 +292,8 @@ const handleAdminRejectTx = async (req: AuthenticatedRequest, res: Response) => 
     const { reason = 'Thông tin ngân hàng không hợp lệ', userId, amount, bankAccount, bankName } = req.body;
     const result = await rejectWithdrawalService(id, reason, { userId, amount, bankAccount, bankName, reason });
     if (!result.success) {
-      return res.status(400).json(result);
+      const statusCode = result.notFound ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
     return res.json(result);
   } catch (error: any) {
@@ -312,13 +314,15 @@ const handleAdminWithdrawalUpdate = async (req: AuthenticatedRequest, res: Respo
     if (status === 'completed' || status === 'approved') {
       const result = await approveWithdrawalService(id, adminNote || '', { userId, amount, bankAccount, bankName, refNote: adminNote });
       if (!result.success) {
-        return res.status(400).json(result);
+        const statusCode = result.notFound ? 404 : 400;
+        return res.status(statusCode).json(result);
       }
       return res.json(result);
     } else if (status === 'rejected' || status === 'failed') {
       const result = await rejectWithdrawalService(id, reason || adminNote || 'Thông tin ngân hàng không hợp lệ', { userId, amount, bankAccount, bankName, reason: reason || adminNote });
       if (!result.success) {
-        return res.status(400).json(result);
+        const statusCode = result.notFound ? 404 : 400;
+        return res.status(statusCode).json(result);
       }
       return res.json(result);
     }
