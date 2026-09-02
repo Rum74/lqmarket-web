@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
-// Disable command buffering so queries don't hang if disconnected
-mongoose.set('bufferCommands', false);
+// Enable command buffering so queries wait safely until connection completes
+mongoose.set('bufferCommands', true);
 
 let isConnected = false;
 
@@ -14,14 +14,14 @@ export async function connectDB(): Promise<boolean> {
   }
 
   if (!MONGODB_URI) {
-    console.log('ℹ️ MONGODB_URI is not set. LQMarket Backend is operating with High-Speed In-Memory & Local Storage Fallback.');
+    console.log('ℹ️ MONGODB_URI is not set. Operating in fallback mode.');
     isConnected = false;
     return false;
   }
 
   try {
     const opts: mongoose.ConnectOptions = {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
       autoIndex: true
     };
 
@@ -31,8 +31,7 @@ export async function connectDB(): Promise<boolean> {
     console.log('✅ Connected to MongoDB Atlas successfully!');
     return true;
   } catch (error: any) {
-    console.warn('⚠️ MongoDB Atlas connection notice:', error.message || error);
-    console.log('ℹ️ Operating in high-speed resilient in-memory mode.');
+    console.error('❌ MongoDB Atlas connection error:', error.message || error);
     isConnected = false;
     return false;
   }
@@ -40,7 +39,7 @@ export async function connectDB(): Promise<boolean> {
 
 mongoose.connection.on('connected', () => {
   isConnected = true;
-  console.log('📡 MongoDB connection established.');
+  console.log('📡 MongoDB Atlas connection established.');
 });
 
 mongoose.connection.on('error', (err) => {
@@ -54,5 +53,9 @@ mongoose.connection.on('disconnected', () => {
 });
 
 export function getDBConnectionStatus(): boolean {
+  // If MONGODB_URI is provided, prioritize MongoDB connection
+  if (process.env.MONGODB_URI) {
+    return mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2;
+  }
   return isConnected && mongoose.connection.readyState === 1;
 }

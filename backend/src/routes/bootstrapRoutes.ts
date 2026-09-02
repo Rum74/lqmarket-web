@@ -216,6 +216,9 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           isVerifiedSeller: usr.isVerifiedSeller,
           sellerTier: usr.sellerTier || 'BASIC SELLER',
           bio: usr.bio || '',
+          bankName: usr.bankName || (usr as any).bankInfo?.bankName || '',
+          bankAccount: usr.bankAccount || (usr as any).bankInfo?.accountNumber || '',
+          bankAccountName: usr.bankAccountName || (usr as any).bankInfo?.accountHolder || '',
           bankInfo: usr.bankInfo,
           createdAt: usr.createdAt
         }));
@@ -234,6 +237,29 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       }
     }
 
+    const payloadStats = {
+      totalAccounts: accounts.length,
+      totalApprovedAccounts: totalApprovedCount,
+      totalCompletedOrders: totalCompletedOrdersCount,
+      totalSoldAccounts: totalSoldAccountsCount,
+      totalCompletedTransactions,
+      isMysteryBoxEventActive,
+      isAutoApprove,
+      totalAvailableAccounts: totalApprovedCount
+    };
+
+    const payloadSettings = {
+      mystery_box_event_active: isMysteryBoxEventActive,
+      auto_approve_accounts: isAutoApprove
+    };
+
+    console.log('[MONGO] /api/bootstrap fetched:', {
+      accountsCount: accounts.length,
+      mysteryBoxesCount: mysteryBoxes.length,
+      ordersCount: userOrders.length,
+      transactionsCount: mergedTransactions.length
+    });
+
     return res.json({
       success: true,
       data: {
@@ -241,19 +267,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         mysteryBoxes,
         mysteryRewards,
         mysteryHistory,
-        stats: {
-          totalAccounts: accounts.length,
-          totalApprovedAccounts: totalApprovedCount,
-          totalCompletedOrders: totalCompletedOrdersCount,
-          totalSoldAccounts: totalSoldAccountsCount,
-          totalCompletedTransactions,
-          isMysteryBoxEventActive,
-          isAutoApprove
-        },
-        settings: {
-          mystery_box_event_active: isMysteryBoxEventActive,
-          auto_approve_accounts: isAutoApprove
-        },
+        stats: payloadStats,
+        settings: payloadSettings,
         currentUser,
         allUsers: isUserAdmin ? allUsers : undefined,
         orders: userOrders,
@@ -261,7 +276,23 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         userInventory,
         notifications: userNotifications,
         conversations: userConversations
-      }
+      },
+      // Root-level fields for direct compatibility with legacy or flat consumers
+      accounts,
+      mysteryBoxes,
+      mysteryRewards,
+      mysteryHistory,
+      stats: payloadStats,
+      settings: payloadSettings,
+      isMysteryBoxEventActive,
+      isAutoApproveAccounts: isAutoApprove,
+      currentUser,
+      allUsers: isUserAdmin ? allUsers : undefined,
+      orders: userOrders,
+      transactions: mergedTransactions,
+      userInventory,
+      notifications: userNotifications,
+      conversations: userConversations
     });
   } catch (error: any) {
     console.error('Error in /api/bootstrap:', error);

@@ -51,6 +51,15 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // Debug Logger for all API requests
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      console.log(`[API] ${req.method} ${req.originalUrl || req.url} - Status: ${res.statusCode} (${Date.now() - start}ms)`);
+    });
+    next();
+  });
+
   // Connect Database (MongoDB Atlas)
   await connectDB();
 

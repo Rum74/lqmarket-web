@@ -132,6 +132,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       Account.countDocuments(filterQuery)
     ]);
 
+    console.log('[MONGO] Collection: accounts, Result count:', accounts.length);
+
     // Sanitize credentials for public queries
     const sanitized = accounts.map((acc: any) => {
       // Hide password unless current user is the seller or admin

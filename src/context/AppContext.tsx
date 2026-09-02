@@ -15,11 +15,6 @@ import {
   UserInventoryItem
 } from '../types';
 import {
-  DEFAULT_MYSTERY_BOX_TIERS,
-  DEFAULT_MYSTERY_BOX_REWARDS,
-  DEFAULT_MYSTERY_BOX_HISTORY
-} from '../data/mysteryBoxData';
-import {
   registerUser as apiRegisterUser,
   loginUser as apiLoginUser,
   logoutUser as apiLogoutUser,
@@ -260,8 +255,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Mystery Box (Túi Mù May Mắn) States
-  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(DEFAULT_MYSTERY_BOX_TIERS);
-  const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>(DEFAULT_MYSTERY_BOX_REWARDS);
+  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>([]);
+  const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>([]);
   const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>([]);
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
   const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>({});
@@ -298,40 +293,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       setCloudSyncStatus('syncing');
 
-      // 1. Primary: Ultra-fast aggregated Bootstrap endpoint (< 50ms)
+      // 1. Primary: Aggregated Bootstrap endpoint
       const bootRes = await api.get('/api/bootstrap').catch(() => null);
       if (bootRes && bootRes.success) {
-        if (Array.isArray(bootRes.accounts)) {
-          setAccounts(bootRes.accounts);
+        const payload = bootRes.data || bootRes;
+
+        const fetchedAccounts = Array.isArray(payload.accounts)
+          ? payload.accounts
+          : Array.isArray(bootRes.accounts)
+          ? bootRes.accounts
+          : null;
+        if (fetchedAccounts) {
+          setAccounts(fetchedAccounts);
         }
-        if (bootRes.stats) {
-          if (typeof bootRes.stats.totalAvailableAccounts === 'number') {
-            setTotalSystemAvailableAccounts(bootRes.stats.totalAvailableAccounts);
+
+        const stats = payload.stats || bootRes.stats;
+        if (stats) {
+          if (typeof stats.totalAvailableAccounts === 'number') {
+            setTotalSystemAvailableAccounts(stats.totalAvailableAccounts);
           }
-          if (typeof bootRes.stats.totalCompletedTransactions === 'number') {
-            setTotalSystemCompletedSales(bootRes.stats.totalCompletedTransactions);
+          if (typeof stats.totalCompletedTransactions === 'number') {
+            setTotalSystemCompletedSales(stats.totalCompletedTransactions);
           }
-          if (typeof bootRes.stats.isAutoApprove === 'boolean') {
-            setIsAutoApproveAccounts(bootRes.stats.isAutoApprove);
+          if (typeof stats.isAutoApprove === 'boolean') {
+            setIsAutoApproveAccounts(stats.isAutoApprove);
           }
         }
-        if (typeof bootRes.isMysteryBoxEventActive === 'boolean') {
-          setIsMysteryBoxEventActive(bootRes.isMysteryBoxEventActive);
+
+        const boxActive = payload.isMysteryBoxEventActive ?? bootRes.isMysteryBoxEventActive ?? stats?.isMysteryBoxEventActive;
+        if (typeof boxActive === 'boolean') {
+          setIsMysteryBoxEventActive(boxActive);
         }
-        if (Array.isArray(bootRes.mysteryBoxes) && bootRes.mysteryBoxes.length > 0) {
-          setMysteryBoxes(bootRes.mysteryBoxes);
-        }
-        if (Array.isArray(bootRes.mysteryRewards) && bootRes.mysteryRewards.length > 0) {
-          setMysteryRewards(bootRes.mysteryRewards);
-        }
-        if (Array.isArray(bootRes.mysteryHistory)) {
-          setMysteryHistory(bootRes.mysteryHistory);
-        }
-        if (Array.isArray(bootRes.transactions)) {
-          setTransactions(bootRes.transactions);
-        }
-        if (bootRes.currentUser) {
-          const userObj = bootRes.currentUser;
+
+        const boxes = Array.isArray(payload.mysteryBoxes) ? payload.mysteryBoxes : Array.isArray(bootRes.mysteryBoxes) ? bootRes.mysteryBoxes : null;
+        if (boxes) setMysteryBoxes(boxes);
+
+        const rewards = Array.isArray(payload.mysteryRewards) ? payload.mysteryRewards : Array.isArray(bootRes.mysteryRewards) ? bootRes.mysteryRewards : null;
+        if (rewards) setMysteryRewards(rewards);
+
+        const history = Array.isArray(payload.mysteryHistory) ? payload.mysteryHistory : Array.isArray(bootRes.mysteryHistory) ? bootRes.mysteryHistory : null;
+        if (history) setMysteryHistory(history);
+
+        const txs = Array.isArray(payload.transactions) ? payload.transactions : Array.isArray(bootRes.transactions) ? bootRes.transactions : null;
+        if (txs) setTransactions(txs);
+
+        const userObj = payload.currentUser || bootRes.currentUser;
+        if (userObj && userObj.id) {
           setCurrentUserId(userObj.id);
           setIsLoggedIn(true);
           setAllUsers(prev => {
@@ -339,21 +346,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return [userObj, ...filtered];
           });
         }
-        if (Array.isArray(bootRes.allUsers) && bootRes.allUsers.length > 0) {
-          setAllUsers(bootRes.allUsers);
-        }
-        if (Array.isArray(bootRes.orders)) {
-          setOrders(bootRes.orders);
-        }
-        if (Array.isArray(bootRes.userInventory)) {
-          setUserInventory(bootRes.userInventory);
-        }
-        if (Array.isArray(bootRes.notifications)) {
-          setNotifications(bootRes.notifications);
-        }
-        if (Array.isArray(bootRes.chatMessages) && bootRes.chatMessages.length > 0) {
-          setChatMessages(bootRes.chatMessages);
-        }
+
+        const usersList = Array.isArray(payload.allUsers) ? payload.allUsers : Array.isArray(bootRes.allUsers) ? bootRes.allUsers : null;
+        if (usersList) setAllUsers(usersList);
+
+        const ordersList = Array.isArray(payload.orders) ? payload.orders : Array.isArray(bootRes.orders) ? bootRes.orders : null;
+        if (ordersList) setOrders(ordersList);
+
+        const inv = Array.isArray(payload.userInventory) ? payload.userInventory : Array.isArray(bootRes.userInventory) ? bootRes.userInventory : null;
+        if (inv) setUserInventory(inv);
+
+        const notifs = Array.isArray(payload.notifications) ? payload.notifications : Array.isArray(bootRes.notifications) ? bootRes.notifications : null;
+        if (notifs) setNotifications(notifs);
+
+        const chats = Array.isArray(payload.conversations) ? payload.conversations : Array.isArray(payload.chatMessages) ? payload.chatMessages : null;
+        if (chats) setChatMessages(chats);
+
+        console.log('[APP STATE] Successfully loaded from MongoDB:', {
+          accountsCount: fetchedAccounts ? fetchedAccounts.length : 0,
+          ordersCount: ordersList ? ordersList.length : 0,
+          mysteryBoxesCount: boxes ? boxes.length : 0,
+          transactionsCount: txs ? txs.length : 0,
+          usersCount: usersList ? usersList.length : 0
+        });
 
         setCloudSyncStatus('synced');
         return;

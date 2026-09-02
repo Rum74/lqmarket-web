@@ -48,8 +48,8 @@ export async function seedMysteryBoxDefaults(forceUpsert = false) {
   }
 }
 
-// Auto seed on boot
-seedMysteryBoxDefaults();
+// Manual seed function for admin
+// seedMysteryBoxDefaults() is NOT called automatically on boot (MongoDB is source of truth)
 
 // POST /api/mystery-boxes/admin/seed-defaults (Admin re-seed / sync all defaults into DB)
 router.post('/admin/seed-defaults', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
@@ -145,21 +145,20 @@ router.post('/settings', authenticateToken, requireAdmin, async (req: Authentica
 // GET /api/mystery-boxes/rewards/all (and /api/mystery-boxes/rewards)
 const getAllRewardsHandler = async (req: Request, res: Response) => {
   try {
-    let rewards = await MysteryReward.find().lean();
-    if (!rewards || rewards.length === 0) {
-      await MysteryReward.insertMany(DEFAULT_SERVER_REWARDS);
-      rewards = await MysteryReward.find().lean();
-    }
+    const rewards = await MysteryReward.find().lean();
+    console.log('[MONGO] Collection: mysteryrewards, Result count:', rewards.length);
     return res.json({
       success: true,
-      data: rewards && rewards.length > 0 ? rewards : DEFAULT_SERVER_REWARDS,
-      rewards: rewards && rewards.length > 0 ? rewards : DEFAULT_SERVER_REWARDS
+      data: rewards || [],
+      rewards: rewards || []
     });
   } catch (error: any) {
-    return res.json({
-      success: true,
-      data: DEFAULT_SERVER_REWARDS,
-      rewards: DEFAULT_SERVER_REWARDS
+    console.error('Error fetching mystery rewards:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi tải danh sách phần thưởng',
+      data: [],
+      rewards: []
     });
   }
 };
@@ -390,21 +389,20 @@ router.post('/user/inventory/:id/use', authenticateToken, async (req: Authentica
 // GET /api/mystery-boxes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    let boxes = await MysteryBox.find().lean();
-    if (!boxes || boxes.length === 0) {
-      await MysteryBox.insertMany(DEFAULT_SERVER_BOX_TIERS);
-      boxes = await MysteryBox.find().lean();
-    }
+    const boxes = await MysteryBox.find().lean();
+    console.log('[MONGO] Collection: mysteryboxes, Result count:', boxes.length);
     return res.json({
       success: true,
-      data: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS,
-      boxes: boxes && boxes.length > 0 ? boxes : DEFAULT_SERVER_BOX_TIERS
+      data: boxes || [],
+      boxes: boxes || []
     });
   } catch (error: any) {
-    return res.json({
-      success: true,
-      data: DEFAULT_SERVER_BOX_TIERS,
-      boxes: DEFAULT_SERVER_BOX_TIERS
+    console.error('Error fetching mystery boxes:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi tải danh sách Túi Mù',
+      data: [],
+      boxes: []
     });
   }
 });

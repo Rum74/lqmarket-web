@@ -326,8 +326,7 @@ export async function seedMemoryMarketData() {
   }
 }
 
-// Auto seed on import
-seedMemoryMarketData();
+// NOTE: seedMemoryMarketData() is disabled on startup so MongoDB Atlas remains the sole SOURCE OF TRUTH
 
 /**
  * Creates a smart model that delegates to Mongoose when connected to MongoDB Atlas,
@@ -335,130 +334,86 @@ seedMemoryMarketData();
  */
 export function createHybridModel<T>(mongooseModel: Model<any>, memoryCollection: MemoryCollection<any>): any {
   function ModelConstructor(this: any, data: any) {
-    if (getDBConnectionStatus()) {
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
       return new mongooseModel(data);
     }
     return memoryCollection.newInstance(data);
   }
 
-  // Bind static methods with fallback
+  // Bind static methods - prioritize Mongoose directly
   ModelConstructor.findOne = (query: any = {}, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return (mongooseModel as any).findOne(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return (mongooseModel as any).findOne(query, ...args);
     }
     return memoryCollection.findOne(query);
   };
 
   ModelConstructor.find = (query: any = {}, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return (mongooseModel as any).find(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return (mongooseModel as any).find(query, ...args);
     }
     return memoryCollection.find(query);
   };
 
   ModelConstructor.findById = (id: string, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return (mongooseModel as any).findById(id, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return (mongooseModel as any).findById(id, ...args);
     }
     return memoryCollection.findById(id);
   };
 
   ModelConstructor.create = async (data: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).create(data, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return await (mongooseModel as any).create(data, ...args);
     }
     return memoryCollection.create(data);
   };
 
   ModelConstructor.insertMany = async (docs: any[], ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).insertMany(docs, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return await (mongooseModel as any).insertMany(docs, ...args);
     }
     return memoryCollection.insertMany(docs);
   };
 
   ModelConstructor.findOneAndUpdate = async (query: any, update: any, options?: any) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).findOneAndUpdate(query, update, options);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return await (mongooseModel as any).findOneAndUpdate(query, update, options);
     }
     return memoryCollection.findOneAndUpdate(query, update, options);
   };
 
   ModelConstructor.updateOne = (query: any, update: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return (mongooseModel as any).updateOne(query, update, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return (mongooseModel as any).updateOne(query, update, ...args);
     }
     return memoryCollection.updateOne(query, update);
   };
 
   ModelConstructor.updateMany = async (query: any, update: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).updateMany(query, update, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return await (mongooseModel as any).updateMany(query, update, ...args);
     }
     return memoryCollection.updateMany(query, update);
   };
 
   ModelConstructor.findOneAndDelete = async (query: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return await (mongooseModel as any).findOneAndDelete(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return await (mongooseModel as any).findOneAndDelete(query, ...args);
     }
     return memoryCollection.findOneAndDelete(query);
   };
 
   ModelConstructor.deleteOne = (query: any, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return (mongooseModel as any).deleteOne(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return (mongooseModel as any).deleteOne(query, ...args);
     }
     return memoryCollection.deleteOne(query);
   };
 
   ModelConstructor.countDocuments = (query: any = {}, ...args: any[]) => {
-    if (getDBConnectionStatus()) {
-      try {
-        return (mongooseModel as any).countDocuments(query, ...args);
-      } catch (err) {
-        console.warn('Mongoose query failed, falling back to Memory Store:', err);
-      }
+    if (getDBConnectionStatus() || process.env.MONGODB_URI) {
+      return (mongooseModel as any).countDocuments(query, ...args);
     }
     return memoryCollection.countDocuments(query);
   };

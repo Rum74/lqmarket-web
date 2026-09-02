@@ -15,9 +15,25 @@ export function getApiBaseUrl(): string {
 
   let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
 
-  // If no explicit VITE_API_URL, use relative path '' so Vercel rewrites or local proxy handles /api
+  // If no explicit VITE_API_URL provided, check environment hostname
   if (!rawApiUrl) {
-    rawApiUrl = '';
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (
+        hostname === 'cholienquan.com' ||
+        hostname === 'www.cholienquan.com' ||
+        hostname.endsWith('.vercel.app')
+      ) {
+        rawApiUrl = 'https://api.cholienquan.com';
+      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        rawApiUrl = ''; // Use local dev proxy
+      } else {
+        // Default to production API domain
+        rawApiUrl = 'https://api.cholienquan.com';
+      }
+    } else {
+      rawApiUrl = 'https://api.cholienquan.com';
+    }
   }
 
   rawApiUrl = rawApiUrl.replace(/\/+$/, '');
@@ -88,6 +104,9 @@ export async function apiRequest<T = any>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
+  const method = options.method || 'GET';
+  console.log('[API REQUEST]', method, url);
+
   try {
     const res = await fetch(url, {
       ...options,
@@ -97,12 +116,14 @@ export async function apiRequest<T = any>(
     clearTimeout(timeoutId);
 
     const data = await res.json().catch(() => ({}));
+    console.log('[API RESPONSE]', res.status, url);
+    console.log('[API DATA]', data);
 
     if (!res.ok) {
       const isEndpointUnavailable = res.status === 405 || res.status === 404 || res.status === 502 || res.status === 503 || res.status === 500;
       return {
         success: false,
-        message: data.message || (isEndpointUnavailable ? 'Máy chủ API tạm thời gián đoạn. Chuyển sang chế độ bảo mật tự động.' : `Lỗi yêu cầu (${res.status})`),
+        message: data.message || (isEndpointUnavailable ? 'Máy chủ API tạm thời gián đoạn.' : `Lỗi yêu cầu (${res.status})`),
         errorCode: isEndpointUnavailable ? 'HTTP_UNAVAILABLE' : (data.errorCode || `HTTP_${res.status}`),
         httpStatus: res.status,
         isUnavailable: isEndpointUnavailable,
@@ -117,31 +138,11 @@ export async function apiRequest<T = any>(
   } catch (error: any) {
     clearTimeout(timeoutId);
     const isAbort = error.name === 'AbortError';
+    console.warn('[API ERROR]', method, url, isAbort ? 'Timed out' : error.message);
 
-    // If first target (e.g. https://api.cholienquan.com) had a network error and we are on production, try direct VPS IP as backup
-    if (!isAbort && baseUrl.includes('api.cholienquan.com') && !endpoint.startsWith('http')) {
-      try {
-        const vpsBackupUrl = `http://221.121.1.220:3000${cleanEndpoint}`;
-        const backupRes = await fetch(vpsBackupUrl, {
-          ...options,
-          headers
-        });
-        const backupData = await backupRes.json().catch(() => ({}));
-        if (backupRes.ok) {
-          return {
-            success: backupData.success !== false,
-            ...backupData
-          };
-        }
-      } catch {
-        // continue to normal fallback
-      }
-    }
-
-    console.warn(`[API Info] ${endpoint}:`, isAbort ? 'Request timed out after 8s' : (error.message || error));
     return {
       success: false,
-      message: isAbort ? 'Kết nối máy chủ quá hạn (8s), tự động kích hoạt sao lưu an toàn.' : 'Không thể kết nối trực tiếp đến máy chủ API.',
+      message: isAbort ? 'Kết nối máy chủ quá hạn (8s).' : 'Không thể kết nối trực tiếp đến máy chủ API.',
       errorCode: isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
       isUnavailable: true
     };
