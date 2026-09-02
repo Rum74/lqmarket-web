@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { Order } from '../models/Order';
 import { Setting } from '../models/Setting';
 import { Notification } from '../models/Notification';
+import { getSellerStats } from '../services/sellerService';
 import {
   authenticateToken,
   optionalAuth,
@@ -203,6 +204,76 @@ router.get('/public-stats', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/accounts/seller/:sellerId (Public Seller Profile endpoint)
+router.get('/seller/:sellerId', async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    const sellerData = await getSellerStats(sellerId);
+    if (!sellerData) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
+    }
+    return res.json({
+      success: true,
+      seller: sellerData,
+      user: sellerData,
+      reviews: sellerData.reviews,
+      accounts: sellerData.accounts,
+      stats: {
+        totalSales: sellerData.totalSold,
+        rating: sellerData.rating,
+        reviewsCount: sellerData.reviewsCount,
+        activeListings: sellerData.activeListings,
+        totalListings: sellerData.totalListings
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải thông tin người bán' });
+  }
+});
+
+// GET /api/accounts/seller/:sellerId/stats
+router.get('/seller/:sellerId/stats', async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    const sellerData = await getSellerStats(sellerId);
+    if (!sellerData) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
+    }
+    return res.json({
+      success: true,
+      stats: {
+        totalSales: sellerData.totalSold,
+        rating: sellerData.rating,
+        reviewsCount: sellerData.reviewsCount,
+        activeListings: sellerData.activeListings,
+        totalListings: sellerData.totalListings
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải thống kê người bán' });
+  }
+});
+
+// GET /api/accounts/seller/:sellerId/reviews
+router.get('/seller/:sellerId/reviews', async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    const sellerData = await getSellerStats(sellerId);
+    if (!sellerData) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
+    }
+    return res.json({
+      success: true,
+      reviews: sellerData.reviews,
+      count: sellerData.reviewsCount,
+      rating: sellerData.rating,
+      averageRating: sellerData.averageRating
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải đánh giá người bán' });
+  }
+});
+
 // GET /api/accounts/:id
 router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -232,6 +303,20 @@ router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response
         password: '••••••••',
         secretNotes: ''
       };
+    }
+
+    // Synchronize seller stats in real time directly from MongoDB
+    try {
+      const sellerStats = await getSellerStats(account.sellerId || account.sellerName);
+      if (sellerStats) {
+        result.sellerCompletedSales = sellerStats.totalSold;
+        result.sellerRating = sellerStats.rating;
+        result.sellerTier = sellerStats.sellerTier;
+        result.sellerVerified = sellerStats.isVerifiedSeller;
+        result.sellerReviewsCount = sellerStats.reviewsCount;
+      }
+    } catch (sErr) {
+      console.warn('Sync seller stats in account get warning:', sErr);
     }
 
     return res.json({

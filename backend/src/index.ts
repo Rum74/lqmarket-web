@@ -83,10 +83,13 @@ async function startServer() {
   // MODULAR REST API ROUTES
   // ==========================================
   app.use('/api/auth', authRoutes);
+  app.use('/api/seller', authRoutes);
+  app.use('/api/sellers', authRoutes);
   app.use('/api/accounts', accountRoutes);
   app.use('/api/products', accountRoutes);
   app.use('/api/orders', orderRoutes);
   app.use('/api/wallet', walletRoutes);
+  app.use('/api/payouts', adminRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/payos', paymentRoutes);
   app.use('/api/mystery-boxes', mysteryBoxRoutes);

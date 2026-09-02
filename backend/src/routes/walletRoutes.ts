@@ -3,6 +3,7 @@ import { User } from '../models/User';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { WithdrawalRequest } from '../models/WithdrawalRequest';
 import { Notification } from '../models/Notification';
+import { approvePayout, rejectPayout } from '../services/payoutService';
 import {
   authenticateToken,
   optionalAuth,
@@ -255,6 +256,81 @@ router.get('/withdrawals', authenticateToken, async (req: AuthenticatedRequest, 
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi khi tải danh sách yêu cầu rút tiền' });
+  }
+});
+
+// Admin Payout Actions via Wallet Router
+const handleWalletApprove = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { refNote, adminNote, userId, amount, bankAccount, bankName } = req.body;
+    const note = refNote || adminNote || '';
+
+    const result = await approvePayout(id, note, {
+      userId,
+      amount: amount ? Number(amount) : undefined,
+      bankAccount,
+      bankName
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi xác nhận giải ngân', error: error.message });
+  }
+};
+
+const handleWalletReject = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason, adminNote, userId, amount, bankAccount, bankName } = req.body;
+    const note = reason || adminNote || 'Thông tin ngân hàng không hợp lệ';
+
+    const result = await rejectPayout(id, note, {
+      userId,
+      amount: amount ? Number(amount) : undefined,
+      bankAccount,
+      bankName
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi từ chối rút tiền', error: error.message });
+  }
+};
+
+router.post('/transactions/:id/approve', authenticateToken, requireAdmin, handleWalletApprove);
+router.put('/transactions/:id/approve', authenticateToken, requireAdmin, handleWalletApprove);
+router.post('/transactions/:id/reject', authenticateToken, requireAdmin, handleWalletReject);
+router.put('/transactions/:id/reject', authenticateToken, requireAdmin, handleWalletReject);
+
+router.post('/withdrawals/:id/approve', authenticateToken, requireAdmin, handleWalletApprove);
+router.put('/withdrawals/:id/approve', authenticateToken, requireAdmin, handleWalletApprove);
+router.post('/withdrawals/:id/reject', authenticateToken, requireAdmin, handleWalletReject);
+router.put('/withdrawals/:id/reject', authenticateToken, requireAdmin, handleWalletReject);
+
+router.put('/withdrawals/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNote, refNote, reason } = req.body;
+    const note = refNote || adminNote || reason || '';
+
+    if (status === 'approved' || status === 'completed' || status === 'success') {
+      const result = await approvePayout(id, note, req.body);
+      return res.status(result.success ? 200 : 400).json(result);
+    } else if (status === 'rejected' || status === 'failed') {
+      const result = await rejectPayout(id, note, req.body);
+      return res.status(result.success ? 200 : 400).json(result);
+    }
+
+    return res.status(400).json({ success: false, message: 'Trạng thái không hợp lệ' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi xử lý rút tiền' });
   }
 });
 

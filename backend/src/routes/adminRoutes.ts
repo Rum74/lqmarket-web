@@ -12,6 +12,7 @@ import { Conversation } from '../models/Conversation';
 import { UserInventory } from '../models/UserInventory';
 import { MysteryHistory } from '../models/MysteryHistory';
 import { Review } from '../models/Review';
+import { approvePayout, rejectPayout } from '../services/payoutService';
 import {
   authenticateToken,
   requireAdmin,
@@ -207,84 +208,85 @@ router.get('/withdrawals', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// Approve payout / transaction / withdrawal handlers
+const approvePayoutHandler = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { refNote, adminNote, userId, amount, bankAccount, bankName } = req.body;
+    const note = refNote || adminNote || '';
+
+    const result = await approvePayout(id, note, {
+      userId,
+      amount: amount ? Number(amount) : undefined,
+      bankAccount,
+      bankName
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Admin approve payout error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi xác nhận giải ngân', error: error.message });
+  }
+};
+
+const rejectPayoutHandler = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason, adminNote, userId, amount, bankAccount, bankName } = req.body;
+    const note = reason || adminNote || 'Thông tin ngân hàng không hợp lệ';
+
+    const result = await rejectPayout(id, note, {
+      userId,
+      amount: amount ? Number(amount) : undefined,
+      bankAccount,
+      bankName
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Admin reject payout error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi từ chối yêu cầu rút tiền', error: error.message });
+  }
+};
+
+// Endpoints for admin payout approval
+router.post('/transactions/:id/approve', approvePayoutHandler);
+router.put('/transactions/:id/approve', approvePayoutHandler);
+router.post('/transactions/:id/reject', rejectPayoutHandler);
+router.put('/transactions/:id/reject', rejectPayoutHandler);
+
+router.post('/withdrawals/:id/approve', approvePayoutHandler);
+router.put('/withdrawals/:id/approve', approvePayoutHandler);
+router.post('/withdrawals/:id/reject', rejectPayoutHandler);
+router.put('/withdrawals/:id/reject', rejectPayoutHandler);
+
+router.post('/payouts/:id/approve', approvePayoutHandler);
+router.put('/payouts/:id/approve', approvePayoutHandler);
+router.post('/payouts/:id/reject', rejectPayoutHandler);
+router.put('/payouts/:id/reject', rejectPayoutHandler);
+
 // PUT /api/admin/withdrawals/:id
 router.put('/withdrawals/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, adminNote } = req.body;
-    const adminUser = req.user;
+    const { status, adminNote, refNote, reason } = req.body;
+    const note = refNote || adminNote || reason || '';
 
-    const request = await WithdrawalRequest.findOne({ id });
-    if (!request) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu rút tiền' });
+    if (status === 'approved' || status === 'completed' || status === 'success') {
+      const result = await approvePayout(id, note, req.body);
+      return res.status(result.success ? 200 : 400).json(result);
+    } else if (status === 'rejected' || status === 'failed') {
+      const result = await rejectPayout(id, note, req.body);
+      return res.status(result.success ? 200 : 400).json(result);
     }
 
-    const previousStatus = request.status;
-    request.status = status;
-    if (adminNote !== undefined) {
-      if (status === 'rejected') {
-        request.rejectionReason = adminNote;
-      } else {
-        request.referenceNote = adminNote;
-      }
-    }
-    request.processedAt = new Date().toISOString();
-    await request.save();
-
-    const user = await User.findOne({ id: request.userId });
-
-    if (user) {
-      if (status === 'completed' && previousStatus === 'pending') {
-        // Complete withdrawal: reduce pending balance
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
-        await user.save();
-
-        const notif = new Notification({
-          id: `notif_${Date.now()}`,
-          userId: user.id,
-          title: 'Rút tiền thành công',
-          message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ về tài khoản ngân hàng ${request.bankName} (${request.bankAccount}) đã được chuyển khoản thành công.`,
-          type: 'wallet',
-          createdAt: new Date().toISOString()
-        });
-        await notif.save();
-      } else if (status === 'rejected' && previousStatus === 'pending') {
-        // Reject withdrawal: return money to user balance
-        user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - request.amount);
-        user.balance += request.amount;
-        await user.save();
-
-        // Record refund tx
-        const refundTx = new WalletTransaction({
-          id: `tx_${Date.now()}_refund`,
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          type: 'refund',
-          amount: request.amount,
-          status: 'success',
-          note: `Hoàn tiền yêu cầu rút không thành công: ${adminNote || 'Sai thông tin STK'}`,
-          createdAt: new Date().toISOString()
-        });
-        await refundTx.save();
-
-        const notif = new Notification({
-          id: `notif_${Date.now()}`,
-          userId: user.id,
-          title: 'Yêu cầu rút tiền bị từ chối',
-          message: `Yêu cầu rút ${request.amount.toLocaleString('vi-VN')}đ đã bị từ chối (${adminNote || 'Thông tin ngân hàng không hợp lệ'}). Tiền đã được hoàn lại vào số dư ví của bạn.`,
-          type: 'wallet',
-          createdAt: new Date().toISOString()
-        });
-        await notif.save();
-      }
-    }
-
-    return res.json({
-      success: true,
-      message: 'Xử lý yêu cầu rút tiền thành công',
-      withdrawal: request.toJSON()
-    });
+    return res.status(400).json({ success: false, message: 'Trạng thái cập nhật không hợp lệ' });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi xử lý rút tiền' });
   }
