@@ -39,59 +39,43 @@ export async function approvePayout(
 
   const nowIso = new Date().toISOString();
 
-  // 1. Direct search by exact ID in WalletTransaction
+  // 1. Direct search by exact ID in WalletTransaction (canonical ID format tx_...)
   let tx = await WalletTransaction.findOne({ id: cleanId });
 
-  // 2. Direct search by exact ID in WithdrawalRequest
+  // 2. Direct search by exact ID in WithdrawalRequest (canonical ID format wdr_...)
   let wdr = await WithdrawalRequest.findOne({ id: cleanId });
 
-  // 3. Cross-reference if needed
+  // 3. Cross-reference only if needed
   if (tx && !wdr) {
     wdr = await WithdrawalRequest.findOne({
       $or: [
         { id: cleanId.replace('tx_', 'wdr_') },
-        {
-          userId: tx.userId,
-          amount: Math.abs(tx.amount),
-          status: 'pending'
-        }
+        { transactionId: cleanId }
       ]
     });
   } else if (!tx && wdr) {
     tx = await WalletTransaction.findOne({
       $or: [
         { id: cleanId.replace('wdr_', 'tx_') },
-        {
-          userId: wdr.userId,
-          type: 'withdraw',
-          amount: -Math.abs(wdr.amount),
-          status: 'pending'
-        }
+        { id: (wdr as any).transactionId }
       ]
     });
-  }
-
-  // If neither was found by exact/derived ID, check extraContext
-  if (!tx && !wdr && extraContext?.userId) {
-    if (extraContext.amount) {
-      tx = await WalletTransaction.findOne({
-        userId: extraContext.userId,
-        type: 'withdraw',
-        amount: -Math.abs(extraContext.amount),
-        status: 'pending'
-      });
-      wdr = await WithdrawalRequest.findOne({
-        userId: extraContext.userId,
-        amount: Math.abs(extraContext.amount),
-        status: 'pending'
-      });
-    }
   }
 
   if (!tx && !wdr) {
     return {
       success: false,
-      message: `Không tìm thấy bản ghi rút tiền với mã ${cleanId} trong cơ sở dữ liệu MongoDB.`
+      message: `Không tìm thấy bản ghi giao dịch rút tiền với mã ${cleanId} trong cơ sở dữ liệu MongoDB.`
+    };
+  }
+
+  // If already approved, return success without duplicate deduction
+  if (tx && (tx.status === 'success' || tx.status === 'approved' || tx.status === 'completed')) {
+    return {
+      success: true,
+      message: 'Giao dịch này đã được giải ngân thành công trước đó.',
+      transaction: tx.toJSON(),
+      withdrawal: wdr ? wdr.toJSON() : null
     };
   }
 
@@ -181,54 +165,41 @@ export async function rejectPayout(
   const nowIso = new Date().toISOString();
   const rejectReason = (reason || 'Thông tin tài khoản ngân hàng không chính xác').trim();
 
-  // 1. Direct search
+  // 1. Direct search by exact ID in WalletTransaction
   let tx = await WalletTransaction.findOne({ id: cleanId });
   let wdr = await WithdrawalRequest.findOne({ id: cleanId });
 
-  // 2. Cross-reference
+  // 2. Cross-reference only if needed
   if (tx && !wdr) {
     wdr = await WithdrawalRequest.findOne({
       $or: [
         { id: cleanId.replace('tx_', 'wdr_') },
-        {
-          userId: tx.userId,
-          amount: Math.abs(tx.amount),
-          status: 'pending'
-        }
+        { transactionId: cleanId }
       ]
     });
   } else if (!tx && wdr) {
     tx = await WalletTransaction.findOne({
       $or: [
         { id: cleanId.replace('wdr_', 'tx_') },
-        {
-          userId: wdr.userId,
-          type: 'withdraw',
-          amount: -Math.abs(wdr.amount),
-          status: 'pending'
-        }
+        { id: (wdr as any).transactionId }
       ]
-    });
-  }
-
-  if (!tx && !wdr && extraContext?.userId && extraContext?.amount) {
-    tx = await WalletTransaction.findOne({
-      userId: extraContext.userId,
-      type: 'withdraw',
-      amount: -Math.abs(extraContext.amount),
-      status: 'pending'
-    });
-    wdr = await WithdrawalRequest.findOne({
-      userId: extraContext.userId,
-      amount: Math.abs(extraContext.amount),
-      status: 'pending'
     });
   }
 
   if (!tx && !wdr) {
     return {
       success: false,
-      message: `Không tìm thấy bản ghi rút tiền với mã ${cleanId} trong cơ sở dữ liệu MongoDB.`
+      message: `Không tìm thấy bản ghi giao dịch rút tiền với mã ${cleanId} trong cơ sở dữ liệu MongoDB.`
+    };
+  }
+
+  // If already rejected or failed
+  if (tx && (tx.status === 'failed' || tx.status === 'rejected')) {
+    return {
+      success: true,
+      message: 'Giao dịch này đã được xử lý từ chối trước đó.',
+      transaction: tx.toJSON(),
+      withdrawal: wdr ? wdr.toJSON() : null
     };
   }
 
