@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { Order } from '../models/Order';
 import { Setting } from '../models/Setting';
 import { Notification } from '../models/Notification';
+import { getSellerStats } from '../services/sellerService';
 import {
   authenticateToken,
   optionalAuth,
@@ -514,6 +515,62 @@ router.post('/:id/like', optionalAuth, async (req: AuthenticatedRequest, res: Re
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi khi thích tài khoản.' });
+  }
+});
+
+// GET /api/accounts/seller/:sellerId/stats & GET /api/accounts/seller/:sellerId
+router.get('/seller/:sellerId/stats', async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    const statsResult = await getSellerStats(sellerId);
+    if (!statsResult) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin người bán.' });
+    }
+    return res.json({ success: true, stats: statsResult });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi lấy thống kê người bán.' });
+  }
+});
+
+router.get('/seller/:sellerId', async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    const statsResult = await getSellerStats(sellerId);
+    if (!statsResult) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ người bán.' });
+    }
+    return res.json({
+      success: true,
+      seller: {
+        id: statsResult.sellerId,
+        name: statsResult.name,
+        username: statsResult.username,
+        avatar: statsResult.avatar,
+        role: statsResult.role,
+        isVerifiedSeller: statsResult.isVerifiedSeller,
+        sellerTier: statsResult.sellerTier,
+        rating: statsResult.rating,
+        averageRating: statsResult.averageRating,
+        completedSales: statsResult.totalSold,
+        totalSold: statsResult.totalSold,
+        bio: statsResult.bio,
+        createdAt: statsResult.createdAt
+      },
+      reviews: statsResult.reviews,
+      accounts: statsResult.accounts,
+      stats: {
+        totalSales: statsResult.totalSold,
+        totalSold: statsResult.totalSold,
+        completedSales: statsResult.totalSold,
+        rating: statsResult.rating,
+        averageRating: statsResult.averageRating,
+        reviewsCount: statsResult.reviewsCount,
+        reviewCount: statsResult.reviewCount,
+        activeListings: statsResult.activeListings
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi khi tải hồ sơ người bán.' });
   }
 });
 

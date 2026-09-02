@@ -98,6 +98,8 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/bootstrap', bootstrapRoutes);
+  app.use('/api/sellers', authRoutes);
+  app.use('/api/seller', authRoutes);
   app.use('/api/sync', bootstrapRoutes);
 
   // Global Webhook listeners (PayOS IPN)

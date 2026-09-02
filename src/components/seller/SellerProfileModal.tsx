@@ -443,12 +443,14 @@ export const SellerProfileModal: React.FC = () => {
                       "{rev.comment}"
                     </div>
 
-                    <div className="pl-10 pt-1 flex items-center gap-2 text-[11px] text-amber-400/80">
-                      <span className="font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                        #{rev.accountCode}
-                      </span>
-                      <span className="text-slate-400 truncate">{rev.accountTitle}</span>
-                    </div>
+                    {rev.accountCode && (
+                      <div className="pl-10 pt-1 flex items-center gap-2 text-[11px] text-amber-400/80">
+                        <span className="font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                          #{rev.accountCode}
+                        </span>
+                        {rev.accountTitle && <span className="text-slate-400 truncate">{rev.accountTitle}</span>}
+                      </div>
+                    )}
                   </div>
                 ))
               )}

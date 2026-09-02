@@ -6,6 +6,7 @@ import { Order } from '../models/Order';
 import { Review } from '../models/Review';
 import { Notification } from '../models/Notification';
 import { authenticateToken, generateToken, AuthenticatedRequest } from '../middleware/auth';
+import { getSellerStats } from '../services/sellerService';
 
 const router = Router();
 
@@ -360,220 +361,47 @@ router.put('/change-password', authenticateToken, async (req: AuthenticatedReque
 router.get('/seller/:sellerId', async (req: Request, res: Response) => {
   try {
     const { sellerId } = req.params;
-    let user = await User.findOne({
-      $or: [
-        { id: sellerId },
-        { username: sellerId },
-        { name: sellerId },
-        { email: sellerId }
-      ]
-    });
+    const statsResult = await getSellerStats(sellerId);
 
-    const accountForSeller = await Account.findOne({
-      $or: [
-        { sellerId },
-        { sellerName: sellerId },
-        { id: sellerId },
-        { code: sellerId }
-      ]
-    });
-
-    if (!user && !accountForSeller) {
-      // Also check if any account exists matching sellerName loosely
-      const looseAccount = await Account.findOne({
-        sellerName: new RegExp(`^${sellerId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-      });
-      if (looseAccount) {
-        user = await User.findOne({ id: looseAccount.sellerId });
-      }
-    }
-
-    if (!user && !accountForSeller) {
+    if (!statsResult) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy hồ sơ người bán'
       });
     }
 
-    const sellerName = user?.name || accountForSeller?.sellerName || 'Shop Acc Liên Quân';
-    const sellerUsername = user?.username || (user?.email ? user.email.split('@')[0] : '') || sellerId;
-    const sellerAvatar = user?.avatar || accountForSeller?.sellerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${sellerId}`;
-    const isVerified = user?.isVerifiedSeller ?? (accountForSeller?.sellerVerified ?? true);
-
-    // Build comprehensive identifier sets to match all orders, reviews, and accounts
-    const sellerIdSet = new Set<string>();
-    if (sellerId) sellerIdSet.add(sellerId);
-    if (user?.id) sellerIdSet.add(user.id);
-    if (user?.username) sellerIdSet.add(user.username);
-    if (accountForSeller?.sellerId) sellerIdSet.add(accountForSeller.sellerId);
-
-    const sellerNames = new Set<string>();
-    if (sellerName) sellerNames.add(sellerName);
-    if (user?.name) sellerNames.add(user.name);
-    if (accountForSeller?.sellerName) sellerNames.add(accountForSeller.sellerName);
-    if (sellerId && isNaN(Number(sellerId))) sellerNames.add(sellerId);
-
-    const sellerNameRegexes = Array.from(sellerNames).map(
-      name => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-    );
-
-    // Fetch all accounts belonging to this seller
-    const sellerAccounts = await Account.find({
-      $or: [
-        { sellerId: { $in: Array.from(sellerIdSet) } },
-        { sellerName: { $in: Array.from(sellerNames) } },
-        ...sellerNameRegexes.map(rx => ({ sellerName: rx }))
-      ]
-    }).sort({ createdAt: -1 }).lean();
-
-    const accountIds = sellerAccounts.map(a => a.id).filter(Boolean);
-    const accountCodes = sellerAccounts.map(a => a.code).filter(Boolean);
-    const soldAccountsCount = sellerAccounts.filter(a => a.status === 'sold').length;
-
-    // Fetch all orders associated with this seller or any of their accounts
-    const sellerOrders = await Order.find({
-      $or: [
-        { sellerId: { $in: Array.from(sellerIdSet) } },
-        { sellerName: { $in: Array.from(sellerNames) } },
-        ...sellerNameRegexes.map(rx => ({ sellerName: rx })),
-        { accountId: { $in: accountIds } },
-        { accountCode: { $in: accountCodes } }
-      ]
-    }).sort({ completedAt: -1, createdAt: -1 }).lean();
-
-    // Filter completed or delivered sales
-    const completedOrders = sellerOrders.filter(
-      o => o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold'
-    );
-    const allOrderIds = sellerOrders.map(o => o.id).filter(Boolean);
-
-    // Fetch all customer reviews from the Review collection
-    const dbReviews = await Review.find({
-      $or: [
-        { sellerId: { $in: Array.from(sellerIdSet) } },
-        { sellerName: { $in: Array.from(sellerNames) } },
-        ...sellerNameRegexes.map(rx => ({ sellerName: rx })),
-        { accountId: { $in: accountIds } },
-        { accountCode: { $in: accountCodes } },
-        { orderId: { $in: allOrderIds } }
-      ]
-    }).sort({ createdAt: -1 }).lean();
-
-    // Format & collect customer reviews
-    const formattedReviews: any[] = [];
-    const seenReviewIds = new Set<string>();
-
-    for (const rev of dbReviews) {
-      const reviewKey = rev.id || rev.orderId || `${rev.buyerId}_${rev.accountId}`;
-      if (!seenReviewIds.has(reviewKey)) {
-        seenReviewIds.add(reviewKey);
-        formattedReviews.push({
-          id: rev.id,
-          buyerName: rev.buyerName || 'Khách Hàng',
-          buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-          rating: rev.rating || 5,
-          comment: rev.comment || 'Tài khoản đúng mô tả, giao dịch nhanh chóng và an toàn.',
-          date: rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('vi-VN') : '29/08/2026',
-          accountCode: rev.accountCode || '',
-          accountTitle: ''
-        });
-      }
-    }
-
-    for (const ord of sellerOrders) {
-      if (ord.review?.rating || ord.review?.comment) {
-        const reviewKey = ord.id;
-        if (!seenReviewIds.has(reviewKey)) {
-          seenReviewIds.add(reviewKey);
-          formattedReviews.push({
-            id: ord.id,
-            buyerName: ord.buyerName || 'Người Mua',
-            buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-            rating: ord.review?.rating || 5,
-            comment: ord.review?.comment || 'Giao dịch thành công, nhận acc ngay tức thì.',
-            date: ord.completedAt
-              ? new Date(ord.completedAt).toLocaleDateString('vi-VN')
-              : ord.createdAt
-              ? new Date(ord.createdAt).toLocaleDateString('vi-VN')
-              : '29/08/2026',
-            accountCode: ord.accountCode || '',
-            accountTitle: ord.accountTitle || ''
-          });
-        }
-      }
-    }
-
-    // If there are sold orders without custom review, provide verified completion feedback
-    if (formattedReviews.length === 0 && completedOrders.length > 0) {
-      for (const ord of completedOrders.slice(0, 5)) {
-        formattedReviews.push({
-          id: `rev_${ord.id}`,
-          buyerName: ord.buyerName || 'Người Mua Uy Tín',
-          buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-          rating: 5,
-          comment: 'Tài khoản đúng thông tin 100%, bảo mật tốt, giao dịch qua Escrow rất yên tâm.',
-          date: ord.completedAt ? new Date(ord.completedAt).toLocaleDateString('vi-VN') : new Date(ord.createdAt).toLocaleDateString('vi-VN'),
-          accountCode: ord.accountCode || '',
-          accountTitle: ord.accountTitle || ''
-        });
-      }
-    }
-
-    // Accurate calculation of total sales and average rating:
-    // Should be the maximum among completed orders, sold accounts, user profile completed sales, and review count
-    const totalSales = Math.max(
-      completedOrders.length,
-      sellerOrders.length,
-      soldAccountsCount,
-      user?.completedSales || 0,
-      accountForSeller?.sellerCompletedSales || 0,
-      formattedReviews.length
-    );
-
-    const avgRating = formattedReviews.length > 0 
-      ? (formattedReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / formattedReviews.length).toFixed(1)
-      : (user?.rating || 5.0).toFixed(1);
-
-    let tier = user?.sellerTier || 'BASIC SELLER';
-    if (isVerified || totalSales >= 10 || user?.role === 'admin') {
-      tier = 'VIP SELLER';
-    } else if (totalSales >= 3) {
-      tier = 'PRO SELLER';
-    }
-
     const publicProfile = {
-      id: user?.id || sellerId,
-      name: sellerName,
-      username: sellerUsername,
-      avatar: sellerAvatar,
-      role: user?.role || 'seller',
-      isVerifiedSeller: isVerified,
-      sellerTier: tier,
-      rating: parseFloat(avgRating),
-      completedSales: totalSales,
-      bio: user?.bio || 'Chuyên cung cấp tài khoản Liên Quân chất lượng cao, bảo hành trọn đời, hỗ trợ 24/7.',
-      createdAt: (user as any)?.createdAt || accountForSeller?.createdAt || '2025-01-01T00:00:00.000Z'
+      id: statsResult.sellerId,
+      name: statsResult.name,
+      username: statsResult.username,
+      avatar: statsResult.avatar,
+      role: statsResult.role,
+      isVerifiedSeller: statsResult.isVerifiedSeller,
+      sellerTier: statsResult.sellerTier,
+      rating: statsResult.rating,
+      averageRating: statsResult.averageRating,
+      completedSales: statsResult.completedSales,
+      totalSold: statsResult.totalSold,
+      bio: statsResult.bio,
+      createdAt: statsResult.createdAt
     };
 
     return res.json({
       success: true,
-      seller: {
-        ...publicProfile,
-        completedSales: totalSales,
-        rating: parseFloat(avgRating)
-      },
-      user: {
-        ...publicProfile,
-        completedSales: totalSales,
-        rating: parseFloat(avgRating)
-      },
-      reviews: formattedReviews,
-      accounts: sellerAccounts,
+      seller: publicProfile,
+      user: publicProfile,
+      reviews: statsResult.reviews,
+      accounts: statsResult.accounts,
       stats: {
-        totalSales,
-        rating: parseFloat(avgRating),
-        reviewsCount: formattedReviews.length,
-        activeListings: sellerAccounts.filter(a => a.status === 'approved').length
+        totalSales: statsResult.totalSold,
+        totalSold: statsResult.totalSold,
+        completedSales: statsResult.totalSold,
+        rating: statsResult.rating,
+        averageRating: statsResult.averageRating,
+        reviewsCount: statsResult.reviewsCount,
+        reviewCount: statsResult.reviewCount,
+        activeListings: statsResult.activeListings,
+        totalListings: statsResult.totalListings
       }
     });
   } catch (error: any) {

@@ -20,30 +20,9 @@ export interface PayoutResult {
 }
 
 /**
- * Builds safe query condition for finding transactions/withdrawals without throwing CastErrors
- */
-function buildSafeConditions(id: string, contextData?: PayoutContextData): any[] {
-  const cleanId = String(id || '').trim();
-  const conditions: any[] = [];
-
-  if (cleanId) {
-    conditions.push({ id: cleanId });
-    conditions.push({ id: cleanId.replace('wdr_', 'tx_') });
-    conditions.push({ id: cleanId.replace('tx_', 'wdr_') });
-
-    // Only add _id condition if it is a strict 24-character hexadecimal ObjectId
-    if (/^[0-9a-fA-F]{24}$/.test(cleanId) && mongoose.Types.ObjectId.isValid(cleanId)) {
-      try {
-        conditions.push({ _id: new mongoose.Types.ObjectId(cleanId) });
-      } catch {}
-    }
-  }
-
-  return conditions.length > 0 ? conditions : [{ id: cleanId }];
-}
-
-/**
- * Approves a withdrawal payout and persists status: 'success' / 'approved' in database
+ * Approves a withdrawal payout in MongoDB:
+ * Target: WalletTransaction (id: tx_...) with fallback to WithdrawalRequest (id: wdr_...)
+ * Status update: pending -> success / approved
  */
 export async function approveWithdrawalService(
   id: string,
@@ -61,44 +40,28 @@ export async function approveWithdrawalService(
       };
     }
 
-    const conditions = buildSafeConditions(cleanId, contextData);
-
-    // 1. Find matching WithdrawalRequest document by ID
-    let targetWdr: any = await WithdrawalRequest.findOne({ id: cleanId });
-    if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
-    }
-    if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('wdr_', 'tx_') });
-    }
-    if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
-      try {
-        targetWdr = await WithdrawalRequest.findById(cleanId);
-      } catch {}
-    }
-    if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ $or: conditions });
-    }
-
-    // Find matching WalletTransaction by ID
+    // 1. Primary lookup: WalletTransaction by exact string ID
     let targetTx: any = await WalletTransaction.findOne({ id: cleanId });
-    if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
-    }
-    if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('tx_', 'wdr_') });
-    }
-    if (!targetTx && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+    if (!targetTx && /^[0-9a-fA-F]{24}$/.test(cleanId) && mongoose.Types.ObjectId.isValid(cleanId)) {
       try {
         targetTx = await WalletTransaction.findById(cleanId);
       } catch {}
     }
+
+    // 2. Secondary lookup if not found in WalletTransaction: check WithdrawalRequest by exact string ID
+    let targetWdr: any = null;
     if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ $or: conditions });
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId });
+      if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId) && mongoose.Types.ObjectId.isValid(cleanId)) {
+        try {
+          targetWdr = await WithdrawalRequest.findById(cleanId);
+        } catch {}
+      }
     }
 
-    // If strictly neither exists in DB, return 404 notFound
-    if (!targetWdr && !targetTx) {
+    // 3. Strict 404 handler with diagnostic logging if not found in MongoDB
+    if (!targetTx && !targetWdr) {
+      console.error(`[PAYOUT APPROVE] NOT FOUND - ID: "${cleanId}", Model: WalletTransaction / WithdrawalRequest, Field: id, Query: { id: "${cleanId}" }`);
       return {
         success: false,
         notFound: true,
@@ -106,121 +69,65 @@ export async function approveWithdrawalService(
       };
     }
 
-    // Resolve target details
-    const targetUserId =
-      contextData?.userId || targetWdr?.userId || targetTx?.userId || '';
-    const targetAmount =
-      contextData?.amount ||
-      (targetWdr ? targetWdr.amount : targetTx ? Math.abs(targetTx.amount) : 0);
-    const targetBankName =
-      contextData?.bankName || targetWdr?.bankName || targetTx?.bankName || 'Ngân hàng';
-    const targetBankAccount =
-      contextData?.bankAccount || targetWdr?.bankAccount || targetTx?.bankAccount || '';
+    let targetUserId = '';
+    let targetAmount = 0;
+    let targetBankName = 'Ngân hàng';
+    let targetBankAccount = '';
 
-    const noteMsg = refNote
-      ? `Yêu cầu rút tiền về ${targetBankName} (${targetBankAccount}) - Đã giải ngân (Mã GD: ${refNote})`
-      : `Yêu cầu rút tiền về ${targetBankName} (${targetBankAccount}) - Đã giải ngân thành công`;
-
-    let hasPersistedAny = false;
-
-    // 2. Directly update target WithdrawalRequest document if found
-    if (targetWdr) {
-      targetWdr.status = 'approved';
-      targetWdr.processedAt = now;
-      targetWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
-      targetWdr.updatedAt = now;
-      await targetWdr.save();
-      hasPersistedAny = true;
-    }
-
-    // 3. Directly update target WalletTransaction document if found
+    // Update WalletTransaction if found
     if (targetTx) {
+      targetUserId = targetTx.userId || contextData?.userId || '';
+      targetAmount = Math.abs(targetTx.amount) || contextData?.amount || 0;
+      targetBankName = targetTx.bankName || contextData?.bankName || 'Ngân hàng';
+      targetBankAccount = targetTx.bankAccount || contextData?.bankAccount || '';
+
+      const noteMsg = refNote
+        ? `Yêu cầu rút tiền về ${targetBankName} (${targetBankAccount}) - Đã giải ngân (Mã GD: ${refNote})`
+        : `Yêu cầu rút tiền về ${targetBankName} (${targetBankAccount}) - Đã giải ngân thành công`;
+
       targetTx.status = 'success';
       targetTx.processedAt = now;
       targetTx.note = noteMsg;
       targetTx.updatedAt = now;
       await targetTx.save();
-      hasPersistedAny = true;
-    }
 
-    // 4. Also perform comprehensive updateMany across conditions to ensure both records are synchronized
-    try {
-      const [wdrRes, txRes] = await Promise.all([
-        WithdrawalRequest.updateMany(
-          { $or: conditions },
-          {
-            $set: {
-              status: 'approved',
-              processedAt: now,
-              referenceNote: refNote || 'Đã giải ngân VietQR 24/7',
-              updatedAt: now
-            }
-          }
-        ),
-        WalletTransaction.updateMany(
-          { $or: conditions },
-          {
-            $set: {
-              status: 'success',
-              processedAt: now,
-              note: noteMsg,
-              updatedAt: now
-            }
-          }
-        )
-      ]);
-      if ((wdrRes as any)?.modifiedCount > 0 || (txRes as any)?.modifiedCount > 0) {
-        hasPersistedAny = true;
+      // Check if there is an exact corresponding WithdrawalRequest by ID
+      const matchingWdr = await WithdrawalRequest.findOne({ id: cleanId });
+      if (matchingWdr) {
+        matchingWdr.status = 'approved';
+        matchingWdr.processedAt = now;
+        matchingWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
+        matchingWdr.updatedAt = now;
+        await matchingWdr.save();
       }
-    } catch (updateErr) {
-      console.warn('Payout updateMany notice:', updateErr);
+    } else if (targetWdr) {
+      targetUserId = targetWdr.userId || contextData?.userId || '';
+      targetAmount = targetWdr.amount || contextData?.amount || 0;
+      targetBankName = targetWdr.bankName || contextData?.bankName || 'Ngân hàng';
+      targetBankAccount = targetWdr.bankAccount || contextData?.bankAccount || '';
+
+      targetWdr.status = 'approved';
+      targetWdr.processedAt = now;
+      targetWdr.referenceNote = refNote || 'Đã giải ngân VietQR 24/7';
+      targetWdr.updatedAt = now;
+      await targetWdr.save();
     }
 
-    // 5. Update user pendingBalance & send notification
+    // 4. Update user pending balance & create notification
     if (targetUserId) {
-      if (targetAmount > 0) {
-        try {
-          await Promise.all([
-            WithdrawalRequest.updateMany(
-              { userId: targetUserId, amount: targetAmount, status: 'pending' },
-              {
-                $set: {
-                  status: 'approved',
-                  processedAt: now,
-                  referenceNote: refNote || 'Đã giải ngân VietQR 24/7',
-                  updatedAt: now
-                }
-              }
-            ),
-            WalletTransaction.updateMany(
-              { userId: targetUserId, type: 'withdraw', amount: -targetAmount, status: 'pending' },
-              {
-                $set: {
-                  status: 'success',
-                  processedAt: now,
-                  note: noteMsg,
-                  updatedAt: now
-                }
-              }
-            )
-          ]);
-        } catch {}
-      }
-
       const user = await User.findOne({ id: targetUserId });
       if (user) {
         user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
         await user.save();
       }
 
-      // Send success notification to user
       try {
         const notif = new Notification({
           id: `notif_approve_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           userId: targetUserId,
           type: 'wallet',
           title: 'Yêu cầu rút tiền đã được giải ngân',
-          message: `Lệnh rút ${targetAmount.toLocaleString('vi-VN')}đ về ${targetBankName} (${targetBankAccount}) đã được Admin duyệt và giải ngân thành công qua VietQR 24/7.${refNote ? ` Mã đối soát: ${refNote}` : ''}`,
+          message: `Lệnh rút ${targetAmount.toLocaleString('vi-VN')}đ về ${targetBankName} (${targetBankAccount}) đã được Admin duyệt và giải ngân thành công qua VietQR.${refNote ? ` Mã đối soát: ${refNote}` : ''}`,
           read: false,
           createdAt: now
         });
@@ -228,13 +135,6 @@ export async function approveWithdrawalService(
       } catch (notifErr) {
         console.warn('Approve notif notice:', notifErr);
       }
-    }
-
-    if (!hasPersistedAny) {
-      return {
-        success: false,
-        message: 'Cơ sở dữ liệu MongoDB không ghi nhận thay đổi nào cho lệnh rút này.'
-      };
     }
 
     return {
@@ -251,7 +151,7 @@ export async function approveWithdrawalService(
 }
 
 /**
- * Rejects a withdrawal payout and refunds balance to member's account
+ * Rejects a withdrawal payout and refunds balance to member's account in MongoDB
  */
 export async function rejectWithdrawalService(
   id: string,
@@ -269,43 +169,27 @@ export async function rejectWithdrawalService(
       };
     }
 
-    const conditions = buildSafeConditions(cleanId, contextData);
-
-    // 1. Find matching WithdrawalRequest document
-    let targetWdr: any = await WithdrawalRequest.findOne({ id: cleanId });
-    if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('tx_', 'wdr_') });
-    }
-    if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ id: cleanId.replace('wdr_', 'tx_') });
-    }
-    if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
-      try {
-        targetWdr = await WithdrawalRequest.findById(cleanId);
-      } catch {}
-    }
-    if (!targetWdr) {
-      targetWdr = await WithdrawalRequest.findOne({ $or: conditions });
-    }
-
-    // Find matching WalletTransaction
+    // 1. Primary lookup: WalletTransaction by exact string ID
     let targetTx: any = await WalletTransaction.findOne({ id: cleanId });
-    if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('wdr_', 'tx_') });
-    }
-    if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ id: cleanId.replace('tx_', 'wdr_') });
-    }
-    if (!targetTx && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
+    if (!targetTx && /^[0-9a-fA-F]{24}$/.test(cleanId) && mongoose.Types.ObjectId.isValid(cleanId)) {
       try {
         targetTx = await WalletTransaction.findById(cleanId);
       } catch {}
     }
+
+    // 2. Secondary lookup if not found in WalletTransaction: check WithdrawalRequest
+    let targetWdr: any = null;
     if (!targetTx) {
-      targetTx = await WalletTransaction.findOne({ $or: conditions });
+      targetWdr = await WithdrawalRequest.findOne({ id: cleanId });
+      if (!targetWdr && /^[0-9a-fA-F]{24}$/.test(cleanId) && mongoose.Types.ObjectId.isValid(cleanId)) {
+        try {
+          targetWdr = await WithdrawalRequest.findById(cleanId);
+        } catch {}
+      }
     }
 
-    if (!targetWdr && !targetTx) {
+    if (!targetTx && !targetWdr) {
+      console.error(`[PAYOUT REJECT] NOT FOUND - ID: "${cleanId}", Model: WalletTransaction / WithdrawalRequest, Field: id, Query: { id: "${cleanId}" }`);
       return {
         success: false,
         notFound: true,
@@ -313,92 +197,47 @@ export async function rejectWithdrawalService(
       };
     }
 
-    // Resolve target details
-    const targetUserId =
-      contextData?.userId || targetWdr?.userId || targetTx?.userId || '';
-    const targetAmount =
-      contextData?.amount ||
-      (targetWdr ? targetWdr.amount : targetTx ? Math.abs(targetTx.amount) : 0);
-    const targetBankName =
-      contextData?.bankName || targetWdr?.bankName || targetTx?.bankName || 'Ngân hàng';
-    const targetBankAccount =
-      contextData?.bankAccount || targetWdr?.bankAccount || targetTx?.bankAccount || '';
+    let targetUserId = '';
+    let targetAmount = 0;
+    let targetBankName = 'Ngân hàng';
+    let targetBankAccount = '';
 
-    // 2. Update target documents
-    if (targetWdr) {
+    if (targetTx) {
+      targetUserId = targetTx.userId || contextData?.userId || '';
+      targetAmount = Math.abs(targetTx.amount) || contextData?.amount || 0;
+      targetBankName = targetTx.bankName || contextData?.bankName || 'Ngân hàng';
+      targetBankAccount = targetTx.bankAccount || contextData?.bankAccount || '';
+
+      targetTx.status = 'failed';
+      targetTx.rejectReason = reason;
+      targetTx.processedAt = now;
+      targetTx.note = `Yêu cầu rút tiền bị từ chối: ${reason}`;
+      targetTx.updatedAt = now;
+      await targetTx.save();
+
+      const matchingWdr = await WithdrawalRequest.findOne({ id: cleanId });
+      if (matchingWdr) {
+        matchingWdr.status = 'rejected';
+        matchingWdr.rejectionReason = reason;
+        matchingWdr.processedAt = now;
+        matchingWdr.updatedAt = now;
+        await matchingWdr.save();
+      }
+    } else if (targetWdr) {
+      targetUserId = targetWdr.userId || contextData?.userId || '';
+      targetAmount = targetWdr.amount || contextData?.amount || 0;
+      targetBankName = targetWdr.bankName || contextData?.bankName || 'Ngân hàng';
+      targetBankAccount = targetWdr.bankAccount || contextData?.bankAccount || '';
+
       targetWdr.status = 'rejected';
       targetWdr.rejectionReason = reason;
       targetWdr.processedAt = now;
       targetWdr.updatedAt = now;
       await targetWdr.save();
     }
-    if (targetTx) {
-      targetTx.status = 'failed';
-      targetTx.rejectReason = reason;
-      targetTx.processedAt = now;
-      targetTx.updatedAt = now;
-      await targetTx.save();
-    }
 
-    // 3. Comprehensive updateMany
-    try {
-      await Promise.all([
-        WithdrawalRequest.updateMany(
-          { $or: conditions },
-          {
-            $set: {
-              status: 'rejected',
-              rejectionReason: reason,
-              processedAt: now,
-              updatedAt: now
-            }
-          }
-        ),
-        WalletTransaction.updateMany(
-          { $or: conditions },
-          {
-            $set: {
-              status: 'failed',
-              rejectReason: reason,
-              processedAt: now,
-              updatedAt: now
-            }
-          }
-        )
-      ]);
-    } catch (updateErr) {
-      console.warn('Payout reject updateMany notice:', updateErr);
-    }
-
-    // 4. Refund balance to User & Send Notification
+    // 3. Refund balance to User & Send Notification
     if (targetUserId && targetAmount > 0) {
-      try {
-        await Promise.all([
-          WithdrawalRequest.updateMany(
-            { userId: targetUserId, amount: targetAmount, status: 'pending' },
-            {
-              $set: {
-                status: 'rejected',
-                rejectionReason: reason,
-                processedAt: now,
-                updatedAt: now
-              }
-            }
-          ),
-          WalletTransaction.updateMany(
-            { userId: targetUserId, type: 'withdraw', amount: -targetAmount, status: 'pending' },
-            {
-              $set: {
-                status: 'failed',
-                rejectReason: reason,
-                processedAt: now,
-                updatedAt: now
-              }
-            }
-          )
-        ]);
-      } catch {}
-
       const user = await User.findOne({ id: targetUserId });
       if (user) {
         user.pendingBalance = Math.max(0, (user.pendingBalance || 0) - targetAmount);
@@ -419,7 +258,6 @@ export async function rejectWithdrawalService(
         });
         await refundTx.save();
 
-        // Send refund notification
         try {
           const notif = new Notification({
             id: `notif_reject_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,

@@ -16,6 +16,7 @@ export interface IWithdrawalRequest {
   referenceNote?: string;
   processedAt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 const WithdrawalRequestSchema = new Schema<IWithdrawalRequest>(

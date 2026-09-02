@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../lib/apiClient';
 import { RankBadge } from '../common/RankBadge';
 import { getDynamicSellerInfo } from '../../utils/sellerHelper';
 import {
@@ -39,13 +40,60 @@ export const AccountDetailModal: React.FC = () => {
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [liveSellerStats, setLiveSellerStats] = useState<{
+    completedSales?: number;
+    reviewsCount?: number;
+    averageRating?: string | null;
+    sellerTier?: string;
+    isVerifiedSeller?: boolean;
+    name?: string;
+    avatar?: string;
+  } | null>(null);
 
   if (!selectedAccountId) return null;
 
   const account = accounts.find(a => a.id === selectedAccountId);
   if (!account) return null;
 
-  const sellerInfo = getDynamicSellerInfo(account.sellerId, allUsers, orders, account);
+  useEffect(() => {
+    if (!account?.sellerId) return;
+    let isMounted = true;
+    api.get(`/api/auth/seller/${account.sellerId}`)
+      .then(res => {
+        if (!isMounted) return;
+        if (res && res.success && (res.seller || res.stats)) {
+          const sellerObj = res.seller || {};
+          const statsObj = res.stats || {};
+          setLiveSellerStats({
+            completedSales: statsObj.totalSold ?? sellerObj.completedSales ?? statsObj.totalSales,
+            reviewsCount: statsObj.reviewsCount ?? statsObj.reviewCount ?? (Array.isArray(res.reviews) ? res.reviews.length : undefined),
+            averageRating: statsObj.averageRating ?? (sellerObj.rating ? String(sellerObj.rating) : undefined),
+            sellerTier: sellerObj.sellerTier,
+            isVerifiedSeller: sellerObj.isVerifiedSeller,
+            name: sellerObj.name,
+            avatar: sellerObj.avatar
+          });
+        }
+      })
+      .catch(err => {
+        console.warn('Could not fetch live seller stats in detail modal:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [account?.sellerId]);
+
+  const rawSellerInfo = getDynamicSellerInfo(account.sellerId, allUsers, orders, account);
+  const sellerInfo = {
+    ...rawSellerInfo,
+    name: liveSellerStats?.name || rawSellerInfo.name,
+    avatar: liveSellerStats?.avatar || rawSellerInfo.avatar,
+    completedSales: liveSellerStats?.completedSales ?? rawSellerInfo.completedSales,
+    reviewsCount: liveSellerStats?.reviewsCount ?? rawSellerInfo.reviewsCount,
+    averageRating: liveSellerStats?.averageRating ?? rawSellerInfo.averageRating,
+    sellerTier: liveSellerStats?.sellerTier || rawSellerInfo.sellerTier,
+    isVerifiedSeller: liveSellerStats?.isVerifiedSeller ?? rawSellerInfo.isVerifiedSeller
+  };
   const wishlisted = isWishlisted(account.id);
   const discountPercent = account.originalPrice
     ? Math.round(((account.originalPrice - account.price) / account.originalPrice) * 100)
