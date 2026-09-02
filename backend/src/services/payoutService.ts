@@ -70,7 +70,7 @@ export async function approvePayout(
   }
 
   // If already approved, return success without duplicate deduction
-  if (tx && (tx.status === 'success' || tx.status === 'approved' || tx.status === 'completed')) {
+  if (tx && (tx.status === 'success' || (tx.status as string) === 'approved' || (tx.status as string) === 'completed')) {
     return {
       success: true,
       message: 'Giao dịch này đã được giải ngân thành công trước đó.',
@@ -194,7 +194,7 @@ export async function rejectPayout(
   }
 
   // If already rejected or failed
-  if (tx && (tx.status === 'failed' || tx.status === 'rejected')) {
+  if (tx && (tx.status === 'failed' || (tx.status as string) === 'rejected' || (tx.status as string) === 'cancelled')) {
     return {
       success: true,
       message: 'Giao dịch này đã được xử lý từ chối trước đó.',
