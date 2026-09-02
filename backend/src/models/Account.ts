@@ -31,6 +31,8 @@ export interface IAccount {
   sellerCompletedSales: number;
   sellerResponseTime: string;
   sellerVerified: boolean;
+  sellerTier?: string;
+  sellerReviewsCount?: number;
   status: 'pending' | 'approved' | 'rejected' | 'sold' | 'hidden';
   rejectionReason?: string;
   credentials: {
@@ -78,6 +80,8 @@ const AccountSchema = new Schema<IAccount>(
     sellerCompletedSales: { type: Number, default: 0 },
     sellerResponseTime: { type: String, default: '< 15 phút' },
     sellerVerified: { type: Boolean, default: false },
+    sellerTier: { type: String, default: 'BASIC SELLER' },
+    sellerReviewsCount: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected', 'sold', 'hidden'],

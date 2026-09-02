@@ -296,7 +296,7 @@ router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response
     const isUserAdmin = req.user?.role === 'admin';
     const isOwner = currentUserId && account.sellerId === currentUserId;
 
-    const result = account.toJSON();
+    const result: any = account.toJSON();
     if (!isOwner && !isUserAdmin) {
       result.credentials = {
         ...result.credentials,
