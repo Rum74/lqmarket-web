@@ -20,8 +20,8 @@ const router = Router();
 
 /**
  * GET /api/bootstrap
- * Ultra-fast single aggregation endpoint that fetches all initial marketplace & user data
- * in ONE single parallel database roundtrip (< 50ms)!
+ * Ultra-fast aggregation endpoint that fetches initial marketplace data
+ * in single parallel database roundtrip.
  */
 router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -66,11 +66,11 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       MysteryHistory.find().sort({ createdAt: -1 }).limit(30).lean(),
       WalletTransaction.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
         .sort({ createdAt: -1 })
-        .limit(200)
+        .limit(300)
         .lean(),
       WithdrawalRequest.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
         .sort({ createdAt: -1 })
-        .limit(200)
+        .limit(300)
         .lean()
     ]);
 
@@ -90,32 +90,34 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       return acc;
     });
 
-    // 3. Merge Transactions & WithdrawalRequests with unified statuses
+    // 3. Merge Transactions & WithdrawalRequests cleanly without dropping pending status
     const mergedTransactions: any[] = [...allTransactionsRaw];
     for (const w of allWithdrawalsRaw) {
-      const wTs = w.id ? w.id.match(/\d{10,}/)?.[0] : null;
       const existingTx = mergedTransactions.find(
         t =>
           t.id === w.id ||
+          t.id === `tx_${w.id.replace('wdr_', '')}` ||
           t.id === w.id.replace('wdr_', 'tx_') ||
-          (wTs && t.id.includes(wTs)) ||
           (t.type === 'withdraw' &&
             t.userId === w.userId &&
             Math.abs(t.amount) === w.amount &&
-            Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 60000)
+            Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 120000)
       );
 
+      const mappedStatus =
+        w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending';
+
       if (existingTx) {
-        if (w.status === 'approved' || existingTx.status === 'success') {
+        // Sync status from WithdrawalRequest if it was processed
+        if (w.status === 'approved') {
           existingTx.status = 'success';
           existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
-          if (w.referenceNote && !existingTx.note?.includes(w.referenceNote)) {
-            existingTx.note = `${existingTx.note || 'Rút tiền'} (Mã GD: ${w.referenceNote})`;
-          }
-        } else if (w.status === 'rejected' || existingTx.status === 'failed') {
+        } else if (w.status === 'rejected') {
           existingTx.status = 'failed';
           existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason || 'Bị từ chối';
           existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
+        } else if (w.status === 'pending' && existingTx.status !== 'success') {
+          existingTx.status = 'pending';
         }
         if (w.bankName) existingTx.bankName = w.bankName;
         if (w.bankCode) existingTx.bankCode = w.bankCode;
@@ -129,7 +131,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           userEmail: w.userEmail || '',
           type: 'withdraw',
           amount: -w.amount,
-          status: w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending',
+          status: mappedStatus,
           note: w.referenceNote
             ? `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount}) (Mã GD: ${w.referenceNote})`
             : `Yêu cầu rút tiền về ${w.bankName} (${w.bankAccount})`,
@@ -158,64 +160,114 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     let allUsers: any[] = [];
     let userOrders: any[] = [];
     let userInventory: any[] = [];
-    let notifications: any[] = [];
-    let chatMessages: any[] = [];
+    let userNotifications: any[] = [];
+    let userConversations: any[] = [];
 
     if (currentUserId) {
-      const [userDoc, ordersDoc, invDoc, notifDoc, chatDoc, allUsersDoc] = await Promise.all([
+      const [u, notifs, convs] = await Promise.all([
         User.findOne({ id: currentUserId }).lean(),
-        Order.find(isUserAdmin ? {} : { $or: [{ buyerId: currentUserId }, { sellerId: currentUserId }] })
-          .sort({ createdAt: -1 })
-          .lean(),
-        UserInventory.find({ userId: currentUserId }).lean(),
-        Notification.find({ userId: currentUserId }).sort({ createdAt: -1 }).limit(30).lean(),
-        Conversation.find({
-          $or: [{ buyerId: currentUserId }, { sellerId: currentUserId }]
-        })
-          .sort({ updatedAt: -1 })
-          .limit(50)
-          .lean(),
-        isUserAdmin ? User.find().sort({ createdAt: -1 }).lean() : Promise.resolve([])
+        Notification.find({ userId: currentUserId }).sort({ createdAt: -1 }).limit(50).lean(),
+        Conversation.find({ participantIds: currentUserId }).sort({ lastMessageTime: -1 }).lean()
       ]);
 
-      currentUser = userDoc;
-      userOrders = ordersDoc;
-      userInventory = invDoc;
-      notifications = notifDoc;
-      chatMessages = chatDoc;
+      if (u) {
+        currentUser = {
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          email: u.email,
+          phone: u.phone,
+          role: u.role,
+          avatar: u.avatar,
+          balance: u.balance || 0,
+          pendingBalance: u.pendingBalance || 0,
+          rating: u.rating || 5.0,
+          completedSales: u.completedSales || 0,
+          isVerifiedSeller: u.isVerifiedSeller,
+          sellerTier: u.sellerTier || 'BASIC SELLER',
+          bio: u.bio || '',
+          bankName: u.bankName || '',
+          bankAccount: u.bankAccount || '',
+          bankAccountName: u.bankAccountName || '',
+          createdAt: u.createdAt
+        };
+      }
+
+      userNotifications = notifs || [];
+      userConversations = convs || [];
+
       if (isUserAdmin) {
-        allUsers = allUsersDoc;
+        const [adminUsers, adminOrders] = await Promise.all([
+          User.find().select('-password').sort({ createdAt: -1 }).lean(),
+          Order.find().sort({ createdAt: -1 }).lean()
+        ]);
+        allUsers = adminUsers.map((usr: any) => ({
+          id: usr.id,
+          name: usr.name,
+          username: usr.username,
+          email: usr.email,
+          phone: usr.phone,
+          role: usr.role,
+          avatar: usr.avatar,
+          balance: usr.balance || 0,
+          pendingBalance: usr.pendingBalance || 0,
+          rating: usr.rating || 5.0,
+          completedSales: usr.completedSales || 0,
+          isVerifiedSeller: usr.isVerifiedSeller,
+          sellerTier: usr.sellerTier || 'BASIC SELLER',
+          bio: usr.bio || '',
+          bankInfo: usr.bankInfo,
+          createdAt: usr.createdAt
+        }));
+        userOrders = adminOrders || [];
+      } else {
+        const [orders, inv] = await Promise.all([
+          Order.find({
+            $or: [{ buyerId: currentUserId }, { sellerId: currentUserId }]
+          })
+            .sort({ createdAt: -1 })
+            .lean(),
+          UserInventory.find({ userId: currentUserId }).sort({ receivedAt: -1 }).lean()
+        ]);
+        userOrders = orders || [];
+        userInventory = inv || [];
       }
     }
 
     return res.json({
       success: true,
-      timestamp: new Date().toISOString(),
-      stats: {
-        totalAvailableAccounts: totalApprovedCount,
-        totalCompletedTransactions,
-        isAutoApprove
-      },
-      accounts,
-      totalAccounts: accounts.length,
-      mysteryBoxes,
-      mysteryRewards,
-      mysteryHistory,
-      isMysteryBoxEventActive,
-      transactions: mergedTransactions,
-      withdrawals: allWithdrawalsRaw,
-      currentUser,
-      allUsers,
-      orders: userOrders,
-      userInventory,
-      notifications,
-      chatMessages
+      data: {
+        accounts,
+        mysteryBoxes,
+        mysteryRewards,
+        mysteryHistory,
+        stats: {
+          totalAccounts: accounts.length,
+          totalApprovedAccounts: totalApprovedCount,
+          totalCompletedOrders: totalCompletedOrdersCount,
+          totalSoldAccounts: totalSoldAccountsCount,
+          totalCompletedTransactions,
+          isMysteryBoxEventActive,
+          isAutoApprove
+        },
+        settings: {
+          mystery_box_event_active: isMysteryBoxEventActive,
+          auto_approve_accounts: isAutoApprove
+        },
+        currentUser,
+        allUsers: isUserAdmin ? allUsers : undefined,
+        orders: userOrders,
+        transactions: mergedTransactions,
+        userInventory,
+        notifications: userNotifications,
+        conversations: userConversations
+      }
     });
   } catch (error: any) {
-    console.error('Bootstrap API error:', error);
+    console.error('Error in /api/bootstrap:', error);
     return res.status(500).json({
       success: false,
-      message: 'Lỗi tải dữ liệu bootstrap hệ thống',
+      message: 'Lỗi tải dữ liệu khởi tạo',
       error: error.message
     });
   }

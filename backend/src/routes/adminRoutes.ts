@@ -12,7 +12,7 @@ import { Conversation } from '../models/Conversation';
 import { UserInventory } from '../models/UserInventory';
 import { MysteryHistory } from '../models/MysteryHistory';
 import { Review } from '../models/Review';
-import { approvePayout, rejectPayout } from '../services/payoutService';
+import { approvePayout, rejectPayout, getPayoutStats } from '../services/payoutService';
 import {
   authenticateToken,
   requireAdmin,
@@ -34,7 +34,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
       pendingAccounts,
       totalOrders,
       completedOrders,
-      pendingWithdrawals,
+      payoutStats,
       allTransactions
     ] = await Promise.all([
       User.countDocuments(),
@@ -43,7 +43,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
       Account.countDocuments({ status: 'pending' }),
       Order.countDocuments(),
       Order.countDocuments({ status: 'completed' }),
-      WithdrawalRequest.countDocuments({ status: 'pending' }),
+      getPayoutStats(),
       WalletTransaction.find({ status: 'success' }).lean()
     ]);
 
@@ -64,7 +64,9 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
         pendingAccounts,
         totalOrders,
         completedOrders,
-        pendingWithdrawals,
+        pendingWithdrawals: payoutStats.pendingCount,
+        completedWithdrawals: payoutStats.completedCount,
+        payoutStats,
         totalRevenue,
         totalFee
       }
@@ -73,6 +75,20 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
     return res.status(500).json({ success: false, message: 'Lỗi tải thống kê quản trị' });
   }
 });
+
+// GET /api/admin/payout-stats or /api/admin/payouts/stats
+const handleGetPayoutStats = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const stats = await getPayoutStats();
+    return res.json({ success: true, stats, data: stats });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải thống kê giải ngân' });
+  }
+};
+
+router.get('/payout-stats', handleGetPayoutStats);
+router.get('/payouts/stats', handleGetPayoutStats);
+router.get('/withdrawals/stats', handleGetPayoutStats);
 
 // GET /api/admin/users
 router.get('/users', async (req: AuthenticatedRequest, res: Response) => {

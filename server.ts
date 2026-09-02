@@ -3,22 +3,23 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
-import { connectDB, getDBConnectionStatus } from './server/config/db';
+import { connectDB, getDBConnectionStatus } from './backend/src/config/db';
 
 // Modular Route Handlers
-import authRoutes from './server/routes/authRoutes';
-import accountRoutes from './server/routes/accountRoutes';
-import orderRoutes from './server/routes/orderRoutes';
-import walletRoutes from './server/routes/walletRoutes';
-import paymentRoutes from './server/routes/paymentRoutes';
-import mysteryBoxRoutes from './server/routes/mysteryBoxRoutes';
-import inventoryRoutes from './server/routes/inventoryRoutes';
-import favoriteRoutes from './server/routes/favoriteRoutes';
-import chatRoutes from './server/routes/chatRoutes';
-import notificationRoutes from './server/routes/notificationRoutes';
-import adminRoutes from './server/routes/adminRoutes';
-import uploadRoutes from './server/routes/uploadRoutes';
-import bootstrapRoutes from './server/routes/bootstrapRoutes';
+import authRoutes from './backend/src/routes/authRoutes';
+import sellerRoutes from './backend/src/routes/sellerRoutes';
+import accountRoutes from './backend/src/routes/accountRoutes';
+import orderRoutes from './backend/src/routes/orderRoutes';
+import walletRoutes from './backend/src/routes/walletRoutes';
+import paymentRoutes from './backend/src/routes/paymentRoutes';
+import mysteryBoxRoutes from './backend/src/routes/mysteryBoxRoutes';
+import inventoryRoutes from './backend/src/routes/inventoryRoutes';
+import favoriteRoutes from './backend/src/routes/favoriteRoutes';
+import chatRoutes from './backend/src/routes/chatRoutes';
+import notificationRoutes from './backend/src/routes/notificationRoutes';
+import adminRoutes from './backend/src/routes/adminRoutes';
+import uploadRoutes from './backend/src/routes/uploadRoutes';
+import bootstrapRoutes from './backend/src/routes/bootstrapRoutes';
 
 async function startServer() {
   const app = express();
@@ -98,8 +99,8 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/bootstrap', bootstrapRoutes);
-  app.use('/api/sellers', authRoutes);
-  app.use('/api/seller', authRoutes);
+  app.use('/api/sellers', sellerRoutes);
+  app.use('/api/seller', sellerRoutes);
   app.use('/api/sync', bootstrapRoutes);
 
   // Global Webhook listeners (PayOS IPN)

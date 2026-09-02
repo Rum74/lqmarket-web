@@ -74,7 +74,7 @@ export const SellerProfileModal: React.FC = () => {
 
     // Fetch live data & all reviews from server API
     setIsLoadingSeller(true);
-    api.get(`/api/auth/seller/${selectedSellerId}`)
+    api.get(`/api/seller/${encodeURIComponent(selectedSellerId)}`)
       .then(res => {
         if (res && res.success && (res.seller || res.user)) {
           const sellerObj = res.seller || res.user;
@@ -139,16 +139,16 @@ export const SellerProfileModal: React.FC = () => {
   const soldAccountsOnClient = sellerAccounts.filter(a => a.status === 'sold').length;
   const completedOrdersOnClient = orders.filter(o => 
     (o.sellerId === selectedSellerId || o.sellerName === (seller?.name || accMatching?.sellerName)) &&
-    (o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold')
+    o.status === 'completed'
   ).length;
 
-  const completedSalesCount = Math.max(
-    fetchedSeller?.completedSales ?? 0,
-    seller?.completedSales ?? 0,
-    sellerInfo?.completedSales ?? 0,
-    soldAccountsOnClient,
-    completedOrdersOnClient,
-    sellerReviews.length
+  const completedSalesCount = fetchedSeller?.completedSales ?? (
+    Math.max(
+      seller?.completedSales ?? 0,
+      sellerInfo?.completedSales ?? 0,
+      soldAccountsOnClient,
+      completedOrdersOnClient
+    )
   );
   const averageRating = fetchedSeller?.rating ?? (seller?.rating || sellerInfo?.averageRating || 5.0);
 

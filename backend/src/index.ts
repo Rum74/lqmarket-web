@@ -5,6 +5,7 @@ import { connectDB, getDBConnectionStatus } from './config/db';
 
 // Modular Route Handlers
 import authRoutes from './routes/authRoutes';
+import sellerRoutes from './routes/sellerRoutes';
 import accountRoutes from './routes/accountRoutes';
 import orderRoutes from './routes/orderRoutes';
 import walletRoutes from './routes/walletRoutes';
@@ -16,6 +17,7 @@ import chatRoutes from './routes/chatRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import adminRoutes from './routes/adminRoutes';
 import uploadRoutes from './routes/uploadRoutes';
+import bootstrapRoutes from './routes/bootstrapRoutes';
 
 async function startServer() {
   const app = express();
@@ -83,8 +85,8 @@ async function startServer() {
   // MODULAR REST API ROUTES
   // ==========================================
   app.use('/api/auth', authRoutes);
-  app.use('/api/seller', authRoutes);
-  app.use('/api/sellers', authRoutes);
+  app.use('/api/seller', sellerRoutes);
+  app.use('/api/sellers', sellerRoutes);
   app.use('/api/accounts', accountRoutes);
   app.use('/api/products', accountRoutes);
   app.use('/api/orders', orderRoutes);
@@ -102,6 +104,7 @@ async function startServer() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
+  app.use('/api/bootstrap', bootstrapRoutes);
 
   // Global Webhook listeners
   app.all('/webhook', (req, res, next) => {

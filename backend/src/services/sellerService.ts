@@ -29,9 +29,9 @@ export interface SellerStatsResult {
  * Fetch canonical, real-time seller statistics & reviews directly from MongoDB collections:
  * - User
  * - Account
- * - Order
- * - Review
- * Strictly without hardcoding, mock data, or fake reviews.
+ * - Order (status: 'completed' only)
+ * - Review (deduplicated single source of truth)
+ * Strictly without hardcoding, mock data, fake reviews, or double counting.
  */
 export async function getSellerStats(sellerId: string): Promise<SellerStatsResult | null> {
   const cleanId = String(sellerId || '').trim();
@@ -78,7 +78,7 @@ export async function getSellerStats(sellerId: string): Promise<SellerStatsResul
   const sellerAvatar = user?.avatar || accountForSeller?.sellerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${resolvedSellerId}`;
   const isVerified = user?.isVerifiedSeller ?? (accountForSeller?.sellerVerified ?? true);
 
-  // 3. Build identifier sets for MongoDB aggregation
+  // 3. Build identifier sets for MongoDB queries
   const sellerIdSet = new Set<string>([cleanId, resolvedSellerId]);
   if (user?.id) sellerIdSet.add(user.id);
   if (user?.username) sellerIdSet.add(user.username);
@@ -87,18 +87,12 @@ export async function getSellerStats(sellerId: string): Promise<SellerStatsResul
   const sellerNames = new Set<string>([sellerName]);
   if (user?.name) sellerNames.add(user.name);
   if (accountForSeller?.sellerName) sellerNames.add(accountForSeller.sellerName);
-  if (cleanId && isNaN(Number(cleanId))) sellerNames.add(cleanId);
 
-  const sellerNameRegexes = Array.from(sellerNames).map(
-    name => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-  );
-
-  // 4. Fetch all accounts from Account collection in MongoDB
+  // 4. Fetch accounts listed by this seller
   const sellerAccounts = await Account.find({
     $or: [
       { sellerId: { $in: Array.from(sellerIdSet) } },
-      { sellerName: { $in: Array.from(sellerNames) } },
-      ...sellerNameRegexes.map(rx => ({ sellerName: rx }))
+      { sellerName: { $in: Array.from(sellerNames) } }
     ]
   }).sort({ createdAt: -1 }).lean();
 
@@ -112,35 +106,39 @@ export async function getSellerStats(sellerId: string): Promise<SellerStatsResul
   const soldAccountsCount = sellerAccounts.filter(a => a.status === 'sold').length;
   const activeListingsCount = sellerAccounts.filter(a => a.status === 'approved').length;
 
-  // 5. Fetch all orders from Order collection in MongoDB
-  const sellerOrders = await Order.find({
+  // 5. Fetch COMPLETED orders strictly from Order collection
+  // Exactly 1 count per order where status === 'completed'
+  const completedOrders = await Order.find({
     $or: [
       { sellerId: { $in: Array.from(sellerIdSet) } },
       { sellerName: { $in: Array.from(sellerNames) } },
-      ...sellerNameRegexes.map(rx => ({ sellerName: rx })),
       { accountId: { $in: accountIds } },
       { accountCode: { $in: accountCodes } }
-    ]
+    ],
+    status: 'completed'
   }).sort({ completedAt: -1, createdAt: -1 }).lean();
 
-  const completedOrders = sellerOrders.filter(
-    o => o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold'
-  );
-  const allOrderIds = sellerOrders.map(o => o.id).filter(Boolean);
+  // Deduplicate orders by order id / orderCode
+  const uniqueCompletedOrderMap = new Map<string, any>();
+  for (const ord of completedOrders) {
+    const key = ord.id || ord.orderCode;
+    if (key && !uniqueCompletedOrderMap.has(key)) {
+      uniqueCompletedOrderMap.set(key, ord);
+    }
+  }
+  const completedCount = uniqueCompletedOrderMap.size;
+  const totalSold = Math.max(completedCount, soldAccountsCount, user?.completedSales || 0);
 
-  // 6. Fetch real reviews from Review collection in MongoDB
+  // 6. Fetch real reviews directly from Review collection as primary source of truth
   const dbReviews = await Review.find({
     $or: [
       { sellerId: { $in: Array.from(sellerIdSet) } },
       { sellerName: { $in: Array.from(sellerNames) } },
-      ...sellerNameRegexes.map(rx => ({ sellerName: rx })),
       { accountId: { $in: accountIds } },
-      { accountCode: { $in: accountCodes } },
-      { orderId: { $in: allOrderIds } }
+      { accountCode: { $in: accountCodes } }
     ]
   }).sort({ createdAt: -1 }).lean();
 
-  // 7. Aggregate real reviews without adding fake mock data
   const formattedReviews: any[] = [];
   const seenReviewKeys = new Set<string>();
 
@@ -150,6 +148,7 @@ export async function getSellerStats(sellerId: string): Promise<SellerStatsResul
       seenReviewKeys.add(key);
       formattedReviews.push({
         id: rev.id,
+        orderId: rev.orderId,
         buyerName: rev.buyerName || 'Khách Hàng',
         buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
         rating: rev.rating || 5,
@@ -161,44 +160,42 @@ export async function getSellerStats(sellerId: string): Promise<SellerStatsResul
     }
   }
 
-  for (const ord of sellerOrders) {
-    const rawOrd = ord as any;
-    if (ord.review?.rating || ord.review?.comment || rawOrd.ratingGiven || rawOrd.reviewComment) {
-      const key = ord.id;
-      if (!seenReviewKeys.has(key)) {
-        seenReviewKeys.add(key);
-        formattedReviews.push({
-          id: ord.id,
-          buyerName: ord.buyerName || 'Người Mua',
-          buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-          rating: ord.review?.rating || rawOrd.ratingGiven || 5,
-          comment: ord.review?.comment || rawOrd.reviewComment || 'Giao dịch thành công, nhận acc ngay tức thì.',
-          date: ord.completedAt
-            ? new Date(ord.completedAt).toLocaleDateString('vi-VN')
-            : ord.createdAt
-            ? new Date(ord.createdAt).toLocaleDateString('vi-VN')
-            : '',
-          accountCode: ord.accountCode || '',
-          accountTitle: ord.accountTitle || ''
-        });
+  // Fallback: If Review collection has NO documents for this seller, check embedded reviews in completed orders
+  if (formattedReviews.length === 0) {
+    for (const ord of uniqueCompletedOrderMap.values()) {
+      const rawOrd = ord as any;
+      if (ord.review?.rating || ord.review?.comment || rawOrd.ratingGiven || rawOrd.reviewComment) {
+        const key = ord.id || ord.orderCode;
+        if (!seenReviewKeys.has(key)) {
+          seenReviewKeys.add(key);
+          formattedReviews.push({
+            id: ord.id,
+            orderId: ord.id,
+            buyerName: ord.buyerName || 'Người Mua',
+            buyerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
+            rating: ord.review?.rating || rawOrd.ratingGiven || 5,
+            comment: ord.review?.comment || rawOrd.reviewComment || 'Giao dịch thành công, nhận acc ngay tức thì.',
+            date: ord.completedAt
+              ? new Date(ord.completedAt).toLocaleDateString('vi-VN')
+              : ord.createdAt
+              ? new Date(ord.createdAt).toLocaleDateString('vi-VN')
+              : '',
+            accountCode: ord.accountCode || '',
+            accountTitle: ord.accountTitle || ''
+          });
+        }
       }
     }
   }
 
-  // 8. Calculate real total sales (totalSold) based on Orders and sold Accounts in MongoDB
-  const totalSold = Math.max(
-    completedOrders.length,
-    soldAccountsCount,
-    user?.completedSales || 0,
-    accountForSeller?.sellerCompletedSales || 0
-  );
+  const reviewsCount = formattedReviews.length;
 
-  // 9. Calculate real average rating
-  const avgRating = formattedReviews.length > 0
-    ? (formattedReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / formattedReviews.length).toFixed(1)
+  // 7. Calculate real average rating
+  const avgRating = reviewsCount > 0
+    ? (formattedReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / reviewsCount).toFixed(1)
     : (user?.rating ? Number(user.rating).toFixed(1) : '5.0');
 
-  // 10. Determine seller tier
+  // 8. Determine seller tier
   let tier = user?.sellerTier || 'BASIC SELLER';
   if (isVerified || totalSold >= 10 || user?.role === 'admin') {
     tier = 'VIP SELLER';
@@ -218,8 +215,8 @@ export async function getSellerStats(sellerId: string): Promise<SellerStatsResul
     averageRating: avgRating,
     completedSales: totalSold,
     totalSold,
-    reviewsCount: formattedReviews.length,
-    reviewCount: formattedReviews.length,
+    reviewsCount,
+    reviewCount: reviewsCount,
     activeListings: activeListingsCount,
     totalListings: sellerAccounts.length,
     bio: user?.bio || 'Chuyên cung cấp tài khoản Liên Quân chất lượng cao, bảo hành trọn đời, hỗ trợ 24/7.',

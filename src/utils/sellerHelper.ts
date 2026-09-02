@@ -8,8 +8,8 @@ export interface DynamicSellerInfo {
   sellerTier: string; // 'VIP SELLER' | 'PRO SELLER' | 'BASIC SELLER'
   completedSales: number;
   reviewsCount: number;
-  averageRating: string | null; // e.g. "5.0" or null
-  ratingNumber: number | null;
+  averageRating: string; // e.g. "5.0"
+  ratingNumber: number;
   bio?: string;
   createdAt?: string;
 }
@@ -25,23 +25,25 @@ export function getDynamicSellerInfo(
   const sellerOrders = orders.filter(
     o => o.sellerId === sellerId || o.sellerName === sellerName || (user && (o.sellerId === user.id || o.sellerName === user.name))
   );
-  const completedOrders = sellerOrders.filter(
-    o => o.status === 'completed' || o.status === 'account_delivered' || o.status === 'escrow_hold'
-  );
+
+  // Completed orders
+  const completedOrders = sellerOrders.filter(o => o.status === 'completed');
+
+  // Review orders
   const reviewOrders = sellerOrders.filter(
-    o => (o.ratingGiven !== undefined && o.ratingGiven !== null) || o.reviewComment || (o as any).review?.rating || (o as any).review?.comment
+    o => (o.ratingGiven !== undefined && o.ratingGiven !== null) || Boolean(o.reviewComment) || Boolean((o as any).review?.rating)
   );
 
   const completedSales = Math.max(
     user?.completedSales || 0,
     accountFallback?.sellerCompletedSales || 0,
-    completedOrders.length,
-    sellerOrders.length
+    completedOrders.length
   );
-  const reviewsCount = reviewOrders.length > 0 
-    ? reviewOrders.length 
-    : (completedSales > 0 ? Math.min(completedSales, 5) : 0);
-  
+
+  const reviewsCount = reviewOrders.length > 0
+    ? reviewOrders.length
+    : (user as any)?.reviewsCount || (user as any)?.reviewCount || 0;
+
   const averageRating =
     reviewOrders.length > 0
       ? (reviewOrders.reduce((sum, o) => sum + (o.ratingGiven || (o as any).review?.rating || 5), 0) / reviewOrders.length).toFixed(1)

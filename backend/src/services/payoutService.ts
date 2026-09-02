@@ -17,6 +17,17 @@ export interface RejectPayoutResult {
   withdrawal?: any;
 }
 
+export interface PayoutStatsResult {
+  pendingCount: number;
+  pendingAmount: number;
+  completedCount: number;
+  completedAmount: number;
+  rejectedCount: number;
+  rejectedAmount: number;
+  totalWithdrawalsCount: number;
+  totalWithdrawalsAmount: number;
+}
+
 /**
  * Approve a withdrawal/payout in MongoDB
  * Handles both WalletTransaction ID (tx_...) and WithdrawalRequest ID (wdr_...)
@@ -50,6 +61,7 @@ export async function approvePayout(
     wdr = await WithdrawalRequest.findOne({
       $or: [
         { id: cleanId.replace('tx_', 'wdr_') },
+        { id: `wdr_${cleanId.replace('tx_', '')}` },
         { transactionId: cleanId }
       ]
     });
@@ -57,6 +69,7 @@ export async function approvePayout(
     tx = await WalletTransaction.findOne({
       $or: [
         { id: cleanId.replace('wdr_', 'tx_') },
+        { id: `tx_${cleanId.replace('wdr_', '')}` },
         { id: (wdr as any).transactionId }
       ]
     });
@@ -174,6 +187,7 @@ export async function rejectPayout(
     wdr = await WithdrawalRequest.findOne({
       $or: [
         { id: cleanId.replace('tx_', 'wdr_') },
+        { id: `wdr_${cleanId.replace('tx_', '')}` },
         { transactionId: cleanId }
       ]
     });
@@ -181,6 +195,7 @@ export async function rejectPayout(
     tx = await WalletTransaction.findOne({
       $or: [
         { id: cleanId.replace('wdr_', 'tx_') },
+        { id: `tx_${cleanId.replace('wdr_', '')}` },
         { id: (wdr as any).transactionId }
       ]
     });
@@ -282,5 +297,82 @@ export async function rejectPayout(
     message: `Đã từ chối yêu cầu rút tiền và hoàn trả ${rawAmount.toLocaleString('vi-VN')}đ vào ví người dùng.`,
     transaction: tx ? tx.toJSON() : null,
     withdrawal: wdr ? wdr.toJSON() : null
+  };
+}
+
+/**
+ * Fetch canonical Payout & Withdrawal statistics from MongoDB.
+ * Source of truth: WithdrawalRequest collection (with fallback to WalletTransaction).
+ * Strictly calculates pending vs approved/completed without double-counting.
+ */
+export async function getPayoutStats(): Promise<PayoutStatsResult> {
+  const allWithdrawals = await WithdrawalRequest.find().lean();
+
+  if (allWithdrawals.length > 0) {
+    let pendingCount = 0;
+    let pendingAmount = 0;
+    let completedCount = 0;
+    let completedAmount = 0;
+    let rejectedCount = 0;
+    let rejectedAmount = 0;
+
+    for (const w of allWithdrawals) {
+      const amt = Math.abs(Number(w.amount) || 0);
+      if (w.status === 'pending') {
+        pendingCount += 1;
+        pendingAmount += amt;
+      } else if (w.status === 'approved' || (w.status as string) === 'success' || (w.status as string) === 'completed') {
+        completedCount += 1;
+        completedAmount += amt;
+      } else if (w.status === 'rejected' || (w.status as string) === 'failed') {
+        rejectedCount += 1;
+        rejectedAmount += amt;
+      }
+    }
+
+    return {
+      pendingCount,
+      pendingAmount,
+      completedCount,
+      completedAmount,
+      rejectedCount,
+      rejectedAmount,
+      totalWithdrawalsCount: allWithdrawals.length,
+      totalWithdrawalsAmount: pendingAmount + completedAmount
+    };
+  }
+
+  // Fallback: Query WalletTransaction collection
+  const withdrawTxs = await WalletTransaction.find({ type: 'withdraw' }).lean();
+  let pendingCount = 0;
+  let pendingAmount = 0;
+  let completedCount = 0;
+  let completedAmount = 0;
+  let rejectedCount = 0;
+  let rejectedAmount = 0;
+
+  for (const t of withdrawTxs) {
+    const amt = Math.abs(Number(t.amount) || 0);
+    if (t.status === 'pending') {
+      pendingCount += 1;
+      pendingAmount += amt;
+    } else if (t.status === 'success' || (t.status as string) === 'approved' || (t.status as string) === 'completed') {
+      completedCount += 1;
+      completedAmount += amt;
+    } else if (t.status === 'failed' || (t.status as string) === 'cancelled' || (t.status as string) === 'rejected') {
+      rejectedCount += 1;
+      rejectedAmount += amt;
+    }
+  }
+
+  return {
+    pendingCount,
+    pendingAmount,
+    completedCount,
+    completedAmount,
+    rejectedCount,
+    rejectedAmount,
+    totalWithdrawalsCount: withdrawTxs.length,
+    totalWithdrawalsAmount: pendingAmount + completedAmount
   };
 }

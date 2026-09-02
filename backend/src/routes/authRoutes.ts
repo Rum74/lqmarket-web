@@ -5,7 +5,6 @@ import { Account } from '../models/Account';
 import { Order } from '../models/Order';
 import { Review } from '../models/Review';
 import { Notification } from '../models/Notification';
-import { getSellerStats } from '../services/sellerService';
 import { authenticateToken, generateToken, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
@@ -354,89 +353,6 @@ router.put('/change-password', authenticateToken, async (req: AuthenticatedReque
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi đổi mật khẩu' });
-  }
-});
-
-// GET /api/auth/seller/:sellerId (Public Seller Profile for all users & guests)
-const getSellerProfileHandler = async (req: Request, res: Response) => {
-  try {
-    const { sellerId } = req.params;
-    const sellerData = await getSellerStats(sellerId);
-
-    if (!sellerData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy hồ sơ người bán'
-      });
-    }
-
-    return res.json({
-      success: true,
-      seller: sellerData,
-      user: sellerData,
-      reviews: sellerData.reviews,
-      accounts: sellerData.accounts,
-      stats: {
-        totalSales: sellerData.totalSold,
-        rating: sellerData.rating,
-        reviewsCount: sellerData.reviewsCount,
-        activeListings: sellerData.activeListings,
-        totalListings: sellerData.totalListings
-      }
-    });
-  } catch (error: any) {
-    console.error('Error fetching seller profile:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi khi tải hồ sơ người bán'
-    });
-  }
-};
-
-router.get('/seller/:sellerId', getSellerProfileHandler);
-router.get('/sellers/:sellerId', getSellerProfileHandler);
-
-// GET /api/auth/seller/:sellerId/reviews (Public reviews list directly from MongoDB)
-router.get('/seller/:sellerId/reviews', async (req: Request, res: Response) => {
-  try {
-    const { sellerId } = req.params;
-    const sellerData = await getSellerStats(sellerId);
-    if (!sellerData) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
-    }
-    return res.json({
-      success: true,
-      data: sellerData.reviews,
-      reviews: sellerData.reviews,
-      count: sellerData.reviewsCount,
-      rating: sellerData.rating,
-      averageRating: sellerData.averageRating
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi khi tải đánh giá người bán' });
-  }
-});
-
-// GET /api/auth/seller/:sellerId/stats
-router.get('/seller/:sellerId/stats', async (req: Request, res: Response) => {
-  try {
-    const { sellerId } = req.params;
-    const sellerData = await getSellerStats(sellerId);
-    if (!sellerData) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
-    }
-    return res.json({
-      success: true,
-      stats: {
-        totalSales: sellerData.totalSold,
-        rating: sellerData.rating,
-        reviewsCount: sellerData.reviewsCount,
-        activeListings: sellerData.activeListings,
-        totalListings: sellerData.totalListings
-      }
-    });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi khi tải thống kê người bán' });
   }
 });
 

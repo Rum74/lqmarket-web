@@ -2,7 +2,7 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import readline from 'readline';
-import { User } from '../server/models/User';
+import { User } from '../backend/src/models/User';
 
 function askQuestion(query: string): Promise<string> {
   const rl = readline.createInterface({
