@@ -108,7 +108,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending';
 
       if (existingTx) {
-        // Sync status from WithdrawalRequest if it was processed
+        existingTx.withdrawalRequestId = w.id;
+        // Source of truth for payout status is strictly WithdrawalRequest.status
         if (w.status === 'approved') {
           existingTx.status = 'success';
           existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
@@ -116,7 +117,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           existingTx.status = 'failed';
           existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason || 'Bị từ chối';
           existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
-        } else if (w.status === 'pending' && existingTx.status !== 'success') {
+        } else if (w.status === 'pending') {
           existingTx.status = 'pending';
         }
         if (w.bankName) existingTx.bankName = w.bankName;
@@ -126,6 +127,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       } else {
         mergedTransactions.push({
           id: w.id,
+          withdrawalRequestId: w.id,
           userId: w.userId,
           userName: w.userName || 'Người dùng',
           userEmail: w.userEmail || '',
@@ -147,10 +149,16 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     }
     mergedTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // 4. Extract settings
-    const eventActiveSetting = allSettings.find(s => s.key === 'mystery_box_event_active');
+    // 4. Extract settings (Checking all possible mystery box keys: mystery_box_active, mystery_box_event_active, mystery_box_enabled)
+    const eventActiveSetting = allSettings.find(s =>
+      s.key === 'mystery_box_event_active' ||
+      s.key === 'mystery_box_active' ||
+      s.key === 'mystery_box_enabled'
+    );
     const autoApproveSetting = allSettings.find(s => s.key === 'auto_approve_accounts');
-    const isMysteryBoxEventActive = eventActiveSetting ? Boolean(eventActiveSetting.value) : true;
+    const isMysteryBoxEventActive = eventActiveSetting
+      ? (eventActiveSetting.value !== false && eventActiveSetting.value !== 'false' && eventActiveSetting.value !== 0)
+      : true;
     const isAutoApprove = autoApproveSetting ? Boolean(autoApproveSetting.value) : false;
 
     const totalCompletedTransactions = Math.max(totalCompletedOrdersCount, totalSoldAccountsCount, 0);
@@ -250,6 +258,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
 
     const payloadSettings = {
       mystery_box_event_active: isMysteryBoxEventActive,
+      mystery_box_active: isMysteryBoxEventActive,
+      mystery_box_enabled: isMysteryBoxEventActive,
       auto_approve_accounts: isAutoApprove
     };
 
@@ -257,7 +267,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       accountsCount: accounts.length,
       mysteryBoxesCount: mysteryBoxes.length,
       ordersCount: userOrders.length,
-      transactionsCount: mergedTransactions.length
+      transactionsCount: mergedTransactions.length,
+      withdrawalsCount: allWithdrawalsRaw.length
     });
 
     return res.json({
@@ -273,6 +284,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         allUsers: isUserAdmin ? allUsers : undefined,
         orders: userOrders,
         transactions: mergedTransactions,
+        withdrawals: allWithdrawalsRaw,
         userInventory,
         notifications: userNotifications,
         conversations: userConversations
@@ -290,6 +302,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       allUsers: isUserAdmin ? allUsers : undefined,
       orders: userOrders,
       transactions: mergedTransactions,
+      withdrawals: allWithdrawalsRaw,
       userInventory,
       notifications: userNotifications,
       conversations: userConversations

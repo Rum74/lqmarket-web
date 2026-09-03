@@ -93,8 +93,15 @@ router.post('/reset', authenticateToken, requireAdmin, async (req: Authenticated
 // GET /api/mystery-boxes/settings
 router.get('/settings', async (req: Request, res: Response) => {
   try {
-    const setting = await Setting.findOne({ key: 'mystery_box_active' });
-    const isActive = setting ? setting.value !== false : true;
+    const setting = await Setting.findOne({
+      key: { $in: ['mystery_box_active', 'mystery_box_event_active', 'mystery_box_enabled'] }
+    }).sort({ updatedAt: -1 });
+    const isActive = setting
+      ? (setting.value !== false && setting.value !== 'false' && setting.value !== 0)
+      : true;
+
+    console.log(`[MYSTERY BOX SETTING LOADED] key: ${setting?.key || 'default'}, value: ${isActive}, raw:`, setting?.value);
+
     return res.json({
       success: true,
       isMysteryBoxEventActive: isActive,
@@ -102,6 +109,7 @@ router.get('/settings', async (req: Request, res: Response) => {
       isActive
     });
   } catch (error: any) {
+    console.error('Error loading mystery box settings:', error);
     return res.json({
       success: true,
       isMysteryBoxEventActive: true,
@@ -119,12 +127,26 @@ router.post('/settings', authenticateToken, requireAdmin, async (req: Authentica
     if (typeof isEventActive === 'boolean') targetActive = isEventActive;
     else if (typeof isMysteryBoxEventActive === 'boolean') targetActive = isMysteryBoxEventActive;
     else if (typeof isActive === 'boolean') targetActive = isActive;
+    else if (isMysteryBoxEventActive === 'false' || isMysteryBoxEventActive === 0) targetActive = false;
+    else if (isActive === 'false' || isActive === 0) targetActive = false;
 
-    await Setting.findOneAndUpdate(
-      { key: 'mystery_box_active' },
-      { $set: { value: targetActive, updatedAt: new Date().toISOString() } },
-      { upsert: true }
-    );
+    console.log(`[MYSTERY BOX TOGGLE REQUEST] targetActive: ${targetActive}, body:`, req.body);
+
+    const nowIso = new Date().toISOString();
+    await Promise.all([
+      Setting.findOneAndUpdate(
+        { key: 'mystery_box_active' },
+        { $set: { value: targetActive, updatedAt: nowIso } },
+        { upsert: true, new: true }
+      ),
+      Setting.findOneAndUpdate(
+        { key: 'mystery_box_event_active' },
+        { $set: { value: targetActive, updatedAt: nowIso } },
+        { upsert: true, new: true }
+      )
+    ]);
+
+    console.log(`[MYSTERY BOX SETTING SAVED TO MONGO] keys: [mystery_box_active, mystery_box_event_active], value: ${targetActive}`);
 
     return res.json({
       success: true,
@@ -134,6 +156,7 @@ router.post('/settings', authenticateToken, requireAdmin, async (req: Authentica
       isActive: targetActive
     });
   } catch (error: any) {
+    console.error('Error updating mystery box settings:', error);
     return res.status(500).json({ success: false, message: 'Lỗi cập nhật cấu hình Túi Mù' });
   }
 });

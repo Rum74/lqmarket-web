@@ -6,6 +6,7 @@ export interface IReview {
   orderId: string;
   accountId: string;
   accountCode: string;
+  accountTitle?: string;
   buyerId: string;
   buyerName: string;
   sellerId: string;
@@ -20,6 +21,7 @@ const ReviewSchema = new Schema<IReview>(
     orderId: { type: String, required: true, index: true },
     accountId: { type: String, required: true, index: true },
     accountCode: { type: String, required: true },
+    accountTitle: { type: String, default: '' },
     buyerId: { type: String, required: true, index: true },
     buyerName: { type: String, default: '' },
     sellerId: { type: String, required: true, index: true },

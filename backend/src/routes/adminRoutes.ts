@@ -391,12 +391,25 @@ router.post('/settings', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { settings } = req.body;
     if (typeof settings === 'object') {
+      const nowIso = new Date().toISOString();
       for (const [key, value] of Object.entries(settings)) {
         await Setting.findOneAndUpdate(
           { key },
-          { $set: { value, updatedAt: new Date().toISOString() } },
+          { $set: { value, updatedAt: nowIso } },
           { upsert: true }
         );
+
+        // If toggling mystery box, sync both keys and log
+        if (key === 'mystery_box_active' || key === 'mystery_box_event_active') {
+          const siblingKey = key === 'mystery_box_active' ? 'mystery_box_event_active' : 'mystery_box_active';
+          console.log(`[MYSTERY BOX TOGGLE REQUEST] via admin settings: key: ${key}, value: ${value}`);
+          await Setting.findOneAndUpdate(
+            { key: siblingKey },
+            { $set: { value, updatedAt: nowIso } },
+            { upsert: true }
+          );
+          console.log(`[MYSTERY BOX SETTING SAVED TO MONGO] keys: [${key}, ${siblingKey}], value: ${value}`);
+        }
       }
     }
     return res.json({ success: true, message: 'Lưu cấu hình sàn thành công!' });

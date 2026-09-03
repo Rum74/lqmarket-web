@@ -3,7 +3,6 @@ import { useApp } from '../../context/AppContext';
 import { api } from '../../lib/apiClient';
 import { UserProfile } from '../../types';
 import { AccountCard } from '../accounts/AccountCard';
-import { getDynamicSellerInfo } from '../../utils/sellerHelper';
 import {
   X,
   ShieldCheck,
@@ -38,50 +37,58 @@ export const SellerProfileModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'policies'>('listings');
   const [fetchedSeller, setFetchedSeller] = useState<UserProfile | null>(null);
+  const [fetchedStats, setFetchedStats] = useState<{
+    soldCount: number;
+    reviewCount: number;
+    averageRating: string;
+    totalSoldAmount?: number;
+  } | null>(null);
   const [fetchedReviews, setFetchedReviews] = useState<any[]>([]);
   const [isLoadingSeller, setIsLoadingSeller] = useState(false);
 
-  // When selectedSellerId opens, fetch latest seller profile & reviews from backend
+  // When selectedSellerId changes, fetch canonical seller profile & stats directly from MongoDB
   useEffect(() => {
     if (!selectedSellerId) {
       setFetchedSeller(null);
+      setFetchedStats(null);
       setFetchedReviews([]);
       setIsLoadingSeller(false);
       return;
     }
 
-    // Try finding by sellerId or sellerName in accounts list for instant display
-    const accMatching = accounts.find(a => a.sellerId === selectedSellerId || a.sellerName === selectedSellerId);
-    if (accMatching && accMatching.sellerName) {
-      const derivedUser: UserProfile = {
-        id: selectedSellerId,
-        name: accMatching.sellerName,
-        username: accMatching.sellerName.toLowerCase().replace(/\s+/g, ''),
-        email: `${selectedSellerId}@cholienquan.com`,
-        phone: '',
-        role: 'seller',
-        avatar: accMatching.sellerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedSellerId}`,
-        balance: 0,
-        pendingBalance: 0,
-        rating: accMatching.sellerRating || 5.0,
-        completedSales: accMatching.sellerCompletedSales || 0,
-        isVerifiedSeller: accMatching.sellerVerified ?? true,
-        sellerTier: 'VIP',
-        createdAt: accMatching.createdAt || new Date().toISOString()
-      };
-      setFetchedSeller(derivedUser);
-    }
+    let ignore = false;
+    const abortController = new AbortController();
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-    // Fetch live data & all reviews from server API
+    console.log(`[SELLER PROFILE REQUEST] sellerId: ${selectedSellerId}, requestId: ${requestId}, timestamp: ${new Date().toISOString()}`);
     setIsLoadingSeller(true);
-    api.get(`/api/seller/${encodeURIComponent(selectedSellerId)}`)
+
+    api.get(`/api/seller/${encodeURIComponent(selectedSellerId)}`, { signal: abortController.signal })
       .then(res => {
+        if (ignore) {
+          console.log(`[SELLER PROFILE IGNORED] Stale response discarded for requestId: ${requestId}`);
+          return;
+        }
+
         if (res && res.success && (res.seller || res.user)) {
           const sellerObj = res.seller || res.user;
+          const statsObj = res.stats || {
+            soldCount: sellerObj.soldCount ?? sellerObj.completedSales ?? 0,
+            reviewCount: Array.isArray(res.reviews) ? res.reviews.length : (sellerObj.reviewCount ?? 0),
+            averageRating: sellerObj.averageRating || (sellerObj.rating ? Number(sellerObj.rating).toFixed(1) : '5.0'),
+            totalSoldAmount: sellerObj.totalSoldAmount || 0
+          };
+
+          console.log(`[SELLER PROFILE RESPONSE] requestId: ${requestId}, sellerId: ${sellerObj.id || selectedSellerId}, soldCount: ${statsObj.soldCount}, reviewCount: ${statsObj.reviewCount}, averageRating: ${statsObj.averageRating}`);
+
           setFetchedSeller(sellerObj);
+          setFetchedStats(statsObj);
           if (Array.isArray(res.reviews)) {
             setFetchedReviews(res.reviews);
           }
+
+          console.log(`[SELLER PROFILE STATE UPDATE] requestId: ${requestId}, soldCount: ${statsObj.soldCount}, reviewCount: ${statsObj.reviewCount}`);
+
           if (typeof setAllUsers === 'function') {
             setAllUsers(prev => {
               if (prev.some(u => u.id === sellerObj.id)) {
@@ -93,18 +100,26 @@ export const SellerProfileModal: React.FC = () => {
         }
       })
       .catch(err => {
-        console.warn('Could not fetch seller profile:', err);
+        if (!ignore && err.name !== 'AbortError') {
+          console.error(`[SELLER PROFILE ERROR] requestId: ${requestId}:`, err);
+        }
       })
       .finally(() => {
-        setIsLoadingSeller(false);
+        if (!ignore) {
+          setIsLoadingSeller(false);
+        }
       });
-  }, [selectedSellerId, accounts, setAllUsers]);
+
+    return () => {
+      ignore = true;
+      abortController.abort();
+    };
+  }, [selectedSellerId, setAllUsers]);
 
   if (!selectedSellerId) return null;
 
   const accMatching = accounts.find(a => a.sellerId === selectedSellerId || a.sellerName === selectedSellerId);
   const seller = fetchedSeller || allUsers.find(u => u.id === selectedSellerId || u.username === selectedSellerId);
-  const sellerInfo = getDynamicSellerInfo(selectedSellerId, allUsers, orders, accMatching || (seller as any));
 
   // Accounts belonging to this seller
   const sellerAccounts = accounts.filter(
@@ -113,44 +128,15 @@ export const SellerProfileModal: React.FC = () => {
   );
   const activeListings = sellerAccounts.filter(a => a.status === 'approved');
 
-  // Reviews list: prioritize server reviews fetched directly from MongoDB
-  const sellerReviews = fetchedReviews.length > 0
-    ? fetchedReviews
-    : orders
-        .filter(o => (o.sellerId === selectedSellerId || o.sellerName === (seller?.name || accMatching?.sellerName)) && (o.reviewComment || o.ratingGiven || (o as any).review?.comment))
-        .map(o => {
-          const buyerUser = allUsers.find(u => u.id === o.buyerId);
-          return {
-            id: o.id,
-            buyerName: o.buyerName || buyerUser?.name || 'Khách Hàng',
-            buyerAvatar:
-              buyerUser?.avatar ||
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80',
-            rating: o.ratingGiven || (o as any).review?.rating || 5,
-            date: o.completedAt
-              ? new Date(o.completedAt).toLocaleDateString('vi-VN')
-              : new Date(o.createdAt).toLocaleDateString('vi-VN'),
-            accountCode: o.accountCode,
-            accountTitle: o.accountTitle,
-            comment: o.reviewComment || (o as any).review?.comment || 'Giao dịch thành công, nhận tài khoản nhanh chóng.'
-          };
-        });
+  // Reviews list: canonical server reviews fetched directly from MongoDB Review collection
+  const sellerReviews = fetchedReviews;
 
-  const soldAccountsOnClient = sellerAccounts.filter(a => a.status === 'sold').length;
-  const completedOrdersOnClient = orders.filter(o => 
-    (o.sellerId === selectedSellerId || o.sellerName === (seller?.name || accMatching?.sellerName)) &&
-    o.status === 'completed'
-  ).length;
-
-  const completedSalesCount = fetchedSeller?.completedSales ?? (
-    Math.max(
-      seller?.completedSales ?? 0,
-      sellerInfo?.completedSales ?? 0,
-      soldAccountsOnClient,
-      completedOrdersOnClient
-    )
-  );
-  const averageRating = fetchedSeller?.rating ?? (seller?.rating || sellerInfo?.averageRating || 5.0);
+  // Canonical sold count and rating calculated strictly from MongoDB (Order & Review collections)
+  const completedSalesCount = fetchedStats?.soldCount ?? fetchedSeller?.soldCount ?? fetchedSeller?.completedSales ?? 0;
+  const reviewCount = fetchedStats?.reviewCount ?? sellerReviews.length;
+  const averageRating = fetchedStats?.averageRating
+    ? Number(fetchedStats.averageRating)
+    : (fetchedSeller?.rating || 5.0);
 
   const formatJoinDate = (dateStr?: string) => {
     if (!dateStr) return 'Mới tham gia sàn';
@@ -171,7 +157,7 @@ export const SellerProfileModal: React.FC = () => {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
         <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
           <Loader2 size={36} className="animate-spin text-amber-400 mx-auto" />
-          <h3 className="text-base font-bold text-white">Đang tải hồ sơ người bán...</h3>
+          <h3 className="text-base font-bold text-white">Đang tải hồ sơ người bán từ MongoDB...</h3>
           <p className="text-xs text-slate-400">Vui lòng đợi giây lát</p>
         </div>
       </div>
@@ -239,11 +225,11 @@ export const SellerProfileModal: React.FC = () => {
             <div className="flex items-end gap-4">
               <div className="relative">
                 <img
-                  src={sellerInfo?.avatar || seller.avatar}
-                  alt={sellerInfo?.name || seller.name}
+                  src={seller.avatar}
+                  alt={seller.name}
                   className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover border-4 border-slate-900 bg-slate-800 shadow-xl"
                 />
-                {sellerInfo?.isVerifiedSeller && (
+                {seller.isVerifiedSeller && (
                   <span className="absolute -bottom-1 -right-1 p-1 bg-emerald-500 text-slate-950 rounded-full border-2 border-slate-900" title="Shop đã xác thực CCCD & Uy tín">
                     <ShieldCheck size={16} />
                   </span>
@@ -252,14 +238,14 @@ export const SellerProfileModal: React.FC = () => {
 
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl sm:text-2xl font-black text-white">{sellerInfo?.name || seller.name}</h2>
-                  {sellerInfo?.isVerifiedSeller && (
+                  <h2 className="text-xl sm:text-2xl font-black text-white">{seller.name}</h2>
+                  {seller.isVerifiedSeller && (
                     <span className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
                       <ShieldCheck size={13} /> Đã Xác Thực
                     </span>
                   )}
                   <span className="text-xs bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-extrabold uppercase">
-                    {sellerInfo?.sellerTier}
+                    {seller.sellerTier || 'VIP'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 flex items-center gap-2">

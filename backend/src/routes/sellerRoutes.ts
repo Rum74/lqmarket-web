@@ -31,13 +31,15 @@ router.get('/:sellerId', async (req: Request, res: Response) => {
       reviews: sellerData.reviews,
       accounts: sellerData.accounts,
       stats: {
-        totalSales: sellerData.totalSold,
-        completedSales: sellerData.completedSales,
-        totalSold: sellerData.totalSold,
-        rating: sellerData.rating,
-        averageRating: sellerData.averageRating,
-        reviewsCount: sellerData.reviewsCount,
+        soldCount: sellerData.soldCount,
         reviewCount: sellerData.reviewCount,
+        averageRating: sellerData.averageRating,
+        totalSoldAmount: sellerData.totalSoldAmount,
+        totalSales: sellerData.soldCount,
+        completedSales: sellerData.soldCount,
+        totalSold: sellerData.soldCount,
+        rating: sellerData.rating,
+        reviewsCount: sellerData.reviewsCount,
         activeListings: sellerData.activeListings,
         totalListings: sellerData.totalListings
       }
