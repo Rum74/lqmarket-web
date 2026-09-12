@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
+import { TopSearchBar } from './components/layout/TopSearchBar';
 import { BottomNav } from './components/layout/BottomNav';
 import { Footer } from './components/layout/Footer';
 import { HomeView } from './components/home/HomeView';
@@ -27,8 +28,11 @@ const MainLayout: React.FC = () => {
       {/* Main Navigation Header */}
       <Navbar />
 
+      {/* Standalone Search Bar Section Below Header */}
+      {currentView !== 'admin' && <TopSearchBar />}
+
       {/* Main App Canvas */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6" style={{ maxWidth: '80rem' }}>
+      <main className="flex-1 w-full max-w-[1536px] mx-auto px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4">
         {currentView === 'home' && <HomeView />}
         {currentView === 'accounts' && <AccountsListView />}
         {currentView === 'mystery_box' && <MysteryBoxView />}
