@@ -28,7 +28,7 @@ const MainLayout: React.FC = () => {
       <Navbar />
 
       {/* Main App Canvas */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6" style={{ maxWidth: '80rem' }}>
         {currentView === 'home' && <HomeView />}
         {currentView === 'accounts' && <AccountsListView />}
         {currentView === 'mystery_box' && <MysteryBoxView />}

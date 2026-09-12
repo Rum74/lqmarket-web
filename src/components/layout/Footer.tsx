@@ -10,7 +10,7 @@ export const Footer: React.FC = () => {
     <footer className="bg-slate-950 border-t border-slate-800/80 text-slate-400 text-sm mt-16">
       {/* Top Value Propositions */}
       <div className="border-b border-slate-800/80 py-8 bg-slate-900/40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8" style={{ maxWidth: '80rem' }}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800/60">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
@@ -56,7 +56,7 @@ export const Footer: React.FC = () => {
       </div>
 
       {/* Main Footer Links */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-12" style={{ maxWidth: '80rem' }}>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Col 1: Brand & Bio */}
           <div className="space-y-4 md:col-span-1">

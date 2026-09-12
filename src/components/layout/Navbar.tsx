@@ -80,19 +80,19 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full transition-all">
-      {/* Main Header Container (Synchronized with App max-w-7xl) */}
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-[64px] sm:h-[68px] w-full gap-2 lg:gap-3">
+      {/* Main Header Container (Strictly Synchronized with App max-w-7xl / 80rem) */}
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8" style={{ maxWidth: '80rem' }}>
+        <div className="flex items-center justify-between h-[64px] sm:h-[68px] w-full gap-2 lg:gap-4">
 
           {/* ====================================================
               1. LEFT GROUP: LOGO & DESKTOP SEARCH
              ==================================================== */}
-          <div className="flex items-center gap-2 xl:gap-3 shrink-0">
-            {/* Mobile Hamburger Toggle Button */}
+          <div className="flex-1 flex items-center justify-start gap-2 xl:gap-3 min-w-0">
+            {/* Mobile / Tablet Hamburger Toggle Button */}
             <button
               id="mobile-menu-btn"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden w-9 h-9 flex items-center justify-center text-slate-300 hover:text-amber-400 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer shrink-0"
+              className="xl:hidden w-9 h-9 flex items-center justify-center text-slate-300 hover:text-amber-400 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer shrink-0"
               aria-label="Menu"
             >
               {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -119,14 +119,14 @@ export const Navbar: React.FC = () => {
                 <span className="text-base sm:text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors leading-none">
                   LQ<span className="text-amber-400">MARKET</span>
                 </span>
-                <p className="text-[10px] text-slate-400 font-medium tracking-tight mt-0.5 hidden sm:block leading-tight">
+                <p className="text-[10px] text-slate-400 font-medium tracking-tight mt-0.5 hidden 2xl:block leading-tight">
                   Sàn Acc Liên Quân Uy Tín
                 </p>
               </div>
             </button>
 
             {/* Desktop Search Bar */}
-            <div className="hidden lg:flex w-[140px] xl:w-[185px] shrink-0 ml-1">
+            <div className="hidden md:flex w-[140px] xl:w-[180px] shrink-0 ml-1">
               <form
                 onSubmit={handleSearchSubmit}
                 className="relative w-full flex items-center bg-[#070b14] border border-slate-800 hover:border-slate-700 focus-within:border-amber-500/80 focus-within:ring-1 focus-within:ring-amber-500/30 rounded-xl transition-all h-[36px] px-2 shadow-inner"
@@ -151,9 +151,9 @@ export const Navbar: React.FC = () => {
           </div>
 
           {/* ====================================================
-              2. CENTER GROUP: NAVIGATION LINKS
+              2. CENTER GROUP: NAVIGATION LINKS (Strictly Centered)
              ==================================================== */}
-          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 shrink-0">
+          <nav className="hidden xl:flex items-center justify-center gap-0.5 xl:gap-1 shrink-0">
             {/* Trang Chủ */}
             <button
               id="nav-btn-home"
@@ -247,9 +247,9 @@ export const Navbar: React.FC = () => {
           </nav>
 
           {/* ====================================================
-              3. RIGHT GROUP: ACCOUNT & ACTIONS AREA
+              3. RIGHT GROUP: ACCOUNT & ACTIONS AREA (Right-aligned)
              ==================================================== */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex-1 flex items-center justify-end gap-1.5 sm:gap-2 min-w-0">
             {isLoggedIn ? (
               <>
                 {/* Wallet Balance Pill */}
@@ -516,10 +516,10 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* ====================================================
-            MOBILE / TABLET SEARCH BAR (HÀNG 2 - Màn hình < lg)
+            MOBILE / TABLET SEARCH BAR (HÀNG 2 - Màn hình < xl)
             Tách biệt rõ ràng, không đè lên header, rất dễ bấm
            ==================================================== */}
-        <div className="lg:hidden pb-3 pt-1">
+        <div className="xl:hidden pb-3 pt-1">
           <form
             onSubmit={handleSearchSubmit}
             className="relative w-full flex items-center bg-[#070b14] border border-slate-800 hover:border-slate-700 focus-within:border-amber-500/80 focus-within:ring-1 focus-within:ring-amber-500/30 rounded-xl transition-all h-[40px] px-3 shadow-inner"
@@ -547,7 +547,7 @@ export const Navbar: React.FC = () => {
           Sạch sẽ, mượt mà, dark navy, không tràn màn hình
          ==================================================== */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden bg-[#0a0f1d]/98 backdrop-blur-xl border-b border-slate-800 px-4 py-4 space-y-2 shadow-2xl animate-in slide-in-from-top-2 duration-200">
+        <div className="xl:hidden bg-[#0a0f1d]/98 backdrop-blur-xl border-b border-slate-800 px-4 py-4 space-y-2 shadow-2xl animate-in slide-in-from-top-2 duration-200">
           <div className="space-y-1">
             <button
               onClick={() => {
