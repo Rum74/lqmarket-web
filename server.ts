@@ -21,9 +21,17 @@ import adminRoutes from './backend/src/routes/adminRoutes';
 import uploadRoutes from './backend/src/routes/uploadRoutes';
 import bootstrapRoutes from './backend/src/routes/bootstrapRoutes';
 
+// Helper to resolve route modules across ESM and CJS imports
+const getRouter = (routeMod: any) => {
+  if (typeof routeMod === 'function') return routeMod;
+  if (routeMod && typeof routeMod.default === 'function') return routeMod.default;
+  if (routeMod && typeof routeMod.router === 'function') return routeMod.router;
+  return routeMod;
+};
+
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = 3000;
 
   // CORS Configuration with CLIENT_URL support
   const allowedOrigins = (process.env.CLIENT_URL || '')
@@ -48,8 +56,10 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Connect Database (MongoDB Atlas) - No auto-seeding
-  await connectDB();
+  // Connect Database (MongoDB Atlas) in background so server binds to port 3000 immediately
+  connectDB().catch(err => {
+    console.warn('Initial MongoDB connection notice:', err?.message || err);
+  });
 
   // ==========================================
   // SYSTEM HEALTH & DIAGNOSTICS
@@ -81,44 +91,59 @@ async function startServer() {
   // ==========================================
   // MODULAR REST API ROUTES
   // ==========================================
-  app.use('/api/auth', authRoutes);
-  app.use('/api/accounts', accountRoutes);
-  app.use('/api/products', accountRoutes); // Alias for frontend compatibility
-  app.use('/api/orders', orderRoutes);
-  app.use('/api/wallet', walletRoutes);
-  app.use('/api/payments', paymentRoutes);
-  app.use('/api/payos', paymentRoutes); // Alias for PayOS callbacks
-  app.use('/api/mystery-boxes', mysteryBoxRoutes);
-  app.use('/api/mystery-box', mysteryBoxRoutes); // Alias
-  app.use('/api/inventory', inventoryRoutes);
-  app.use('/api/favorites', favoriteRoutes);
-  app.use('/api/conversations', chatRoutes);
-  app.use('/api/chat', chatRoutes); // Alias
-  app.use('/api/messages', chatRoutes); // Alias
-  app.use('/api/notifications', notificationRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/upload', uploadRoutes);
-  app.use('/api/bootstrap', bootstrapRoutes);
-  app.use('/api/sellers', sellerRoutes);
-  app.use('/api/seller', sellerRoutes);
-  app.use('/api/sync', bootstrapRoutes);
+  const resolvedAuthRoutes = getRouter(authRoutes);
+  const resolvedAccountRoutes = getRouter(accountRoutes);
+  const resolvedOrderRoutes = getRouter(orderRoutes);
+  const resolvedWalletRoutes = getRouter(walletRoutes);
+  const resolvedPaymentRoutes = getRouter(paymentRoutes);
+  const resolvedMysteryBoxRoutes = getRouter(mysteryBoxRoutes);
+  const resolvedInventoryRoutes = getRouter(inventoryRoutes);
+  const resolvedFavoriteRoutes = getRouter(favoriteRoutes);
+  const resolvedChatRoutes = getRouter(chatRoutes);
+  const resolvedNotificationRoutes = getRouter(notificationRoutes);
+  const resolvedAdminRoutes = getRouter(adminRoutes);
+  const resolvedUploadRoutes = getRouter(uploadRoutes);
+  const resolvedBootstrapRoutes = getRouter(bootstrapRoutes);
+  const resolvedSellerRoutes = getRouter(sellerRoutes);
+
+  app.use('/api/auth', resolvedAuthRoutes);
+  app.use('/api/accounts', resolvedAccountRoutes);
+  app.use('/api/products', resolvedAccountRoutes); // Alias for frontend compatibility
+  app.use('/api/orders', resolvedOrderRoutes);
+  app.use('/api/wallet', resolvedWalletRoutes);
+  app.use('/api/payments', resolvedPaymentRoutes);
+  app.use('/api/payos', resolvedPaymentRoutes); // Alias for PayOS callbacks
+  app.use('/api/mystery-boxes', resolvedMysteryBoxRoutes);
+  app.use('/api/mystery-box', resolvedMysteryBoxRoutes); // Alias
+  app.use('/api/inventory', resolvedInventoryRoutes);
+  app.use('/api/favorites', resolvedFavoriteRoutes);
+  app.use('/api/conversations', resolvedChatRoutes);
+  app.use('/api/chat', resolvedChatRoutes); // Alias
+  app.use('/api/messages', resolvedChatRoutes); // Alias
+  app.use('/api/notifications', resolvedNotificationRoutes);
+  app.use('/api/admin', resolvedAdminRoutes);
+  app.use('/api/upload', resolvedUploadRoutes);
+  app.use('/api/bootstrap', resolvedBootstrapRoutes);
+  app.use('/api/sellers', resolvedSellerRoutes);
+  app.use('/api/seller', resolvedSellerRoutes);
+  app.use('/api/sync', resolvedBootstrapRoutes);
 
   // Global Webhook listeners (PayOS IPN)
   app.all('/webhook', (req, res, next) => {
     req.url = '/webhook';
-    paymentRoutes(req, res, next);
+    resolvedPaymentRoutes(req, res, next);
   });
   app.all('/api/webhook', (req, res, next) => {
     req.url = '/webhook';
-    paymentRoutes(req, res, next);
+    resolvedPaymentRoutes(req, res, next);
   });
   app.all('/confirm-webhook', (req, res, next) => {
     req.url = '/confirm-webhook';
-    paymentRoutes(req, res, next);
+    resolvedPaymentRoutes(req, res, next);
   });
   app.all('/api/confirm-webhook', (req, res, next) => {
     req.url = '/confirm-webhook';
-    paymentRoutes(req, res, next);
+    resolvedPaymentRoutes(req, res, next);
   });
 
   // Helper APIs for Valuation & Credential Validation

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { LQMARKET_LOGO } from '../../assets/logo';
 import {
-  Gamepad2,
   Search,
   Heart,
   Wallet,
@@ -12,17 +11,15 @@ import {
   ShieldCheck,
   Menu,
   X,
-  HelpCircle,
   LogOut,
   ChevronDown,
   Sparkles,
   LogIn,
   UserPlus,
-  Cloud,
-  Store,
-  UserCheck,
   User,
-  Settings
+  Home,
+  Layers,
+  HelpCircle
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -40,10 +37,8 @@ export const Navbar: React.FC = () => {
     clearAllNotifications,
     setIsWalletOpen,
     openProfileModal,
-    filterOptions,
     setFilterOptions,
-    accounts,
-    cloudSyncStatus
+    accounts
   } = useApp();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -79,111 +74,130 @@ export const Navbar: React.FC = () => {
     if (searchInput.trim()) {
       setFilterOptions(prev => ({ ...prev, search: searchInput.trim() }));
       setCurrentView('accounts');
+      setIsMobileMenuOpen(false);
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-xl">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-4">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
+    <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full transition-all">
+      {/* Main Header Container (Synchronized with App max-w-7xl) */}
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-[64px] sm:h-[68px] w-full gap-2 lg:gap-3">
+
+          {/* ====================================================
+              1. LEFT GROUP: LOGO & DESKTOP SEARCH
+             ==================================================== */}
+          <div className="flex items-center gap-2 xl:gap-3 shrink-0">
+            {/* Mobile Hamburger Toggle Button */}
+            <button
+              id="mobile-menu-btn"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden w-9 h-9 flex items-center justify-center text-slate-300 hover:text-amber-400 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer shrink-0"
+              aria-label="Menu"
+            >
+              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+
             <button
               id="navbar-logo-btn"
               onClick={() => {
                 setCurrentView('home');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 sm:gap-2 group text-left cursor-pointer shrink-0"
+              className="flex items-center gap-2 group text-left cursor-pointer shrink-0 focus:outline-none"
             >
-              <div className="relative w-8 h-8 sm:w-10 sm:h-10 min-w-[32px] min-h-[32px] sm:min-w-[40px] sm:min-h-[40px] rounded-full aspect-square shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+              <div className="relative w-8 h-8 sm:w-9 sm:h-9 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] rounded-xl overflow-hidden aspect-square shrink-0 border border-amber-500/40 shadow-sm shadow-amber-500/20 group-hover:scale-105 group-hover:border-amber-400 transition-all">
                 <img
                   src={LQMARKET_LOGO}
                   alt="LQMarket Logo"
                   referrerPolicy="no-referrer"
-                  className="w-full h-full aspect-square rounded-full object-cover shadow-lg shadow-amber-500/25 border border-amber-500/50 block"
+                  className="w-full h-full object-cover rounded-xl block"
                 />
               </div>
-              <div className="shrink-0">
-                <div className="flex items-center gap-1">
-                  <span className="text-base sm:text-xl font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">
-                    LQ<span className="text-amber-400">MARKET</span>
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] font-bold tracking-wider bg-amber-500/20 text-amber-400 px-1 sm:px-1.5 py-0.5 rounded border border-amber-500/30">
-                    cholienquan.com
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 font-medium hidden sm:block">
-                  Sàn Mua Bán Acc Liên Quân Uy Tín • Chợ Liên Quân
+
+              <div className="shrink-0 flex flex-col justify-center">
+                <span className="text-base sm:text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors leading-none">
+                  LQ<span className="text-amber-400">MARKET</span>
+                </span>
+                <p className="text-[10px] text-slate-400 font-medium tracking-tight mt-0.5 hidden sm:block leading-tight">
+                  Sàn Acc Liên Quân Uy Tín
                 </p>
               </div>
             </button>
-          </div>
 
-          {/* Search Bar (Desktop / Tablet Landscape) */}
-          <div className="hidden md:flex flex-1 min-w-[180px] max-w-xs lg:max-w-sm xl:max-w-md mx-2 shrink-0">
-            <form onSubmit={handleSearchSubmit} className="relative w-full">
-              <input
-                id="navbar-search-input"
-                type="text"
-                value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-                placeholder="Tìm acc theo tướng, rank, skin..."
-                className="w-full bg-slate-950/90 border border-slate-700 hover:border-slate-600 text-slate-100 placeholder-slate-400 text-xs rounded-xl pl-9 pr-14 py-2 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-medium"
-              />
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-              <button
-                type="submit"
-                className="absolute right-1 top-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            {/* Desktop Search Bar */}
+            <div className="hidden lg:flex w-[140px] xl:w-[185px] shrink-0 ml-1">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="relative w-full flex items-center bg-[#070b14] border border-slate-800 hover:border-slate-700 focus-within:border-amber-500/80 focus-within:ring-1 focus-within:ring-amber-500/30 rounded-xl transition-all h-[36px] px-2 shadow-inner"
               >
-                Tìm
-              </button>
-            </form>
+                <Search className="w-3.5 h-3.5 text-slate-400 shrink-0 pointer-events-none" />
+                <input
+                  id="navbar-search-input"
+                  type="text"
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  placeholder="Tìm acc, rank, skin..."
+                  className="w-full bg-transparent text-white placeholder:text-slate-500 text-xs font-medium pl-1.5 pr-1 py-1 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-[11px] font-bold px-2 py-0.5 rounded-lg transition-all cursor-pointer shadow-xs whitespace-nowrap ml-0.5"
+                >
+                  Tìm
+                </button>
+              </form>
+            </div>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
+          {/* ====================================================
+              2. CENTER GROUP: NAVIGATION LINKS
+             ==================================================== */}
+          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 shrink-0">
+            {/* Trang Chủ */}
             <button
               id="nav-btn-home"
               onClick={() => setCurrentView('home')}
-              className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-colors cursor-pointer whitespace-nowrap ${
+              className={`h-[34px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 currentView === 'home'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
               }`}
             >
-              Trang Chủ
+              <span>Trang Chủ</span>
             </button>
 
+            {/* Tất Cả Acc */}
             <button
               id="nav-btn-accounts"
               onClick={() => setCurrentView('accounts')}
-              className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-colors cursor-pointer whitespace-nowrap ${
+              className={`h-[34px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 currentView === 'accounts'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
               }`}
             >
-              Tất Cả Acc
+              <span>Tất Cả Acc</span>
             </button>
 
+            {/* Xé Túi Mù */}
             <button
               id="nav-btn-mystery-box"
               onClick={() => setCurrentView('mystery_box')}
-              className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`h-[34px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 currentView === 'mystery_box'
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md shadow-amber-500/25'
-                  : 'text-amber-400 bg-amber-400/10 border border-amber-400/30 hover:bg-amber-400/20'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                  : 'text-amber-400 bg-amber-400/10 border border-amber-400/30 hover:bg-amber-400/20 font-bold'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
               <span>Xé Túi Mù</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white uppercase tracking-wider leading-none animate-pulse">
                 HOT
               </span>
             </button>
 
-            {/* Sell button visible only for non-buyers (Sellers, Admins, or Visitors) */}
+            {/* Đăng Bán (Dành cho Người Bán / Admin / Khách) */}
             {(!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
               <button
                 id="nav-btn-sell"
@@ -194,63 +208,66 @@ export const Navbar: React.FC = () => {
                     setCurrentView('sell');
                   }
                 }}
-                className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                className={`h-[34px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 flex items-center gap-1 cursor-pointer whitespace-nowrap ${
                   currentView === 'sell'
-                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold shadow-xs'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
                 }`}
               >
-                <PlusCircle className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-amber-400 shrink-0" />
+                <PlusCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>Đăng Bán</span>
               </button>
             )}
 
+            {/* Đơn Hàng */}
             <button
               id="nav-btn-orders"
               onClick={() => setCurrentView('orders')}
-              className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-colors cursor-pointer whitespace-nowrap ${
+              className={`h-[34px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 currentView === 'orders'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
               }`}
             >
-              Đơn Hàng
+              <span>Đơn Hàng</span>
             </button>
 
+            {/* Hướng Dẫn */}
             <button
               id="nav-btn-guide"
               onClick={() => setCurrentView('guide')}
-              className={`px-2.5 xl:px-3 py-1.5 rounded-xl text-xs xl:text-sm font-bold tracking-tight transition-colors cursor-pointer whitespace-nowrap ${
+              className={`h-[34px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 currentView === 'guide'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
               }`}
             >
-              Hướng Dẫn
+              <span>Hướng Dẫn</span>
             </button>
           </nav>
 
-          {/* Right Actions: Auth or Profile & Wallet */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* ====================================================
+              3. RIGHT GROUP: ACCOUNT & ACTIONS AREA
+             ==================================================== */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isLoggedIn ? (
               <>
-                {/* Sleek Minimalist Wallet Pill */}
+                {/* Wallet Balance Pill */}
                 <button
                   id="navbar-wallet-btn"
                   onClick={() => setIsWalletOpen(true)}
-                  className="h-9 flex items-center gap-2 bg-slate-950/80 hover:bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer group shadow-xs shrink-0 whitespace-nowrap"
-                  title="Ví LQMarket Pay - Bấm để Nạp/Rút"
+                  className="h-[35px] sm:h-[36px] flex items-center gap-1.5 sm:gap-2 bg-[#070b14] hover:bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 px-2 sm:px-2.5 rounded-xl transition-all cursor-pointer group shadow-xs shrink-0 whitespace-nowrap"
+                  title="Ví LQMarket Pay - Bấm để Nạp / Rút"
                 >
                   <Wallet className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-                  <div className="flex items-baseline gap-1">
+                  <div className="flex items-baseline gap-0.5">
                     <span className="text-xs font-black tracking-tight text-slate-100 group-hover:text-amber-300 transition-colors">
-                      {currentUser.balance >= 1000000 
-                        ? `${(currentUser.balance / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}M` 
+                      {currentUser.balance >= 1000000
+                        ? `${(currentUser.balance / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}M`
                         : `${currentUser.balance.toLocaleString('vi-VN')}đ`}
                     </span>
-                    <span className="hidden sm:inline text-[10px] text-amber-400 font-bold">đ</span>
                   </div>
-                  <span className="w-4 h-4 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center text-[11px] font-black leading-none transition-all ml-0.5 shrink-0">
+                  <span className="w-4 h-4 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center text-[10px] font-black leading-none transition-all ml-0.5 shrink-0">
                     +
                   </span>
                 </button>
@@ -259,12 +276,12 @@ export const Navbar: React.FC = () => {
                 <button
                   id="navbar-wishlist-btn"
                   onClick={() => setCurrentView('wishlist')}
-                  className={`hidden sm:flex w-9 h-9 items-center justify-center rounded-xl border relative transition-colors cursor-pointer shrink-0 ${
+                  className={`hidden sm:flex w-[35px] h-[35px] sm:w-[36px] sm:h-[36px] items-center justify-center rounded-xl border relative transition-colors cursor-pointer shrink-0 ${
                     currentView === 'wishlist'
                       ? 'bg-rose-500/15 text-rose-400 border-rose-500/40'
-                      : 'bg-slate-950/80 border-slate-800 text-slate-300 hover:text-rose-400 hover:border-slate-700'
+                      : 'bg-[#070b14] border-slate-800 text-slate-300 hover:text-rose-400 hover:border-slate-700'
                   }`}
-                  title="Acc đã lưu / Yêu thích"
+                  title="Acc Đã Lưu Yêu Thích"
                 >
                   <Heart className="w-4 h-4" />
                   {validWishlistCount > 0 && (
@@ -279,7 +296,7 @@ export const Navbar: React.FC = () => {
                   <button
                     id="navbar-notif-btn"
                     onClick={() => setIsNotifOpen(!isNotifOpen)}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-950/80 border border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700 relative transition-colors cursor-pointer"
+                    className="w-[35px] h-[35px] sm:w-[36px] sm:h-[36px] flex items-center justify-center rounded-xl bg-[#070b14] border border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700 relative transition-colors cursor-pointer"
                     title="Thông báo hệ thống"
                   >
                     <Bell className="w-4 h-4" />
@@ -292,16 +309,16 @@ export const Navbar: React.FC = () => {
 
                   {/* Notification Popover */}
                   {isNotifOpen && (
-                    <div className="absolute right-0 mt-2 w-72 sm:w-96 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden text-left">
-                      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+                    <div className="absolute right-0 mt-2 w-72 sm:w-88 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden text-left">
+                      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
                         <div className="flex items-center gap-2">
                           <Bell className="w-4 h-4 text-amber-400" />
-                          <span className="text-sm font-bold text-white">Thông Báo</span>
+                          <span className="text-xs font-bold text-white uppercase tracking-wider">Thông Báo</span>
                         </div>
                         {unreadNotifs.length > 0 && (
                           <button
                             onClick={clearAllNotifications}
-                            className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer"
+                            className="text-xs text-amber-400 hover:text-amber-300 font-semibold cursor-pointer"
                           >
                             Đọc hết
                           </button>
@@ -351,12 +368,12 @@ export const Navbar: React.FC = () => {
                   <button
                     id="navbar-profile-btn"
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="h-9 flex items-center gap-2 px-1.5 sm:px-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
+                    className="h-[35px] sm:h-[36px] flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 rounded-xl bg-[#070b14] hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
                   >
                     <img
                       src={currentUser.avatar}
                       alt={currentUser.name}
-                      className="w-6 h-6 rounded-lg object-cover border border-amber-500/40 group-hover:border-amber-400 transition-colors"
+                      className="w-6 h-6 rounded-lg object-cover border border-amber-500/40 group-hover:border-amber-400 transition-colors shrink-0"
                     />
                     <div className="text-left hidden sm:block">
                       <span className="text-xs font-bold text-slate-200 group-hover:text-white block max-w-[90px] truncate leading-none">
@@ -366,13 +383,13 @@ export const Navbar: React.FC = () => {
                         {currentUser.role === 'admin' ? 'ADMIN' : currentUser.role === 'seller' ? 'SELLER' : 'MEMBER'}
                       </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:inline group-hover:text-slate-200 transition-colors" />
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:inline group-hover:text-slate-200 transition-colors shrink-0" />
                   </button>
 
                   {/* User Dropdown Menu */}
                   {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 text-left animate-in fade-in duration-150">
-                      <div className="p-3 border-b border-slate-800 bg-slate-950/40 rounded-xl mb-2">
+                      <div className="p-3 border-b border-slate-800 bg-slate-950/60 rounded-xl mb-2">
                         <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
                         <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
                         <div className="mt-2 flex items-center justify-between">
@@ -406,7 +423,7 @@ export const Navbar: React.FC = () => {
                             setIsWalletOpen(true);
                             setIsUserMenuOpen(false);
                           }}
-                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
+                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
                         >
                           <Wallet className="w-4 h-4 text-amber-400" />
                           <span>Ví điện tử & Nạp VietQR</span>
@@ -417,7 +434,7 @@ export const Navbar: React.FC = () => {
                             setCurrentView('orders');
                             setIsUserMenuOpen(false);
                           }}
-                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
+                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
                         >
                           <ShoppingBag className="w-4 h-4 text-cyan-400" />
                           <span>Quản lý đơn hàng</span>
@@ -429,7 +446,7 @@ export const Navbar: React.FC = () => {
                               setCurrentView('sell');
                               setIsUserMenuOpen(false);
                             }}
-                            className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer"
+                            className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <PlusCircle className="w-4 h-4 text-emerald-400" />
                             <span>Đăng bán & Quản lý gian hàng</span>
@@ -455,7 +472,7 @@ export const Navbar: React.FC = () => {
                               logoutUser();
                               setIsUserMenuOpen(false);
                             }}
-                            className="w-full px-3 py-2 text-rose-400 hover:bg-rose-950/40 rounded-lg flex items-center gap-2 cursor-pointer"
+                            className="w-full px-3 py-2 text-rose-400 hover:bg-rose-950/40 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <LogOut className="w-4 h-4 text-rose-400" />
                             <span>Đăng xuất tài khoản</span>
@@ -467,12 +484,18 @@ export const Navbar: React.FC = () => {
                 </div>
               </>
             ) : (
-              /* NOT LOGGED IN BUTTONS */
-              <div className="flex items-center gap-1 sm:gap-2">
+              /* ====================================================
+                 5. AUTH BUTTONS (NOT LOGGED IN)
+                 - Đăng Nhập: outline/subtle button
+                 - Đăng Ký: primary yellow/orange button
+                 - Height: ~36-38px, clean and prominent
+                 ==================================================== */
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
+                  id="navbar-login-btn"
                   onClick={openLoginModal}
-                  className="px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
+                  className="h-[35px] sm:h-[36px] px-2.5 sm:px-3 rounded-xl text-xs font-semibold text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
                 >
                   <LogIn size={13} className="text-amber-400" />
                   <span>Đăng Nhập</span>
@@ -480,153 +503,195 @@ export const Navbar: React.FC = () => {
 
                 <button
                   type="button"
+                  id="navbar-register-btn"
                   onClick={() => openRegisterModal('buyer')}
-                  className="px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                  className="h-[35px] sm:h-[36px] px-3 sm:px-3.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                 >
                   <UserPlus size={13} />
                   <span>Đăng Ký</span>
                 </button>
               </div>
             )}
-
-            {/* Mobile / Tablet Menu Toggle */}
-            <button
-              id="mobile-menu-btn"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-slate-400 hover:text-white rounded-xl bg-slate-950/60 border border-slate-800 shrink-0 cursor-pointer"
-              aria-label="Menu"
-            >
-              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-            </button>
           </div>
         </div>
-      </div>
 
-      {/* Mobile / Tablet Drawer Menu */}
-      {isMobileMenuOpen && (
-        <div className="lg:hidden bg-slate-950/98 backdrop-blur-xl border-b border-slate-800 px-4 py-4 space-y-3 shadow-2xl">
-          {/* Mobile Search Input */}
-          <form onSubmit={handleSearchSubmit} className="relative w-full">
+        {/* ====================================================
+            MOBILE / TABLET SEARCH BAR (HÀNG 2 - Màn hình < lg)
+            Tách biệt rõ ràng, không đè lên header, rất dễ bấm
+           ==================================================== */}
+        <div className="lg:hidden pb-3 pt-1">
+          <form
+            onSubmit={handleSearchSubmit}
+            className="relative w-full flex items-center bg-[#070b14] border border-slate-800 hover:border-slate-700 focus-within:border-amber-500/80 focus-within:ring-1 focus-within:ring-amber-500/30 rounded-xl transition-all h-[40px] px-3 shadow-inner"
+          >
+            <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" />
             <input
               type="text"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Tìm acc theo tướng, rank, skin..."
-              className="w-full bg-slate-900 border border-slate-700/80 text-slate-100 placeholder-slate-500 text-xs rounded-xl pl-9 pr-14 py-2.5 focus:outline-none focus:border-amber-500"
+              placeholder="Tìm acc theo ID, rank, skin..."
+              className="w-full bg-transparent text-white placeholder:text-slate-500 text-xs font-medium pl-2.5 pr-2 py-1.5 focus:outline-none"
             />
-            <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
             <button
               type="submit"
-              className="absolute right-1.5 top-1.5 px-2 py-1 bg-amber-500 text-slate-950 text-xs font-bold rounded-lg"
+              className="shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer shadow-xs whitespace-nowrap ml-1"
             >
               Tìm
             </button>
           </form>
+        </div>
+      </div>
 
-          {/* Mobile Menu Links */}
+      {/* ====================================================
+          MOBILE / TABLET DRAWER MENU (HÀNG MỞ RỘNG)
+          Sạch sẽ, mượt mà, dark navy, không tràn màn hình
+         ==================================================== */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden bg-[#0a0f1d]/98 backdrop-blur-xl border-b border-slate-800 px-4 py-4 space-y-2 shadow-2xl animate-in slide-in-from-top-2 duration-200">
           <div className="space-y-1">
             <button
               onClick={() => {
                 setCurrentView('home');
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                currentView === 'home' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-slate-300 hover:bg-slate-900'
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                currentView === 'home'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
               }`}
             >
-              <span>🏠 Trang Chủ</span>
+              <Home className="w-4 h-4 text-amber-400" />
+              <span>Trang Chủ</span>
             </button>
+
             <button
               onClick={() => {
                 setCurrentView('accounts');
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                currentView === 'accounts' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-slate-300 hover:bg-slate-900'
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors ${
+                currentView === 'accounts'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
               }`}
             >
-              <span>⚔️ Tất Cả Acc Liên Quân ({accounts.filter(a => a.status === 'approved').length})</span>
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 text-amber-400" />
+                <span>Tất Cả Acc Liên Quân</span>
+              </div>
+              <span className="text-[10px] font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
+                {accounts.filter(a => a.status === 'approved').length} acc
+              </span>
             </button>
+
             <button
               onClick={() => {
                 setCurrentView('mystery_box');
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${
                 currentView === 'mystery_box'
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black'
                   : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
               }`}
             >
-              <span className="flex items-center gap-2">
-                <span>🎁 Xé Túi Mù May Mắn</span>
-                <span className="px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full animate-pulse">HOT</span>
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Xé Túi Mù May Mắn</span>
+              </div>
+              <span className="px-2 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded-full uppercase tracking-wider animate-pulse">
+                HOT
               </span>
             </button>
-            <button
-              onClick={() => {
-                if (!isLoggedIn) {
-                  openRegisterModal('seller');
-                } else {
-                  setCurrentView('sell');
-                }
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                currentView === 'sell' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-slate-300 hover:bg-slate-900'
-              }`}
-            >
-              <span>🏪 Đăng Bán & Gian Hàng</span>
-              <PlusCircle className="w-4 h-4 text-amber-400" />
-            </button>
+
+            {(!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
+              <button
+                onClick={() => {
+                  if (!isLoggedIn) {
+                    openRegisterModal('seller');
+                  } else {
+                    setCurrentView('sell');
+                  }
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors ${
+                  currentView === 'sell'
+                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                    : 'text-slate-300 hover:bg-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <PlusCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Đăng Bán & Quản Lý Gian Hàng</span>
+                </div>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setCurrentView('orders');
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                currentView === 'orders' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-slate-300 hover:bg-slate-900'
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                currentView === 'orders'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
               }`}
             >
-              <span>📦 Quản Lý Đơn Hàng</span>
+              <ShoppingBag className="w-4 h-4 text-cyan-400" />
+              <span>Quản Lý Đơn Hàng</span>
             </button>
+
             <button
               onClick={() => {
                 setCurrentView('wishlist');
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                currentView === 'wishlist' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'text-slate-300 hover:bg-slate-900'
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors ${
+                currentView === 'wishlist'
+                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
               }`}
             >
-              <span>❤️ Acc Đã Lưu Yêu Thích</span>
+              <div className="flex items-center gap-2.5">
+                <Heart className="w-4 h-4 text-rose-400" />
+                <span>Acc Đã Lưu Yêu Thích</span>
+              </div>
               {validWishlistCount > 0 && (
-                <span className="text-[10px] bg-rose-500 text-white font-bold px-1.5 py-0.5 rounded-full">
+                <span className="text-[10px] bg-rose-500 text-white font-bold px-2 py-0.5 rounded-full">
                   {validWishlistCount}
                 </span>
               )}
             </button>
+
             <button
               onClick={() => {
                 setCurrentView('guide');
                 setIsMobileMenuOpen(false);
               }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                currentView === 'guide' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-slate-300 hover:bg-slate-900'
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                currentView === 'guide'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
               }`}
             >
-              <span>🛡️ Hướng Dẫn & Chính Sách Escrow</span>
+              <HelpCircle className="w-4 h-4 text-amber-400" />
+              <span>Hướng Dẫn & Chính Sách Escrow</span>
             </button>
+
             {isLoggedIn && currentUser.role === 'admin' && (
               <button
                 onClick={() => {
                   setCurrentView('admin');
                   setIsMobileMenuOpen(false);
                 }}
-                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold bg-red-950/40 text-red-400 border border-red-900/50 flex items-center justify-between"
+                className="w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold bg-red-950/40 text-red-400 border border-red-900/50 flex items-center justify-between"
               >
-                <span>🛡️ Super Admin Control</span>
-                <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-red-400" />
+                  <span>Bảng Điều Khiển Super Admin</span>
+                </div>
+                <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">
                   {pendingApprovals} duyệt
                 </span>
               </button>
@@ -634,24 +699,26 @@ export const Navbar: React.FC = () => {
           </div>
 
           {!isLoggedIn && (
-            <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2">
+            <div className="pt-3 border-t border-slate-800 grid grid-cols-2 gap-2.5">
               <button
                 onClick={() => {
                   openLoginModal();
                   setIsMobileMenuOpen(false);
                 }}
-                className="py-2.5 text-center text-xs font-bold bg-slate-800 text-white rounded-xl"
+                className="py-2.5 text-center text-xs font-bold bg-slate-800 text-white rounded-xl border border-slate-700 flex items-center justify-center gap-1.5"
               >
-                Đăng Nhập
+                <LogIn size={14} className="text-amber-400" />
+                <span>Đăng Nhập</span>
               </button>
               <button
                 onClick={() => {
                   openRegisterModal('buyer');
                   setIsMobileMenuOpen(false);
                 }}
-                className="py-2.5 text-center text-xs font-bold bg-amber-500 text-slate-950 rounded-xl"
+                className="py-2.5 text-center text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 rounded-xl shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5"
               >
-                Đăng Ký
+                <UserPlus size={14} />
+                <span>Đăng Ký</span>
               </button>
             </div>
           )}
@@ -660,3 +727,4 @@ export const Navbar: React.FC = () => {
     </header>
   );
 };
+
