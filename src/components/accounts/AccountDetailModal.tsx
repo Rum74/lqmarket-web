@@ -50,11 +50,15 @@ export const AccountDetailModal: React.FC = () => {
     avatar?: string;
   } | null>(null);
 
-  if (!selectedAccountId) return null;
+  const account = selectedAccountId ? accounts.find(a => a.id === selectedAccountId) : null;
 
-  const account = accounts.find(a => a.id === selectedAccountId);
-  if (!account) return null;
+  // Reset modal state whenever selected account changes
+  useEffect(() => {
+    setActiveImageIdx(0);
+    setCopiedCode(false);
+  }, [selectedAccountId]);
 
+  // Fetch live seller statistics whenever account changes
   useEffect(() => {
     if (!account?.sellerId) return;
     let isMounted = true;
@@ -82,6 +86,8 @@ export const AccountDetailModal: React.FC = () => {
       isMounted = false;
     };
   }, [account?.sellerId]);
+
+  if (!selectedAccountId || !account) return null;
 
   const rawSellerInfo = getDynamicSellerInfo(account.sellerId, allUsers, orders, account);
   const sellerInfo = {

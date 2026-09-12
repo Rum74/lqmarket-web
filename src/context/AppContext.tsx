@@ -250,9 +250,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('lqmarket_wishlist_ids');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  // Automatically persist wishlist state to localStorage across reloads
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lqmarket_wishlist_ids', JSON.stringify(wishlistIds));
+      }
+    } catch {}
+  }, [wishlistIds]);
 
   // Mystery Box (Túi Mù May Mắn) States
   const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>([]);
@@ -361,6 +381,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const chats = Array.isArray(payload.conversations) ? payload.conversations : Array.isArray(payload.chatMessages) ? payload.chatMessages : null;
         if (chats) setChatMessages(chats);
+
+        const serverWishlist = payload.wishlistIds || payload.currentUser?.wishlistIds || bootRes.wishlistIds || bootRes.currentUser?.wishlistIds;
+        if (Array.isArray(serverWishlist) && serverWishlist.length > 0) {
+          setWishlistIds(prev => {
+            const merged = Array.from(new Set([...prev, ...serverWishlist]));
+            try {
+              localStorage.setItem('lqmarket_wishlist_ids', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
 
         console.log('[APP STATE] Successfully loaded from MongoDB:', {
           accountsCount: fetchedAccounts ? fetchedAccounts.length : 0,
@@ -555,6 +586,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUserId(loggedUser.id);
       setIsLoggedIn(true);
       setAllUsers(prev => [loggedUser, ...prev.filter(u => u && u.id !== loggedUser.id)]);
+      if (Array.isArray(loggedUser.wishlistIds) && loggedUser.wishlistIds.length > 0) {
+        setWishlistIds(prev => {
+          const merged = Array.from(new Set([...prev, ...loggedUser.wishlistIds]));
+          try {
+            localStorage.setItem('lqmarket_wishlist_ids', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
       setIsAuthModalOpen(false);
       
       // Reload user data & admin lists if applicable
@@ -656,15 +696,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsChatOpen(false);
   };
 
-  // Toggle Wishlist
+  // Toggle Wishlist (Persisted across reloads via localStorage and synced with MongoDB)
   const toggleWishlist = async (accountId: string) => {
-    if (!isLoggedIn || !currentUser.id) {
-      openLoginModal();
-      return;
-    }
     const exists = wishlistIds.includes(accountId);
     const updated = exists ? wishlistIds.filter(id => id !== accountId) : [...wishlistIds, accountId];
+    
     setWishlistIds(updated);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lqmarket_wishlist_ids', JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Failed to save wishlist to localStorage:', e);
+    }
 
     setAccounts(accs =>
       accs.map(a =>
@@ -672,10 +716,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    try {
-      await api.post(`/api/favorites/${accountId}`, {});
-    } catch (e) {
-      console.warn('MongoDB wishlist sync notice:', e);
+    const token = getAuthToken();
+    if (token && isLoggedIn) {
+      try {
+        if (exists) {
+          await api.delete(`/api/favorites/${accountId}`);
+        } else {
+          await api.post(`/api/favorites/${accountId}`, {});
+        }
+      } catch (e) {
+        console.warn('MongoDB wishlist sync notice:', e);
+      }
     }
   };
 

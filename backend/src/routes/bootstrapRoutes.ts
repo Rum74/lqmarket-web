@@ -197,7 +197,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           bankName: u.bankName || '',
           bankAccount: u.bankAccount || '',
           bankAccountName: u.bankAccountName || '',
-          createdAt: u.createdAt
+          createdAt: u.createdAt,
+          wishlistIds: u.wishlistIds || []
         };
       }
 
@@ -287,7 +288,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         withdrawals: allWithdrawalsRaw,
         userInventory,
         notifications: userNotifications,
-        conversations: userConversations
+        conversations: userConversations,
+        wishlistIds: currentUser?.wishlistIds || []
       },
       // Root-level fields for direct compatibility with legacy or flat consumers
       accounts,
