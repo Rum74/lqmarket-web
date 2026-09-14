@@ -664,6 +664,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
+        const loadedCoupons = payload.coupons || bootRes.coupons;
+        if (Array.isArray(loadedCoupons) && loadedCoupons.length > 0) {
+          setCoupons(loadedCoupons);
+        }
+
+        const loadedSvr = payload.sellerVerificationRequests || bootRes.sellerVerificationRequests;
+        if (Array.isArray(loadedSvr)) {
+          setSellerVerificationRequests(loadedSvr);
+        }
+
+        const loadedDisputes = payload.disputeTickets || bootRes.disputeTickets;
+        if (Array.isArray(loadedDisputes)) {
+          setDisputeTickets(loadedDisputes);
+        }
+
+        const loadedLogs = payload.adminAuditLogs || bootRes.adminAuditLogs;
+        if (Array.isArray(loadedLogs) && loadedLogs.length > 0) {
+          setAdminAuditLogs(loadedLogs);
+        }
+
+        const loadedAlerts = payload.priceAlerts || bootRes.priceAlerts;
+        if (Array.isArray(loadedAlerts)) {
+          setPriceAlerts(loadedAlerts);
+        }
+
         console.log('[APP STATE] Successfully loaded from MongoDB:', {
           accountsCount: fetchedAccounts ? fetchedAccounts.length : 0,
           ordersCount: ordersList ? ordersList.length : 0,
@@ -1485,6 +1510,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       amount
     };
     setAdminAuditLogs(prev => [newLog, ...prev]);
+    api.post('/api/admin/audit-logs', {
+      action,
+      targetType,
+      targetId,
+      details,
+      amount
+    }).catch(err => console.warn('Audit log API notice:', err));
   }, [currentUser]);
 
   // Comparison Tool Actions
@@ -1527,10 +1559,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setPriceAlerts(prev => [newAlert, ...prev.filter(a => a.accountId !== accountId)]);
     setIsPriceAlertModalOpen(false);
+
+    api.post('/api/price-alerts', { accountId, targetPrice })
+      .catch(err => console.warn('Price alert API notice:', err));
   };
 
   const removePriceAlert = (id: string) => {
     setPriceAlerts(prev => prev.filter(a => a.id !== id));
+    api.delete(`/api/price-alerts/${id}`)
+      .catch(err => console.warn('Price alert delete API notice:', err));
   };
 
   // Coupons Actions
@@ -1545,16 +1582,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setCoupons(prev => [newCoupon, ...prev]);
     logAdminAction('CREATE_COUPON', 'coupon', newCoupon.code, `Tạo mã giảm giá mới: ${newCoupon.code}`);
+    api.post('/api/coupons', newCoupon)
+      .catch(err => console.warn('Coupon create API notice:', err));
   };
 
   const adminToggleCoupon = (id: string) => {
     setCoupons(prev =>
       prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
     );
+    api.put(`/api/coupons/${id}/toggle`, {})
+      .catch(err => console.warn('Coupon toggle API notice:', err));
   };
 
   const adminDeleteCoupon = (id: string) => {
     setCoupons(prev => prev.filter(c => c.id !== id));
+    api.delete(`/api/coupons/${id}`)
+      .catch(err => console.warn('Coupon delete API notice:', err));
   };
 
   const applyCouponCode = (code: string, orderPrice: number): {
@@ -1619,6 +1662,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       appliedAt: new Date().toISOString()
     };
     setSellerVerificationRequests(prev => [newReq, ...prev]);
+    api.post('/api/seller-verifications/apply', {
+      fullName: newReq.fullName,
+      idCardNumber: newReq.idCardNumber,
+      userPhone: newReq.userPhone,
+      zaloPhone: (data as any).zaloPhone || newReq.userPhone,
+      socialLink: (data as any).socialLink || '',
+      idCardFront: (data as any).idCardFront || '',
+      idCardBack: (data as any).idCardBack || '',
+      portraitWithId: (data as any).portraitWithId || '',
+      agreedWarranty: newReq.warrantyCommitment
+    }).catch(err => console.warn('Seller verification API notice:', err));
   };
 
   const adminReviewSellerVerification = (id: string, status: 'approved' | 'rejected', reason?: string) => {
@@ -1641,6 +1695,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
     }
+
+    api.put(`/api/seller-verifications/${id}/review`, { status, rejectionReason: reason })
+      .catch(err => console.warn('Seller review API notice:', err));
   };
 
   // Dispute Tickets Actions
@@ -1669,6 +1726,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setDisputeTickets(prev => [newTicket, ...prev]);
     disputeOrder(orderId, reason);
+
+    api.post('/api/disputes', {
+      orderId,
+      reason,
+      evidencePhotos,
+      evidenceVideo
+    }).catch(err => console.warn('Dispute API notice:', err));
   };
 
   const adminResolveDisputeTicket = (
@@ -1720,6 +1784,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ticket.amount
       );
     }
+
+    api.put(`/api/disputes/${ticketId}/resolve`, { status, adminDecisionNote: note })
+      .catch(err => console.warn('Dispute resolve API notice:', err));
   };
 
   // Chat

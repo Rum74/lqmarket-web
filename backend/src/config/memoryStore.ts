@@ -306,6 +306,11 @@ export const memoryStore = {
   notifications: new MemoryCollection<any>('notifications'),
   reviews: new MemoryCollection<any>('reviews'),
   settings: new MemoryCollection<any>('settings'),
+  coupons: new MemoryCollection<any>('coupons'),
+  sellerVerifications: new MemoryCollection<any>('sellerVerifications'),
+  disputes: new MemoryCollection<any>('disputes'),
+  auditLogs: new MemoryCollection<any>('auditLogs'),
+  priceAlerts: new MemoryCollection<any>('priceAlerts'),
 };
 
 // Seed initial memory store with admin account if empty

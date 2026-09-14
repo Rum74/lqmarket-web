@@ -11,6 +11,12 @@ import { UserInventory } from '../models/UserInventory';
 import { Setting } from '../models/Setting';
 import { Notification } from '../models/Notification';
 import { Conversation } from '../models/Conversation';
+import { Coupon } from '../models/Coupon';
+import { SellerVerification } from '../models/SellerVerification';
+import { Dispute } from '../models/Dispute';
+import { AuditLog } from '../models/AuditLog';
+import { PriceAlert } from '../models/PriceAlert';
+import { ensureCouponsSeeded } from './couponRoutes';
 import {
   optionalAuth,
   AuthenticatedRequest
@@ -28,6 +34,9 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     const currentUserId = req.user?.userId;
     const isUserAdmin = req.user?.role === 'admin';
 
+    // Ensure initial coupons exist
+    await ensureCouponsSeeded().catch(() => {});
+
     // 1. Fetch core marketplace collections in parallel
     const [
       allAccountsRaw,
@@ -39,7 +48,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       mysteryRewards,
       mysteryHistory,
       allTransactionsRaw,
-      allWithdrawalsRaw
+      allWithdrawalsRaw,
+      couponsRaw
     ] = await Promise.all([
       // Fetch accounts (Admin gets all, regular user gets all approved + sold + their own)
       Account.find(
@@ -71,6 +81,9 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       WithdrawalRequest.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
         .sort({ createdAt: -1 })
         .limit(300)
+        .lean(),
+      Coupon.find(isUserAdmin ? {} : { isActive: true })
+        .sort({ createdAt: -1 })
         .lean()
     ]);
 
@@ -170,12 +183,17 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     let userInventory: any[] = [];
     let userNotifications: any[] = [];
     let userConversations: any[] = [];
+    let sellerVerifications: any[] = [];
+    let disputes: any[] = [];
+    let auditLogs: any[] = [];
+    let priceAlerts: any[] = [];
 
     if (currentUserId) {
-      const [u, notifs, convs] = await Promise.all([
+      const [u, notifs, convs, alerts] = await Promise.all([
         User.findOne({ id: currentUserId }).lean(),
         Notification.find({ userId: currentUserId }).sort({ createdAt: -1 }).limit(50).lean(),
-        Conversation.find({ participantIds: currentUserId }).sort({ lastMessageTime: -1 }).lean()
+        Conversation.find({ participantIds: currentUserId }).sort({ lastMessageTime: -1 }).lean(),
+        PriceAlert.find({ userId: currentUserId }).sort({ createdAt: -1 }).lean()
       ]);
 
       if (u) {
@@ -204,11 +222,15 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
 
       userNotifications = notifs || [];
       userConversations = convs || [];
+      priceAlerts = alerts || [];
 
       if (isUserAdmin) {
-        const [adminUsers, adminOrders] = await Promise.all([
+        const [adminUsers, adminOrders, allSvr, allDsp, allLogs] = await Promise.all([
           User.find().select('-password').sort({ createdAt: -1 }).lean(),
-          Order.find().sort({ createdAt: -1 }).lean()
+          Order.find().sort({ createdAt: -1 }).lean(),
+          SellerVerification.find().sort({ appliedAt: -1 }).lean(),
+          Dispute.find().sort({ createdAt: -1 }).lean(),
+          AuditLog.find().sort({ timestamp: -1 }).limit(100).lean()
         ]);
         allUsers = adminUsers.map((usr: any) => ({
           id: usr.id,
@@ -232,17 +254,26 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           createdAt: usr.createdAt
         }));
         userOrders = adminOrders || [];
+        sellerVerifications = allSvr || [];
+        disputes = allDsp || [];
+        auditLogs = allLogs || [];
       } else {
-        const [orders, inv] = await Promise.all([
+        const [orders, inv, mySvr, myDsp] = await Promise.all([
           Order.find({
             $or: [{ buyerId: currentUserId }, { sellerId: currentUserId }]
           })
             .sort({ createdAt: -1 })
             .lean(),
-          UserInventory.find({ userId: currentUserId }).sort({ receivedAt: -1 }).lean()
+          UserInventory.find({ userId: currentUserId }).sort({ receivedAt: -1 }).lean(),
+          SellerVerification.find({ userId: currentUserId }).sort({ appliedAt: -1 }).lean(),
+          Dispute.find({
+            $or: [{ buyerId: currentUserId }, { sellerId: currentUserId }]
+          }).sort({ createdAt: -1 }).lean()
         ]);
         userOrders = orders || [];
         userInventory = inv || [];
+        sellerVerifications = mySvr || [];
+        disputes = myDsp || [];
       }
     }
 
@@ -269,7 +300,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       mysteryBoxesCount: mysteryBoxes.length,
       ordersCount: userOrders.length,
       transactionsCount: mergedTransactions.length,
-      withdrawalsCount: allWithdrawalsRaw.length
+      withdrawalsCount: allWithdrawalsRaw.length,
+      couponsCount: couponsRaw.length
     });
 
     return res.json({
@@ -289,7 +321,12 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         userInventory,
         notifications: userNotifications,
         conversations: userConversations,
-        wishlistIds: currentUser?.wishlistIds || []
+        wishlistIds: currentUser?.wishlistIds || [],
+        coupons: couponsRaw,
+        sellerVerificationRequests: sellerVerifications,
+        disputeTickets: disputes,
+        adminAuditLogs: isUserAdmin ? auditLogs : [],
+        priceAlerts
       },
       // Root-level fields for direct compatibility with legacy or flat consumers
       accounts,
@@ -307,7 +344,12 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       withdrawals: allWithdrawalsRaw,
       userInventory,
       notifications: userNotifications,
-      conversations: userConversations
+      conversations: userConversations,
+      coupons: couponsRaw,
+      sellerVerificationRequests: sellerVerifications,
+      disputeTickets: disputes,
+      adminAuditLogs: isUserAdmin ? auditLogs : [],
+      priceAlerts
     });
   } catch (error: any) {
     console.error('Error in /api/bootstrap:', error);

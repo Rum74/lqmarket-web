@@ -20,6 +20,12 @@ import notificationRoutes from './backend/src/routes/notificationRoutes';
 import adminRoutes from './backend/src/routes/adminRoutes';
 import uploadRoutes from './backend/src/routes/uploadRoutes';
 import bootstrapRoutes from './backend/src/routes/bootstrapRoutes';
+import couponRoutes from './backend/src/routes/couponRoutes';
+import sellerVerificationRoutes from './backend/src/routes/sellerVerificationRoutes';
+import disputeRoutes from './backend/src/routes/disputeRoutes';
+import auditLogRoutes from './backend/src/routes/auditLogRoutes';
+import priceAlertRoutes from './backend/src/routes/priceAlertRoutes';
+import affiliateRoutes from './backend/src/routes/affiliateRoutes';
 
 // Helper to resolve route modules across ESM and CJS imports
 const getRouter = (routeMod: any) => {
@@ -105,6 +111,12 @@ async function startServer() {
   const resolvedUploadRoutes = getRouter(uploadRoutes);
   const resolvedBootstrapRoutes = getRouter(bootstrapRoutes);
   const resolvedSellerRoutes = getRouter(sellerRoutes);
+  const resolvedCouponRoutes = getRouter(couponRoutes);
+  const resolvedSellerVerificationRoutes = getRouter(sellerVerificationRoutes);
+  const resolvedDisputeRoutes = getRouter(disputeRoutes);
+  const resolvedAuditLogRoutes = getRouter(auditLogRoutes);
+  const resolvedPriceAlertRoutes = getRouter(priceAlertRoutes);
+  const resolvedAffiliateRoutes = getRouter(affiliateRoutes);
 
   app.use('/api/auth', resolvedAuthRoutes);
   app.use('/api/accounts', resolvedAccountRoutes);
@@ -127,6 +139,12 @@ async function startServer() {
   app.use('/api/sellers', resolvedSellerRoutes);
   app.use('/api/seller', resolvedSellerRoutes);
   app.use('/api/sync', resolvedBootstrapRoutes);
+  app.use('/api/coupons', resolvedCouponRoutes);
+  app.use('/api/seller-verifications', resolvedSellerVerificationRoutes);
+  app.use('/api/disputes', resolvedDisputeRoutes);
+  app.use('/api/admin/audit-logs', resolvedAuditLogRoutes);
+  app.use('/api/price-alerts', resolvedPriceAlertRoutes);
+  app.use('/api/affiliate', resolvedAffiliateRoutes);
 
   // Global Webhook listeners (PayOS IPN)
   app.all('/webhook', (req, res, next) => {

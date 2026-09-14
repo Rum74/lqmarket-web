@@ -9,6 +9,8 @@ export interface AuthUserPayload {
   userId: string;
   email: string;
   role: 'buyer' | 'seller' | 'admin';
+  username?: string;
+  name?: string;
 }
 
 export interface AuthenticatedRequest extends Request {

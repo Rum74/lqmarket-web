@@ -5,6 +5,7 @@ import { User } from '../models/User';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
 import { Review } from '../models/Review';
+import { Coupon } from '../models/Coupon';
 import {
   authenticateToken,
   requireAdmin,
@@ -94,6 +95,14 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     });
 
     await newOrder.save();
+
+    // If coupon was applied, increment its usedCount
+    if (voucherCodeUsed) {
+      Coupon.updateOne(
+        { code: String(voucherCodeUsed).toUpperCase() },
+        { $inc: { usedCount: 1 } }
+      ).catch(() => {});
+    }
 
     // Record buyer wallet transaction
     const buyerTx = new WalletTransaction({
