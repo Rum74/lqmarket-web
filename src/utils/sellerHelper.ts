@@ -10,8 +10,51 @@ export interface DynamicSellerInfo {
   reviewsCount: number;
   averageRating: string; // e.g. "5.0"
   ratingNumber: number;
+  trustScore: number;
+  trustScoreBreakdown: {
+    base: number;
+    dealsBonus: number;
+    ratingBonus: number;
+    verifiedBonus: number;
+    disputePenalty: number;
+  };
   bio?: string;
   createdAt?: string;
+}
+
+export function calculateSellerTrustScore(params: {
+  completedSales: number;
+  averageRating: number;
+  isVerifiedSeller: boolean;
+  disputesCount?: number;
+  cancelledCount?: number;
+}): { score: number; dealsBonus: number; ratingBonus: number; verifiedBonus: number; disputePenalty: number } {
+  const { completedSales, averageRating, isVerifiedSeller, disputesCount = 0, cancelledCount = 0 } = params;
+
+  // Base score 75
+  let score = 75;
+
+  // Completed sales bonus (+0.5 per sale, up to +15)
+  const dealsBonus = Math.min(15, Math.round(completedSales * 0.5));
+
+  // High rating bonus (above 4.0 gives up to +10, below 4.0 penalizes)
+  const ratingBonus = Math.round(Math.max(-10, (averageRating - 4.0) * 10));
+
+  // Verification bonus (+10)
+  const verifiedBonus = isVerifiedSeller ? 10 : 0;
+
+  // Dispute and cancellation penalty (-8 per dispute, -3 per cancelled order)
+  const disputePenalty = (disputesCount * 8) + (cancelledCount * 3);
+
+  score = Math.max(20, Math.min(100, score + dealsBonus + ratingBonus + verifiedBonus - disputePenalty));
+
+  return {
+    score,
+    dealsBonus,
+    ratingBonus,
+    verifiedBonus,
+    disputePenalty
+  };
 }
 
 export function getDynamicSellerInfo(
@@ -65,6 +108,15 @@ export function getDynamicSellerInfo(
 
   const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(sellerId || 'seller')}`;
 
+  const ratingNum = averageRating ? parseFloat(averageRating) : 5.0;
+  const disputesCount = sellerOrders.filter(o => o.status === 'disputed' || o.status === 'refunded').length;
+  const trustData = calculateSellerTrustScore({
+    completedSales,
+    averageRating: ratingNum,
+    isVerifiedSeller: isVerified,
+    disputesCount
+  });
+
   return {
     id: sellerId,
     name: accountFallback?.sellerName || user?.name || 'Shop Acc Liên Quân',
@@ -77,7 +129,15 @@ export function getDynamicSellerInfo(
     completedSales,
     reviewsCount,
     averageRating,
-    ratingNumber: averageRating ? parseFloat(averageRating) : 5.0,
+    ratingNumber: ratingNum,
+    trustScore: trustData.score,
+    trustScoreBreakdown: {
+      base: 75,
+      dealsBonus: trustData.dealsBonus,
+      ratingBonus: trustData.ratingBonus,
+      verifiedBonus: trustData.verifiedBonus,
+      disputePenalty: trustData.disputePenalty
+    },
     bio: user?.bio,
     createdAt: user?.createdAt
   };

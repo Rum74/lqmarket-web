@@ -20,7 +20,11 @@ import {
   Home,
   Layers,
   HelpCircle,
-  BookOpen
+  BookOpen,
+  Scale,
+  Crown,
+  Store,
+  Share2
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -39,7 +43,10 @@ export const Navbar: React.FC = () => {
     setIsWalletOpen,
     openProfileModal,
     setFilterOptions,
-    accounts
+    accounts,
+    compareAccountIds,
+    setIsCompareModalOpen,
+    setIsLoyaltyModalOpen
   } = useApp();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -215,12 +222,41 @@ export const Navbar: React.FC = () => {
               <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span>Hướng Dẫn</span>
             </button>
+
+            {/* Cẩm Nang / Blog */}
+            <button
+              id="nav-btn-blog"
+              onClick={() => setCurrentView('blog')}
+              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentView === 'blog'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Cẩm Nang</span>
+            </button>
           </nav>
 
           {/* ====================================================
               3. RIGHT GROUP: ACCOUNT & ACTIONS AREA
              ==================================================== */}
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
+            {/* Compare Tool Pill (if accounts selected) */}
+            {compareAccountIds.length > 0 && (
+              <button
+                id="navbar-compare-btn"
+                onClick={() => setIsCompareModalOpen(true)}
+                className="h-[35px] sm:h-[36px] flex items-center gap-1.5 bg-gradient-to-r from-cyan-950 to-blue-950 hover:from-cyan-900 hover:to-blue-900 border border-cyan-500/40 px-2.5 rounded-xl transition-all cursor-pointer group shadow-sm text-cyan-300 font-bold text-xs"
+                title="Mở bảng so sánh tài khoản"
+              >
+                <Scale className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">So Sánh</span>
+                <span className="w-4 h-4 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center text-[10px] font-black">
+                  {compareAccountIds.length}
+                </span>
+              </button>
+            )}
             {isLoggedIn ? (
               <>
                 {/* Wallet Balance Pill */}
@@ -414,13 +450,48 @@ export const Navbar: React.FC = () => {
                         {currentUser.role !== 'buyer' && (
                           <button
                             onClick={() => {
+                              setCurrentView('seller_center');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="w-full px-3 py-2 text-amber-300 hover:text-white hover:bg-amber-500/20 rounded-lg flex items-center gap-2 cursor-pointer font-bold"
+                          >
+                            <Store className="w-4 h-4 text-amber-400" />
+                            <span>Kênh Người Bán (Seller Center)</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setIsLoyaltyModalOpen(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                        >
+                          <Crown className="w-4 h-4 text-amber-400" />
+                          <span>Cấp Bậc Hội Viên & Ưu Đãi</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setCurrentView('affiliate');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                        >
+                          <Share2 className="w-4 h-4 text-emerald-400" />
+                          <span>Tiếp Thị Liên Kết (Affiliate)</span>
+                        </button>
+
+                        {currentUser.role !== 'buyer' && (
+                          <button
+                            onClick={() => {
                               setCurrentView('sell');
                               setIsUserMenuOpen(false);
                             }}
                             className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <PlusCircle className="w-4 h-4 text-emerald-400" />
-                            <span>Đăng bán & Quản lý gian hàng</span>
+                            <span>Đăng bán tài khoản mới</span>
                           </button>
                         )}
 
@@ -623,6 +694,60 @@ export const Navbar: React.FC = () => {
               <HelpCircle className="w-4 h-4 text-amber-400" />
               <span>Hướng Dẫn & Chính Sách Escrow</span>
             </button>
+
+            <button
+              onClick={() => {
+                setCurrentView('blog');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                currentView === 'blog'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-amber-400" />
+              <span>Cẩm Nang Leo Rank & Tin Tức</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentView('affiliate');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                currentView === 'affiliate'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
+              }`}
+            >
+              <Share2 className="w-4 h-4 text-emerald-400" />
+              <span>Kiếm Tiền Tiếp Thị (Affiliate)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setIsLoyaltyModalOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors text-amber-300 hover:bg-slate-900"
+            >
+              <Crown className="w-4 h-4 text-amber-400" />
+              <span>Cấp Bậc Hội Viên (Loyalty)</span>
+            </button>
+
+            {isLoggedIn && (currentUser.role === 'seller' || currentUser.role === 'admin') && (
+              <button
+                onClick={() => {
+                  setCurrentView('seller_center');
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-2.5"
+              >
+                <Store className="w-4 h-4 text-amber-400" />
+                <span>Kênh Quản Lý Người Bán (Seller Center)</span>
+              </button>
+            )}
 
             {isLoggedIn && currentUser.role === 'admin' && (
               <button

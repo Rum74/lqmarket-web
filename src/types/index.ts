@@ -88,6 +88,12 @@ export interface UserProfile {
   completedSales: number;
   isVerifiedSeller: boolean;
   sellerTier: SellerTier;
+  memberTier?: 'Member' | 'Silver' | 'Gold' | 'Diamond' | 'VIP';
+  trustScore?: number;
+  verificationStatus?: 'none' | 'pending' | 'verified' | 'rejected';
+  refCode?: string;
+  invitedByRef?: string;
+  totalSpent?: number;
   bankName?: string;
   bankAccount?: string;
   bankAccountName?: string;
@@ -284,3 +290,165 @@ export interface UserInventoryItem {
   isUsed?: boolean;
   receivedAt: string;
 }
+
+// ----------------------------------------------------
+// SELLER VERIFICATION & TRUST SCORE TYPES
+// ----------------------------------------------------
+export interface SellerTrustScore {
+  score: number; // 0 - 100
+  successfulDeals: number;
+  completionRate: number; // % e.g. 100
+  rating: number;
+  disputesCount: number;
+  cancelledCount: number;
+  isVerified: boolean;
+  activeSince: string;
+}
+
+export interface SellerVerificationRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  fullName?: string;
+  phone?: string;
+  userAvatar?: string;
+  idCardNumber: string;
+  socialLink?: string;
+  zaloPhone?: string;
+  warrantyCommitment: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  appliedAt: string;
+  reviewedAt?: string;
+}
+
+// ----------------------------------------------------
+// COUPON & VOUCHER TYPES
+// ----------------------------------------------------
+export interface CouponItem {
+  id: string;
+  code: string; // e.g. LQMARKET10
+  discountPercent?: number; // e.g. 10 (%)
+  discountAmount?: number; // e.g. 50000 (VNĐ)
+  minOrder: number; // e.g. 500000 (VNĐ)
+  maxDiscount?: number; // max cap e.g. 200000 (VNĐ)
+  maxUses: number;
+  usedCount: number;
+  validFrom: string;
+  validTo: string;
+  isActive: boolean;
+  description: string;
+}
+
+// ----------------------------------------------------
+// DISPUTE (KHIẾU NẠI) TYPES
+// ----------------------------------------------------
+export type DisputeStatus =
+  | 'pending'
+  | 'under_review'
+  | 'resolved_buyer_refund'
+  | 'resolved_seller_payout'
+  | 'more_info_needed';
+
+export interface DisputeTicket {
+  id: string; // #DSP001
+  orderId: string;
+  orderCode: string;
+  accountId: string;
+  accountCode: string;
+  accountTitle: string;
+  amount: number;
+  buyerId: string;
+  buyerName: string;
+  sellerId: string;
+  sellerName: string;
+  reason: string;
+  evidencePhotos: string[];
+  evidenceVideo?: string;
+  buyerNote?: string;
+  sellerResponse?: string;
+  adminDecisionNote?: string;
+  status: DisputeStatus;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+// ----------------------------------------------------
+// AFFILIATE & REFERRAL TYPES
+// ----------------------------------------------------
+export interface AffiliateStats {
+  userId: string;
+  refCode: string;
+  refLink: string;
+  totalClicks: number;
+  totalSignups: number;
+  totalOrders: number;
+  totalCommission: number;
+  paidCommission: number;
+  pendingCommission: number;
+}
+
+// ----------------------------------------------------
+// PRICE ALERT TYPES
+// ----------------------------------------------------
+export interface PriceAlertItem {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  accountId: string;
+  accountCode: string;
+  accountTitle: string;
+  initialPrice?: number;
+  currentPrice?: number;
+  targetPrice: number;
+  isTriggered: boolean;
+  createdAt: string;
+}
+
+// ----------------------------------------------------
+// ADMIN AUDIT LOG TYPES
+// ----------------------------------------------------
+export interface AdminAuditLog {
+  id: string;
+  adminId: string;
+  adminName: string;
+  action:
+    | 'APPROVE_WITHDRAWAL'
+    | 'REJECT_WITHDRAWAL'
+    | 'APPROVE_SELLER'
+    | 'REJECT_SELLER'
+    | 'REFUND_DISPUTE'
+    | 'RESOLVE_DISPUTE_SELLER'
+    | 'BLOCK_USER'
+    | 'UNBLOCK_USER'
+    | 'CREATE_COUPON'
+    | 'TOGGLE_COUPON'
+    | 'APPROVE_ACCOUNT'
+    | 'REJECT_ACCOUNT';
+  targetType: 'withdrawal' | 'seller' | 'dispute' | 'user' | 'coupon' | 'account';
+  targetId: string;
+  amount?: number;
+  statusChange?: string; // e.g. "pending -> approved"
+  details: string;
+  timestamp: string;
+}
+
+// ----------------------------------------------------
+// BLOG & GUIDE TYPES
+// ----------------------------------------------------
+export interface BlogPostItem {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  content: string;
+  coverImage: string;
+  category: 'meta' | 'security' | 'guide' | 'review';
+  author: string;
+  publishedAt: string;
+  readTime: string;
+  relatedAccountTags?: string[];
+}
+

@@ -25,7 +25,8 @@ import {
   Shield,
   UserCheck,
   PackageOpen,
-  Gift
+  Gift,
+  BookOpen
 } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
@@ -39,7 +40,8 @@ export const HomeView: React.FC = () => {
     openChatWith,
     mysteryBoxes,
     totalSystemCompletedSales,
-    totalSystemAvailableAccounts
+    totalSystemAvailableAccounts,
+    coupons
   } = useApp();
 
   const approvedAccounts = accounts.filter(a => a.status === 'approved');
@@ -79,6 +81,11 @@ export const HomeView: React.FC = () => {
   // Featured Accounts (VIP / SSS)
   const featuredAccounts = approvedAccounts.filter(a => a.isFeatured || a.badgeTag === 'VIP');
 
+  // Newest Accounts
+  const newestAccounts = [...approvedAccounts]
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 4);
+
   // Budget Accounts (< 500k)
   const budgetAccounts = approvedAccounts.filter(a => a.price <= 500000);
 
@@ -86,6 +93,18 @@ export const HomeView: React.FC = () => {
   const superSkinAccounts = approvedAccounts.filter(
     a => a.skinsCount >= 180 || a.rareSkins.some(s => s.tier === 'SSS')
   );
+
+  const activeCoupons = (coupons || []).filter(
+    c => c && c.isActive && (!c.validTo || new Date(c.validTo) > new Date())
+  );
+  const featuredCoupon = activeCoupons[0];
+  const couponDiscountText = featuredCoupon
+    ? featuredCoupon.discountPercent
+      ? `giảm ${featuredCoupon.discountPercent}%${featuredCoupon.maxDiscount ? ` (tối đa ${featuredCoupon.maxDiscount.toLocaleString('vi-VN')}đ)` : ''}`
+      : typeof featuredCoupon.discountAmount === 'number'
+      ? `giảm ${featuredCoupon.discountAmount.toLocaleString('vi-VN')}đ`
+      : 'ưu đãi giảm giá'
+    : '';
 
   const handleRankQuickFilter = (rankName: string) => {
     setFilterOptions(prev => ({
@@ -98,11 +117,11 @@ export const HomeView: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handlePriceQuickFilter = (max: number) => {
+  const handlePriceQuickFilter = (min: number, max: number) => {
     setFilterOptions(prev => ({
       ...prev,
-      minPrice: 0,
-      maxPrice: max >= 2000000 ? 100000000 : max,
+      minPrice: min,
+      maxPrice: max,
       rank: 'all'
     }));
     setCurrentView('accounts');
@@ -229,7 +248,86 @@ export const HomeView: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {/* Quick Price Range Filters */}
+        <div className="pt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
+            <Tag size={13} className="text-emerald-400" />
+            <span>Mức Giá:</span>
+          </span>
+          {[
+            { label: 'Dưới 100k', min: 0, max: 100000 },
+            { label: '100k - 300k', min: 100000, max: 300000 },
+            { label: '300k - 600k', min: 300000, max: 600000 },
+            { label: '600k - 1.5Tr', min: 600000, max: 1500000 },
+            { label: 'Trên 1.5Tr (VIP)', min: 1500000, max: 50000000 },
+          ].map((pf, idx) => (
+            <button
+              key={idx}
+              onClick={() => handlePriceQuickFilter(pf.min, pf.max)}
+              className="px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 text-xs font-bold text-slate-300 hover:text-emerald-400 transition-all cursor-pointer shadow-xs"
+            >
+              {pf.label}
+            </button>
+          ))}
+
+          {/* Quick attribute tags */}
+          <div className="ml-auto hidden md:flex items-center gap-2">
+            <button
+              onClick={() => {
+                setFilterOptions(prev => ({ ...prev, search: 'trắng thông tin' }));
+                setCurrentView('accounts');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            >
+              ✓ Trắng Thông Tin
+            </button>
+            <button
+              onClick={() => {
+                setFilterOptions(prev => ({ ...prev, search: 'thứ nguyên' }));
+                setCurrentView('accounts');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[11px] font-bold hover:bg-amber-500/20 transition-colors cursor-pointer"
+            >
+              ★ Skin Vệ Thần SSS
+            </button>
+          </div>
+        </div>
       </section>
+
+      {/* ACTIVE PROMOTIONAL COUPONS BANNER */}
+      {featuredCoupon && (
+        <section className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-slate-900 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Tag size={20} />
+            </div>
+            <div>
+              <div className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Ưu đãi mã giảm giá độc quyền</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[9px] font-bold animate-pulse">GIẢM NGAY</span>
+              </div>
+              <div className="text-sm font-bold text-white mt-0.5">
+                Sử dụng mã <span className="text-amber-300 font-mono font-black bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40">{featuredCoupon.code}</span> để được {couponDiscountText} khi thanh toán!
+                {featuredCoupon.minOrder > 0 && (
+                  <span className="text-xs text-slate-400 font-normal ml-1">
+                    (Đơn tối thiểu {featuredCoupon.minOrder.toLocaleString('vi-VN')}đ)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(featuredCoupon.code);
+              alert(`Đã sao chép mã giảm giá: ${featuredCoupon.code}`);
+            }}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl cursor-pointer shadow-md transition-all shrink-0"
+          >
+            Sao Chép Mã
+          </button>
+        </section>
+      )}
 
       {/* MYSTERY BOX PROMOTIONAL HIGHLIGHT SECTION */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-950/40 via-purple-950/40 to-slate-900 border-2 border-amber-500/40 p-5 sm:p-8 shadow-2xl">
@@ -318,6 +416,38 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
+      {/* NEWEST ACCOUNTS (ACC MỚI LÊN SÀN) */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-cyan-500/15 text-cyan-400">
+                <Clock size={16} />
+              </span>
+              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">ACC MỚI LÊN SÀN HÔM NAY</h2>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">Tài khoản vừa được các seller đăng bán và kiểm duyệt hoàn tất</p>
+          </div>
+
+          <button
+            onClick={() => {
+              setFilterOptions(prev => ({ ...prev, sortBy: 'newest' }));
+              setCurrentView('accounts');
+            }}
+            className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+          >
+            <span>Xem danh sách mới nhất</span>
+            <ArrowRight size={14} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+          {newestAccounts.map(acc => (
+            <AccountCard key={acc.id} account={acc} />
+          ))}
+        </div>
+      </section>
+
       {/* 4. BUDGET ACCOUNTS (< 500K) */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
@@ -332,7 +462,7 @@ export const HomeView: React.FC = () => {
           </div>
 
           <button
-            onClick={() => handlePriceQuickFilter(500000)}
+            onClick={() => handlePriceQuickFilter(0, 500000)}
             className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
           >
             <span>Xem thêm acc dưới 500k</span>
@@ -602,6 +732,33 @@ export const HomeView: React.FC = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* 8. COMMUNITY & SAFETY GUIDES (CẨM NANG LIÊN QUÂN) */}
+      <section className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-amber-950/20 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="space-y-2 text-center md:text-left max-w-xl">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold">
+            <BookOpen size={14} />
+            <span>CẨM NANG & BÍ QUYẾT GIAO DỊCH</span>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-white">
+            Bí Quyết Mua Acc Không Bị Lừa Đảo & Hướng Dẫn Bảo Mật
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            Xem ngay các bài viết chia sẻ kinh nghiệm nhận biết acc trắng thông tin, cách liên kết CCCD/Email an toàn và mẹo chọn acc full tướng leo Thách Đấu.
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            setCurrentView('blog');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 font-bold text-xs sm:text-sm rounded-2xl flex items-center gap-2 cursor-pointer transition-all shadow-lg shrink-0"
+        >
+          <span>Khám Phá Cẩm Nang</span>
+          <ArrowRight size={16} />
+        </button>
       </section>
 
       {/* 7. WHY CHOOSE LQMARKET (CAM KẾT DỊCH VỤ) */}

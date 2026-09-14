@@ -5,6 +5,10 @@ import { UserProfile, UserRole } from '../../types';
 import confetti from '../../utils/confetti';
 import { AdminPayoutManagement } from './AdminPayoutManagement';
 import { AdminMysteryBoxManagement } from './AdminMysteryBoxManagement';
+import { AdminSellerVerificationTab } from './AdminSellerVerificationTab';
+import { AdminDisputesTab } from './AdminDisputesTab';
+import { AdminCouponsTab } from './AdminCouponsTab';
+import { AdminAuditLogsTab } from './AdminAuditLogsTab';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -40,7 +44,9 @@ import {
   BadgeCheck,
   PackageOpen,
   Database,
-  Gamepad2
+  Gamepad2,
+  Tag,
+  FileText
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -67,10 +73,14 @@ export const AdminDashboardView: React.FC = () => {
     seedSampleData,
     cloudSyncStatus,
     isAutoApproveAccounts,
-    adminToggleAutoApproveAccounts
+    adminToggleAutoApproveAccounts,
+    sellerVerificationRequests,
+    disputeTickets
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'accounts' | 'disputes' | 'payouts' | 'users' | 'mystery_box' | 'settings'>('pending');
+  const [activeTab, setActiveTab] = useState<
+    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'payouts' | 'users' | 'mystery_box' | 'audit_logs' | 'settings'
+  >('pending');
   const [rejectionModalAccId, setRejectionModalAccId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
@@ -439,11 +449,40 @@ export const AdminDashboardView: React.FC = () => {
           >
             <AlertTriangle size={13} />
             <span>Khiếu Nại</span>
-            {disputedOrders.length > 0 && (
+            {(disputedOrders.length > 0 || (disputeTickets && disputeTickets.filter(t => t.status === 'open').length > 0)) && (
               <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full animate-bounce">
-                {disputedOrders.length}
+                {disputedOrders.length + (disputeTickets ? disputeTickets.filter(t => t.status === 'open').length : 0)}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('seller_verification')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'seller_verification'
+                ? 'bg-red-500 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <BadgeCheck size={13} />
+            <span>Duyệt Seller</span>
+            {sellerVerificationRequests && sellerVerificationRequests.filter(r => r.status === 'pending').length > 0 && (
+              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                {sellerVerificationRequests.filter(r => r.status === 'pending').length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('coupons')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'coupons'
+                ? 'bg-red-500 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Tag size={13} />
+            <span>Mã Giảm Giá</span>
           </button>
 
           <button
@@ -484,6 +523,18 @@ export const AdminDashboardView: React.FC = () => {
           >
             <PackageOpen size={13} />
             <span>Túi Mù</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('audit_logs')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'audit_logs'
+                ? 'bg-red-500 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <FileText size={13} />
+            <span>Nhật Ký</span>
           </button>
 
           <button
@@ -1318,6 +1369,21 @@ export const AdminDashboardView: React.FC = () => {
       {/* TAB: MYSTERY BOX MANAGEMENT */}
       {activeTab === 'mystery_box' && (
         <AdminMysteryBoxManagement />
+      )}
+
+      {/* TAB: SELLER VERIFICATION */}
+      {activeTab === 'seller_verification' && (
+        <AdminSellerVerificationTab />
+      )}
+
+      {/* TAB: COUPONS */}
+      {activeTab === 'coupons' && (
+        <AdminCouponsTab />
+      )}
+
+      {/* TAB: AUDIT LOGS */}
+      {activeTab === 'audit_logs' && (
+        <AdminAuditLogsTab />
       )}
 
       {/* DISPUTE RESOLUTION CONFIRMATION MODAL */}

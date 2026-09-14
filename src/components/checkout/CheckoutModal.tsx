@@ -38,7 +38,8 @@ export const CheckoutModal: React.FC = () => {
     setIsWalletOpen,
     setCurrentView,
     orders,
-    userInventory
+    userInventory,
+    applyCouponCode
   } = useApp();
 
   const [agreeTerms, setAgreeTerms] = useState(true);
@@ -46,6 +47,9 @@ export const CheckoutModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
   const [selectedVoucherId, setSelectedVoucherId] = useState<string>('');
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
+  const [couponError, setCouponError] = useState('');
 
   const [copiedUser, setCopiedUser] = useState(false);
   const [copiedPass, setCopiedPass] = useState(false);
@@ -62,11 +66,30 @@ export const CheckoutModal: React.FC = () => {
 
   const selectedVoucher = availableVouchers.find(v => v.id === selectedVoucherId);
   const voucherDiscount = selectedVoucher ? Math.min(account.price, selectedVoucher.value) : 0;
-  const finalPrice = Math.max(0, account.price - voucherDiscount);
+  const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
+  const totalDiscount = Math.min(account.price, voucherDiscount + couponDiscount);
+  const finalPrice = Math.max(0, account.price - totalDiscount);
 
   const completedOrder = completedOrderId ? orders.find(o => o.id === completedOrderId) : null;
   const isBalanceSufficient = currentUser.balance >= finalPrice;
   const deficitAmount = Math.max(0, finalPrice - currentUser.balance);
+
+  const handleApplyCoupon = () => {
+    setCouponError('');
+    if (!couponInput.trim()) return;
+    const res = applyCouponCode(couponInput.trim(), account.price);
+    if (res.success) {
+      setAppliedCoupon({ code: couponInput.trim().toUpperCase(), discount: res.discount });
+    } else {
+      setCouponError(res.message);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
 
   const handleClose = () => {
     setIsCheckoutOpen(false);
@@ -99,11 +122,12 @@ export const CheckoutModal: React.FC = () => {
     setErrorMessage('');
 
     setTimeout(() => {
-      const voucherPayload = selectedVoucher
+      const usedCode = appliedCoupon?.code || selectedVoucher?.voucherCode || selectedVoucher?.title || 'COUPON';
+      const voucherPayload = totalDiscount > 0
         ? {
-            code: selectedVoucher.voucherCode || selectedVoucher.title,
-            discount: voucherDiscount,
-            inventoryItemId: selectedVoucher.id
+            code: usedCode,
+            discount: totalDiscount,
+            inventoryItemId: selectedVoucher?.id
           }
         : undefined;
 
@@ -338,6 +362,64 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
+              {/* Promo Coupon Code Input */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                    <Ticket size={15} />
+                    <span>Mã Giảm Giá Khuyến Mãi (Coupon):</span>
+                  </div>
+                  {appliedCoupon && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded">
+                      ĐÃ ÁP DỤNG
+                    </span>
+                  )}
+                </div>
+
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs">
+                    <div>
+                      <span className="font-mono font-black text-emerald-400 mr-2">{appliedCoupon.code}</span>
+                      <span className="text-slate-300">Giảm -{appliedCoupon.discount.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-bold cursor-pointer"
+                    >
+                      Hủy mã
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponInput}
+                        onChange={e => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          setCouponError('');
+                        }}
+                        placeholder="Nhập mã (ví dụ: LQMARKET10, VIP50K)"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyCoupon}
+                        className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition-all shrink-0"
+                      >
+                        Áp Dụng
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="text-[11px] text-rose-400 flex items-center gap-1">
+                        <AlertCircle size={12} /> {couponError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Order Cost Breakdown */}
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5 text-xs">
                 <div className="flex justify-between text-slate-300">
@@ -347,9 +429,17 @@ export const CheckoutModal: React.FC = () => {
                 {voucherDiscount > 0 && (
                   <div className="flex justify-between text-cyan-400 font-medium">
                     <span className="flex items-center gap-1">
-                      <Ticket size={13} /> Voucher giảm giá (Sàn tài trợ):
+                      <Ticket size={13} /> Voucher giảm giá (Túi Mù):
                     </span>
                     <span className="font-bold font-mono">-{voucherDiscount.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                )}
+                {couponDiscount > 0 && (
+                  <div className="flex justify-between text-amber-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Ticket size={13} /> Mã giảm giá ({appliedCoupon?.code}):
+                    </span>
+                    <span className="font-bold font-mono">-{couponDiscount.toLocaleString('vi-VN')}đ</span>
                   </div>
                 )}
                 <div className="flex justify-between text-slate-300">

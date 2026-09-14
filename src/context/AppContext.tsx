@@ -12,8 +12,15 @@ import {
   MysteryBoxTierConfig,
   MysteryBoxRewardItem,
   MysteryBoxHistoryItem,
-  UserInventoryItem
+  UserInventoryItem,
+  SellerVerificationRequest,
+  CouponItem,
+  DisputeTicket,
+  AffiliateStats,
+  PriceAlertItem,
+  AdminAuditLog
 } from '../types';
+import { INITIAL_COUPONS } from '../data/couponData';
 import {
   registerUser as apiRegisterUser,
   loginUser as apiLoginUser,
@@ -52,8 +59,8 @@ interface AppContextType {
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
 
   // Navigation & Views
-  currentView: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide';
-  setCurrentView: (view: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide') => void;
+  currentView: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog';
+  setCurrentView: (view: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog') => void;
   selectedAccountId: string | null;
   setSelectedAccountId: (id: string | null) => void;
   selectedSellerId: string | null;
@@ -74,6 +81,54 @@ interface AppContextType {
   activeChatPartner: { id: string; name: string; avatar: string; role: string } | null;
   openChatWith: (recipient: { id: string; name: string; avatar: string; role: string }) => void;
   closeChat: () => void;
+
+  // Comparison Tool
+  compareAccountIds: string[];
+  isCompareModalOpen: boolean;
+  setIsCompareModalOpen: (open: boolean) => void;
+  addToCompare: (accountId: string) => void;
+  removeFromCompare: (accountId: string) => void;
+  clearCompare: () => void;
+
+  // Price Alerts
+  priceAlerts: PriceAlertItem[];
+  isPriceAlertModalOpen: boolean;
+  setIsPriceAlertModalOpen: (open: boolean) => void;
+  targetPriceAlertAccount: AccountItem | null;
+  setTargetPriceAlertAccount: (account: AccountItem | null) => void;
+  setPriceAlert: (accountId: string, targetPrice: number) => void;
+  removePriceAlert: (id: string) => void;
+
+  // Loyalty & Member Tier
+  isLoyaltyModalOpen: boolean;
+  setIsLoyaltyModalOpen: (open: boolean) => void;
+
+  // Coupons & Discounts
+  coupons: CouponItem[];
+  adminCreateCoupon: (couponData: Omit<CouponItem, 'id' | 'usedCount' | 'validFrom' | 'validTo' | 'isActive'>) => void;
+  adminToggleCoupon: (id: string) => void;
+  adminDeleteCoupon: (id: string) => void;
+  applyCouponCode: (code: string, orderPrice: number) => { success: boolean; discount: number; message: string; coupon?: CouponItem };
+
+  // Affiliate & Referral
+  affiliateStats: AffiliateStats;
+
+  // Seller Center & Verification
+  sellerVerificationRequests: SellerVerificationRequest[];
+  submitSellerVerification: (data: Partial<SellerVerificationRequest> & { idCardNumber: string; warrantyCommitment: boolean }) => void;
+  adminReviewSellerVerification: (id: string, status: 'approved' | 'rejected', reason?: string) => void;
+
+  // Disputes (Khiếu Nại)
+  disputeTickets: DisputeTicket[];
+  createDisputeTicket: (orderId: string, reason: string, evidencePhotos?: string[], evidenceVideo?: string) => void;
+  adminResolveDisputeTicket: (ticketId: string, status: 'resolved_buyer_refund' | 'resolved_seller_payout' | 'more_info_needed', note?: string) => void;
+
+  // Admin Audit Logs
+  adminAuditLogs: AdminAuditLog[];
+  logAdminAction: (action: AdminAuditLog['action'], targetType: AdminAuditLog['targetType'], targetId: string, details: string, amount?: number) => void;
+
+  // Online Users dynamic stats
+  onlineUsersCount: number;
 
   // Accounts
   accounts: AccountItem[];
@@ -284,7 +339,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedBoxTierForUnboxing, setSelectedBoxTierForUnboxing] = useState<string | null>(null);
 
   // View States
-  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog'>('home');
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -292,6 +347,222 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatRecipient, setChatRecipient] = useState<{ id: string; name: string; avatar: string; role: string } | null>(null);
+
+  // Comparison Tool State
+  const [compareAccountIds, setCompareAccountIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_compare_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+
+  // Price Alerts State
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlertItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_price_alerts');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isPriceAlertModalOpen, setIsPriceAlertModalOpen] = useState(false);
+  const [targetPriceAlertAccount, setTargetPriceAlertAccount] = useState<AccountItem | null>(null);
+
+  // Loyalty Modal State
+  const [isLoyaltyModalOpen, setIsLoyaltyModalOpen] = useState(false);
+
+  // Coupons State
+  const [coupons, setCoupons] = useState<CouponItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_coupons');
+      return saved ? JSON.parse(saved) : INITIAL_COUPONS;
+    } catch {
+      return INITIAL_COUPONS;
+    }
+  });
+
+  // Affiliate Stats State
+  const [affiliateStats, setAffiliateStats] = useState<AffiliateStats>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_affiliate_stats');
+      return saved ? JSON.parse(saved) : {
+        totalClicks: 1248,
+        totalSignups: 87,
+        totalOrders: 21,
+        totalCommission: 1250000,
+        paidCommission: 850000,
+        pendingCommission: 400000
+      };
+    } catch {
+      return {
+        totalClicks: 1248,
+        totalSignups: 87,
+        totalOrders: 21,
+        totalCommission: 1250000,
+        paidCommission: 850000,
+        pendingCommission: 400000
+      };
+    }
+  });
+
+  // Seller Verification Requests State
+  const [sellerVerificationRequests, setSellerVerificationRequests] = useState<SellerVerificationRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_seller_verifications');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'svr_01',
+          userId: 'u2',
+          userName: 'Tuấn Shop LQ',
+          userEmail: 'tuan@lqmarket.com',
+          userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
+          fullName: 'Nguyễn Văn Tuấn',
+          userPhone: '0988776655',
+          idCardNumber: '001202008899',
+          zaloPhone: '0988776655',
+          socialLink: 'https://facebook.com/tuanshop',
+          agreedWarranty: true,
+          status: 'approved',
+          appliedAt: '2025-01-10T08:00:00.000Z'
+        },
+        {
+          id: 'svr_02',
+          userId: 'u4',
+          userName: 'LQ Pro Seller',
+          userEmail: 'seller@lqmarket.com',
+          userAvatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&auto=format&fit=crop&q=80',
+          fullName: 'Trần Văn Mạnh',
+          userPhone: '0912345678',
+          idCardNumber: '024201004567',
+          zaloPhone: '0912345678',
+          socialLink: 'https://facebook.com/lqproshop',
+          agreedWarranty: true,
+          status: 'pending',
+          appliedAt: new Date().toISOString()
+        }
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  // Dispute Tickets State
+  const [disputeTickets, setDisputeTickets] = useState<DisputeTicket[]>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_dispute_tickets');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'DSP123',
+          orderId: 'ord_1',
+          orderCode: 'ORD456',
+          buyerId: 'u1',
+          buyerName: 'Nguyễn Hoàng',
+          sellerId: 'u2',
+          sellerName: 'Tuấn Shop LQ',
+          accountId: 'acc_1',
+          accountCode: 'LQ999',
+          accountTitle: 'Acc Full Tướng Full Skin Tinh Hệ',
+          amount: 1200000,
+          reason: 'Mật khẩu báo sai khi đăng nhập vào Garena, đã thử đổi pass không thành công.',
+          evidencePhotos: ['https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=80'],
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        }
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  // Admin Audit Logs State
+  const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_audit_logs');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'log_01',
+          timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
+          adminId: 'admin_1',
+          adminName: 'Super Admin',
+          action: 'APPROVE_WITHDRAWAL',
+          targetType: 'transaction',
+          targetId: 'tx_withdraw_101',
+          details: 'Duyệt yêu cầu rút tiền MBBank 0988776655 số tiền 850.000đ',
+          amount: 850000
+        },
+        {
+          id: 'log_02',
+          timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
+          adminId: 'admin_1',
+          adminName: 'Super Admin',
+          action: 'APPROVE_SELLER',
+          targetType: 'user',
+          targetId: 'u2',
+          details: 'Xác minh hồ sơ người bán uy tín Tuấn Shop LQ (CCCD 001202008899)'
+        }
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  // Save to localStorage effects
+  useEffect(() => {
+    try {
+      localStorage.setItem('lqmarket_compare_ids', JSON.stringify(compareAccountIds));
+    } catch (e) {
+      console.warn('Could not save compare ids', e);
+    }
+  }, [compareAccountIds]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lqmarket_price_alerts', JSON.stringify(priceAlerts));
+    } catch (e) {
+      console.warn('Could not save price alerts', e);
+    }
+  }, [priceAlerts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lqmarket_coupons', JSON.stringify(coupons));
+    } catch (e) {
+      console.warn('Could not save coupons', e);
+    }
+  }, [coupons]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lqmarket_seller_verifications', JSON.stringify(sellerVerificationRequests));
+    } catch (e) {
+      console.warn('Could not save seller verifications', e);
+    }
+  }, [sellerVerificationRequests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lqmarket_dispute_tickets', JSON.stringify(disputeTickets));
+    } catch (e) {
+      console.warn('Could not save dispute tickets', e);
+    }
+  }, [disputeTickets]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lqmarket_audit_logs', JSON.stringify(adminAuditLogs));
+    } catch (e) {
+      console.warn('Could not save audit logs', e);
+    }
+  }, [adminAuditLogs]);
+
+  // Online users count (dynamic based on real users + active connections)
+  const onlineUsersCount = useMemo(() => {
+    const base = Math.max(120, allUsers.length * 8 + 35);
+    return base;
+  }, [allUsers.length]);
 
   // Auth & Profile Modal States
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -1194,6 +1465,263 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: `Đã giải ngân đơn hàng ${order.orderCode} thành công!` };
   };
 
+  // Admin Audit Log Helper
+  const logAdminAction = useCallback((
+    action: AdminAuditLog['action'],
+    targetType: AdminAuditLog['targetType'],
+    targetId: string,
+    details: string,
+    amount?: number
+  ) => {
+    const newLog: AdminAuditLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      adminId: currentUser.id || 'admin_1',
+      adminName: currentUser.name || 'Super Admin',
+      action,
+      targetType,
+      targetId,
+      details,
+      amount
+    };
+    setAdminAuditLogs(prev => [newLog, ...prev]);
+  }, [currentUser]);
+
+  // Comparison Tool Actions
+  const addToCompare = (accountId: string) => {
+    setCompareAccountIds(prev => {
+      if (prev.includes(accountId)) return prev;
+      if (prev.length >= 3) {
+        return [...prev.slice(1), accountId];
+      }
+      return [...prev, accountId];
+    });
+    setIsCompareModalOpen(true);
+  };
+
+  const removeFromCompare = (accountId: string) => {
+    setCompareAccountIds(prev => prev.filter(id => id !== accountId));
+  };
+
+  const clearCompare = () => {
+    setCompareAccountIds([]);
+  };
+
+  // Price Alerts Actions
+  const setPriceAlert = (accountId: string, targetPrice: number) => {
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) return;
+
+    const newAlert: PriceAlertItem = {
+      id: `alert_${Date.now()}`,
+      userId: currentUser.id || 'user_guest',
+      userEmail: currentUser.email || '',
+      accountId,
+      accountCode: account.code,
+      accountTitle: account.title,
+      targetPrice,
+      currentPrice: account.price,
+      createdAt: new Date().toISOString(),
+      isTriggered: account.price <= targetPrice
+    };
+
+    setPriceAlerts(prev => [newAlert, ...prev.filter(a => a.accountId !== accountId)]);
+    setIsPriceAlertModalOpen(false);
+  };
+
+  const removePriceAlert = (id: string) => {
+    setPriceAlerts(prev => prev.filter(a => a.id !== id));
+  };
+
+  // Coupons Actions
+  const adminCreateCoupon = (couponData: Omit<CouponItem, 'id' | 'usedCount' | 'validFrom' | 'validTo' | 'isActive'>) => {
+    const newCoupon: CouponItem = {
+      ...couponData,
+      id: `cpn_${Date.now()}`,
+      usedCount: 0,
+      validFrom: new Date().toISOString(),
+      validTo: new Date(Date.now() + 30 * 86400000).toISOString(),
+      isActive: true
+    };
+    setCoupons(prev => [newCoupon, ...prev]);
+    logAdminAction('CREATE_COUPON', 'coupon', newCoupon.code, `Tạo mã giảm giá mới: ${newCoupon.code}`);
+  };
+
+  const adminToggleCoupon = (id: string) => {
+    setCoupons(prev =>
+      prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+    );
+  };
+
+  const adminDeleteCoupon = (id: string) => {
+    setCoupons(prev => prev.filter(c => c.id !== id));
+  };
+
+  const applyCouponCode = (code: string, orderPrice: number): {
+    success: boolean;
+    discount: number;
+    message: string;
+    coupon?: CouponItem;
+  } => {
+    const cleanCode = code.trim().toUpperCase();
+    const found = coupons.find(c => c.code.toUpperCase() === cleanCode);
+
+    if (!found) {
+      return { success: false, discount: 0, message: 'Mã giảm giá không tồn tại hoặc đã hết hạn.' };
+    }
+    if (!found.isActive) {
+      return { success: false, discount: 0, message: 'Mã giảm giá hiện đang tạm khóa.' };
+    }
+    if (orderPrice < found.minOrder) {
+      return {
+        success: false,
+        discount: 0,
+        message: `Đơn hàng phải từ ${found.minOrder.toLocaleString('vi-VN')}đ để áp dụng mã này.`
+      };
+    }
+    if (found.usedCount >= found.maxUses) {
+      return { success: false, discount: 0, message: 'Mã giảm giá đã hết lượt sử dụng.' };
+    }
+
+    let discount = 0;
+    if (found.discountPercent) {
+      discount = Math.round((orderPrice * found.discountPercent) / 100);
+      if (found.maxDiscount && discount > found.maxDiscount) {
+        discount = found.maxDiscount;
+      }
+    } else if (found.discountAmount) {
+      discount = Math.min(orderPrice, found.discountAmount);
+    }
+
+    return {
+      success: true,
+      discount,
+      message: `Đã áp dụng mã ${found.code}: Giảm ${discount.toLocaleString('vi-VN')}đ`,
+      coupon: found
+    };
+  };
+
+  // Seller Verification Actions
+  const submitSellerVerification = (data: Partial<SellerVerificationRequest> & { idCardNumber: string; warrantyCommitment: boolean }) => {
+    const newReq: SellerVerificationRequest = {
+      ...data,
+      id: `svr_${Date.now()}`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userEmail: currentUser.email,
+      userAvatar: currentUser.avatar,
+      userPhone: data.phone || data.userPhone || currentUser.phone || '',
+      fullName: data.fullName || currentUser.name,
+      phone: data.phone || data.userPhone || currentUser.phone || '',
+      idCardNumber: data.idCardNumber,
+      warrantyCommitment: data.warrantyCommitment,
+      status: 'pending',
+      appliedAt: new Date().toISOString()
+    };
+    setSellerVerificationRequests(prev => [newReq, ...prev]);
+  };
+
+  const adminReviewSellerVerification = (id: string, status: 'approved' | 'rejected', reason?: string) => {
+    setSellerVerificationRequests(prev =>
+      prev.map(r => (r.id === id ? { ...r, status, rejectionReason: reason } : r))
+    );
+
+    const targetReq = sellerVerificationRequests.find(r => r.id === id);
+    if (targetReq) {
+      logAdminAction(
+        status === 'approved' ? 'APPROVE_SELLER' : 'REJECT_SELLER',
+        'user',
+        targetReq.userId,
+        `${status === 'approved' ? 'Phê duyệt' : 'Từ chối'} xác minh người bán: ${targetReq.fullName} (${targetReq.userName})`
+      );
+
+      if (status === 'approved') {
+        setAllUsers(prev =>
+          prev.map(u => (u.id === targetReq.userId ? { ...u, isVerifiedSeller: true } : u))
+        );
+      }
+    }
+  };
+
+  // Dispute Tickets Actions
+  const createDisputeTicket = (orderId: string, reason: string, evidencePhotos: string[] = [], evidenceVideo: string = '') => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const newTicket: DisputeTicket = {
+      id: `DSP${Date.now().toString().slice(-4)}`,
+      orderId,
+      orderCode: order.orderCode,
+      buyerId: order.buyerId,
+      buyerName: order.buyerName,
+      sellerId: order.sellerId,
+      sellerName: order.sellerName,
+      accountId: order.accountId,
+      accountCode: order.accountCode,
+      accountTitle: order.accountTitle,
+      amount: order.accountPrice,
+      reason,
+      evidencePhotos,
+      evidenceVideo,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    setDisputeTickets(prev => [newTicket, ...prev]);
+    disputeOrder(orderId, reason);
+  };
+
+  const adminResolveDisputeTicket = (
+    ticketId: string,
+    status: 'resolved_buyer_refund' | 'resolved_seller_payout' | 'more_info_needed',
+    note?: string
+  ) => {
+    setDisputeTickets(prev =>
+      prev.map(d =>
+        d.id === ticketId
+          ? {
+              ...d,
+              status,
+              adminDecisionNote: note,
+              resolvedAt: new Date().toISOString()
+            }
+          : d
+      )
+    );
+
+    const ticket = disputeTickets.find(d => d.id === ticketId);
+    if (!ticket) return;
+
+    if (status === 'resolved_buyer_refund') {
+      // Refund escrow balance back to Buyer
+      setAllUsers(prev =>
+        prev.map(u =>
+          u.id === ticket.buyerId ? { ...u, balance: (u.balance || 0) + ticket.amount } : u
+        )
+      );
+      setOrders(prev =>
+        prev.map(o => (o.id === ticket.orderId ? { ...o, status: 'refunded' } : o))
+      );
+      logAdminAction(
+        'REFUND_DISPUTE',
+        'dispute',
+        ticketId,
+        `Hoàn tiền 100% khiếu nại #${ticketId} cho Buyer ${ticket.buyerName}: ${note || ''}`,
+        ticket.amount
+      );
+    } else if (status === 'resolved_seller_payout') {
+      // Payout escrow balance to Seller
+      confirmOrderReceived(ticket.orderId);
+      logAdminAction(
+        'RESOLVE_DISPUTE_SELLER',
+        'dispute',
+        ticketId,
+        `Giải ngân số tiền khiếu nại #${ticketId} cho Seller ${ticket.sellerName}: ${note || ''}`,
+        ticket.amount
+      );
+    }
+  };
+
   // Chat
   const sendMessage = (recipientId: string, text: string, orderId?: string) => {
     const newMsg: ChatMessage = {
@@ -1604,6 +2132,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeChatPartner: chatRecipient,
         openChatWith,
         closeChat,
+
+        // Comparison Tool
+        compareAccountIds,
+        isCompareModalOpen,
+        setIsCompareModalOpen,
+        addToCompare,
+        removeFromCompare,
+        clearCompare,
+
+        // Price Alerts
+        priceAlerts,
+        isPriceAlertModalOpen,
+        setIsPriceAlertModalOpen,
+        targetPriceAlertAccount,
+        setTargetPriceAlertAccount,
+        setPriceAlert,
+        removePriceAlert,
+
+        // Loyalty Modal
+        isLoyaltyModalOpen,
+        setIsLoyaltyModalOpen,
+
+        // Coupons
+        coupons,
+        adminCreateCoupon,
+        adminToggleCoupon,
+        adminDeleteCoupon,
+        applyCouponCode,
+
+        // Affiliate
+        affiliateStats,
+
+        // Seller Verification
+        sellerVerificationRequests,
+        submitSellerVerification,
+        adminReviewSellerVerification,
+
+        // Dispute Tickets
+        disputeTickets,
+        createDisputeTicket,
+        adminResolveDisputeTicket,
+
+        // Admin Audit Logs
+        adminAuditLogs,
+        logAdminAction,
+
+        // Online Stats
+        onlineUsersCount,
 
         accounts,
         filterOptions,

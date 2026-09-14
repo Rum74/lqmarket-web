@@ -12,7 +12,13 @@ import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { WishlistView } from './components/wishlist/WishlistView';
 import { GuideView } from './components/guide/GuideView';
 import { MysteryBoxView } from './components/mysteryBox/MysteryBoxView';
+import { SellerCenterView } from './components/seller/SellerCenterView';
+import { AffiliateView } from './components/affiliate/AffiliateView';
+import { BlogView } from './components/blog/BlogView';
 import { AccountDetailModal } from './components/accounts/AccountDetailModal';
+import { AccountCompareModal } from './components/compare/AccountCompareModal';
+import { PriceAlertModal } from './components/accounts/PriceAlertModal';
+import { LoyaltyTierModal } from './components/loyalty/LoyaltyTierModal';
 import { CheckoutModal } from './components/checkout/CheckoutModal';
 import { WalletModal } from './components/wallet/WalletModal';
 import { ChatModal } from './components/chat/ChatModal';
@@ -21,7 +27,18 @@ import { SellerProfileModal } from './components/seller/SellerProfileModal';
 import { ProfileModal } from './components/profile/ProfileModal';
 
 const MainLayout: React.FC = () => {
-  const { currentView, isProfileModalOpen, setIsProfileModalOpen } = useApp();
+  const {
+    currentView,
+    isProfileModalOpen,
+    setIsProfileModalOpen,
+    isCompareModalOpen,
+    setIsCompareModalOpen,
+    isPriceAlertModalOpen,
+    setIsPriceAlertModalOpen,
+    targetPriceAlertAccount,
+    isLoyaltyModalOpen,
+    setIsLoyaltyModalOpen
+  } = useApp();
 
   return (
     <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950 pb-16 md:pb-0">
@@ -41,10 +58,26 @@ const MainLayout: React.FC = () => {
         {currentView === 'admin' && <AdminDashboardView />}
         {currentView === 'wishlist' && <WishlistView />}
         {currentView === 'guide' && <GuideView />}
+        {currentView === 'seller_center' && <SellerCenterView />}
+        {currentView === 'affiliate' && <AffiliateView />}
+        {currentView === 'blog' && <BlogView />}
       </main>
 
       {/* Account Detail Modal */}
       <AccountDetailModal />
+
+      {/* Account Compare Modal */}
+      <AccountCompareModal isOpen={isCompareModalOpen} onClose={() => setIsCompareModalOpen(false)} />
+
+      {/* Price Alert Modal */}
+      <PriceAlertModal
+        isOpen={isPriceAlertModalOpen}
+        onClose={() => setIsPriceAlertModalOpen(false)}
+        account={targetPriceAlertAccount}
+      />
+
+      {/* Member Loyalty Tier Modal */}
+      <LoyaltyTierModal isOpen={isLoyaltyModalOpen} onClose={() => setIsLoyaltyModalOpen(false)} />
 
       {/* User Profile & Password/Avatar Settings Modal */}
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
