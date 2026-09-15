@@ -32,7 +32,7 @@ router.post('/apply', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
     }
 
-    let user = await User.findOne({
+    let user: any = await User.findOne({
       $or: [
         { id: userId },
         { username: userId },
