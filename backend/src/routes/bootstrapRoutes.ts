@@ -59,10 +59,16 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           ? {
               $or: [
                 { status: { $in: ['approved', 'sold'] } },
-                { sellerId: currentUserId }
+                { sellerId: currentUserId },
+                { status: { $exists: false } }
               ]
             }
-          : { status: { $in: ['approved', 'sold'] } }
+          : {
+              $or: [
+                { status: { $in: ['approved', 'sold'] } },
+                { status: { $exists: false } }
+              ]
+            }
       )
         .sort({ createdAt: -1 })
         .lean(),
@@ -190,9 +196,20 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
 
     if (currentUserId) {
       const [u, notifs, convs, alerts] = await Promise.all([
-        User.findOne({ id: currentUserId }).lean(),
+        User.findOne({
+          $or: [
+            { id: currentUserId },
+            { username: currentUserId },
+            { email: currentUserId }
+          ]
+        }).lean(),
         Notification.find({ userId: currentUserId }).sort({ createdAt: -1 }).limit(50).lean(),
-        Conversation.find({ participantIds: currentUserId }).sort({ lastMessageTime: -1 }).lean(),
+        Conversation.find({
+          $or: [
+            { participants: currentUserId },
+            { participantIds: currentUserId }
+          ]
+        }).sort({ lastMessageTime: -1 }).lean(),
         PriceAlert.find({ userId: currentUserId }).sort({ createdAt: -1 }).lean()
       ]);
 
@@ -202,14 +219,14 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           name: u.name,
           username: u.username,
           email: u.email,
-          phone: u.phone,
-          role: u.role,
-          avatar: u.avatar,
+          phone: u.phone || '',
+          role: u.role || 'buyer',
+          avatar: u.avatar || '',
           balance: u.balance || 0,
           pendingBalance: u.pendingBalance || 0,
           rating: u.rating || 5.0,
           completedSales: u.completedSales || 0,
-          isVerifiedSeller: u.isVerifiedSeller,
+          isVerifiedSeller: !!u.isVerifiedSeller,
           sellerTier: u.sellerTier || 'BASIC SELLER',
           bio: u.bio || '',
           bankName: u.bankName || '',
@@ -217,6 +234,28 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
           bankAccountName: u.bankAccountName || '',
           createdAt: u.createdAt,
           wishlistIds: u.wishlistIds || []
+        };
+      } else if (req.user) {
+        currentUser = {
+          id: req.user.userId,
+          name: req.user.name || req.user.username || 'Người dùng',
+          username: req.user.username || req.user.userId,
+          email: req.user.email || '',
+          phone: '',
+          role: req.user.role || 'buyer',
+          avatar: '',
+          balance: 0,
+          pendingBalance: 0,
+          rating: 5.0,
+          completedSales: 0,
+          isVerifiedSeller: false,
+          sellerTier: 'BASIC SELLER',
+          bio: '',
+          bankName: '',
+          bankAccount: '',
+          bankAccountName: '',
+          createdAt: new Date().toISOString(),
+          wishlistIds: []
         };
       }
 

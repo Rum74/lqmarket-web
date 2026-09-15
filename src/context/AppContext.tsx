@@ -384,27 +384,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Affiliate Stats State
+  // Affiliate Stats State (Clean initial zero-state, purge any legacy sample data)
   const [affiliateStats, setAffiliateStats] = useState<AffiliateStats>(() => {
+    const emptyStats: AffiliateStats = {
+      userId: '',
+      refCode: '',
+      refLink: '',
+      totalClicks: 0,
+      totalSignups: 0,
+      totalOrders: 0,
+      totalCommission: 0,
+      paidCommission: 0,
+      pendingCommission: 0
+    };
     try {
       const saved = localStorage.getItem('lqmarket_affiliate_stats');
-      return saved ? JSON.parse(saved) : {
-        totalClicks: 1248,
-        totalSignups: 87,
-        totalOrders: 21,
-        totalCommission: 1250000,
-        paidCommission: 850000,
-        pendingCommission: 400000
-      };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Automatically purge old mock values if found in storage
+        if (parsed.totalClicks === 1248 || parsed.totalCommission === 1250000) {
+          localStorage.removeItem('lqmarket_affiliate_stats');
+          return emptyStats;
+        }
+        return { ...emptyStats, ...parsed };
+      }
+      return emptyStats;
     } catch {
-      return {
-        totalClicks: 1248,
-        totalSignups: 87,
-        totalOrders: 21,
-        totalCommission: 1250000,
-        paidCommission: 850000,
-        pendingCommission: 400000
-      };
+      return emptyStats;
     }
   });
 

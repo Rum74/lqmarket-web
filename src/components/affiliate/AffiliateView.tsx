@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import confetti from '../../utils/confetti';
+import api from '../../lib/apiClient';
 import {
   Share2,
   Copy,
@@ -22,9 +23,27 @@ export const AffiliateView: React.FC = () => {
   const { currentUser, affiliateStats, isLoggedIn, openLoginModal, openRegisterModal } = useApp();
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [liveStats, setLiveStats] = useState<any>(null);
 
-  const refCode = currentUser.username || currentUser.name.replace(/\s+/g, '').toUpperCase() || 'LQVIP88';
+  const refCode = currentUser?.username || (currentUser?.name ? currentUser.name.replace(/\s+/g, '').toUpperCase() : '') || 'LQVIP88';
   const refLink = `${window.location.origin}/?ref=${encodeURIComponent(refCode)}`;
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      api.get('/api/affiliate/stats').then((res) => {
+        if (res && res.success && res.stats) {
+          setLiveStats(res.stats);
+        }
+      }).catch(() => {});
+    }
+  }, [isLoggedIn]);
+
+  const totalClicks = Number(liveStats?.totalClicks ?? affiliateStats?.totalClicks ?? 0);
+  const totalSignups = Number(liveStats?.totalSignups ?? liveStats?.successfulReferrals ?? affiliateStats?.totalSignups ?? 0);
+  const totalOrders = Number(liveStats?.totalOrders ?? liveStats?.successfulReferrals ?? affiliateStats?.totalOrders ?? 0);
+  const totalCommission = Number(liveStats?.totalCommissionEarned ?? liveStats?.totalCommission ?? affiliateStats?.totalCommission ?? 0);
+  const paidCommission = Number(liveStats?.paidCommission ?? affiliateStats?.paidCommission ?? 0);
+  const pendingCommission = Number(liveStats?.pendingCommission ?? affiliateStats?.pendingCommission ?? 0);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(refLink);
@@ -142,7 +161,7 @@ export const AffiliateView: React.FC = () => {
             <span>Lượt Click Link</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-white">
-            {affiliateStats?.totalClicks || 1248}
+            {totalClicks.toLocaleString('vi-VN')}
           </div>
         </div>
 
@@ -152,7 +171,7 @@ export const AffiliateView: React.FC = () => {
             <span>Người Đăng Ký</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-white">
-            {affiliateStats?.totalSignups || 87}
+            {totalSignups.toLocaleString('vi-VN')}
           </div>
         </div>
 
@@ -162,7 +181,7 @@ export const AffiliateView: React.FC = () => {
             <span>Đơn Hàng Mua</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-amber-400">
-            {affiliateStats?.totalOrders || 21}
+            {totalOrders.toLocaleString('vi-VN')}
           </div>
         </div>
 
@@ -172,7 +191,7 @@ export const AffiliateView: React.FC = () => {
             <span>Tổng Hoa Hồng</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-emerald-400">
-            {(affiliateStats?.totalCommission || 1250000).toLocaleString('vi-VN')}đ
+            {totalCommission.toLocaleString('vi-VN')}đ
           </div>
         </div>
 
@@ -182,7 +201,7 @@ export const AffiliateView: React.FC = () => {
             <span>Đã Rút Về Ví</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-slate-300">
-            {(affiliateStats?.paidCommission || 850000).toLocaleString('vi-VN')}đ
+            {paidCommission.toLocaleString('vi-VN')}đ
           </div>
         </div>
 
@@ -192,7 +211,7 @@ export const AffiliateView: React.FC = () => {
             <span>Chờ Quyết Toán</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-orange-400">
-            {(affiliateStats?.pendingCommission || 400000).toLocaleString('vi-VN')}đ
+            {pendingCommission.toLocaleString('vi-VN')}đ
           </div>
         </div>
       </div>

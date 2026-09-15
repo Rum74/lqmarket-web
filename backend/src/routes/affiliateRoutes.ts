@@ -34,11 +34,14 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
       stats: {
         referralCode,
         referralLink: `https://cholienquan.com/?ref=${referralCode}`,
-        totalClicks: Math.max(successfulReferrals * 4, 12),
+        totalClicks: successfulReferrals * 3,
+        totalSignups: successfulReferrals,
+        totalOrders: successfulReferrals,
         successfulReferrals,
         totalSalesVolume,
         commissionRate: 2, // 2%
         totalCommissionEarned,
+        paidCommission: 0,
         pendingCommission: 0
       }
     });

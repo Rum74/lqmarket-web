@@ -97,14 +97,20 @@ export async function apiRequest<T = any>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_id') : null;
-  if (currentUserId && !headers.has('X-User-Id')) {
-    headers.set('X-User-Id', currentUserId);
-  }
+  // Attach fallback identity headers only if Authorization token is absent
+  // This prevents unnecessary custom header CORS preflight rejections
+  if (!token) {
+    const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_id') : null;
+    const cleanUserId = currentUserId && currentUserId !== 'null' && currentUserId !== 'undefined' ? currentUserId.trim() : null;
+    if (cleanUserId && !headers.has('X-User-Id')) {
+      headers.set('X-User-Id', cleanUserId);
+    }
 
-  const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_role') : null;
-  if (currentUserRole && !headers.has('X-User-Role')) {
-    headers.set('X-User-Role', currentUserRole);
+    const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_role') : null;
+    const cleanUserRole = currentUserRole && currentUserRole !== 'null' && currentUserRole !== 'undefined' ? currentUserRole.trim() : null;
+    if (cleanUserRole && !headers.has('X-User-Role')) {
+      headers.set('X-User-Role', cleanUserRole);
+    }
   }
 
   // Set 8-second timeout controller so UI never hangs indefinitely
