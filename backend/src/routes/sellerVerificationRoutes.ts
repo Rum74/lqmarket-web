@@ -32,9 +32,43 @@ router.post('/apply', authenticateToken, async (req: AuthenticatedRequest, res: 
       return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
     }
 
-    const user = await User.findOne({ id: userId });
+    let user = await User.findOne({
+      $or: [
+        { id: userId },
+        { username: userId },
+        { email: userId }
+      ]
+    });
+
     if (!user) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      try {
+        user = await User.create({
+          id: userId,
+          name: req.body.fullName || req.user?.name || 'Người bán',
+          username: req.user?.username || userId,
+          email: req.user?.email || `${userId}@cholienquan.com`,
+          phone: req.body.phone || req.body.userPhone || '',
+          role: 'seller',
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${userId}`,
+          balance: 0,
+          pendingBalance: 0,
+          rating: 5.0,
+          completedSales: 0,
+          isVerifiedSeller: false,
+          sellerTier: 'BASIC',
+          status: 'active'
+        });
+      } catch (err) {
+        user = {
+          id: userId,
+          name: req.body.fullName || 'Người bán',
+          username: userId,
+          email: `${userId}@cholienquan.com`,
+          phone: req.body.phone || '',
+          avatar: '',
+          role: 'seller'
+        } as any;
+      }
     }
 
     const {
@@ -107,6 +141,23 @@ router.post('/apply', authenticateToken, async (req: AuthenticatedRequest, res: 
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi gửi hồ sơ xác minh' });
+  }
+});
+
+/**
+ * GET /api/seller-verifications/my-status
+ * Check current user's seller verification status
+ */
+router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+    }
+    const request = await SellerVerification.findOne({ userId }).sort({ appliedAt: -1 }).lean();
+    return res.json({ success: true, request: request || null, data: request || null });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi kiểm tra trạng thái xác minh' });
   }
 });
 

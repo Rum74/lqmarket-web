@@ -21,18 +21,15 @@ export function getApiBaseUrl(): string {
       const hostname = window.location.hostname;
       if (
         hostname === 'cholienquan.com' ||
-        hostname === 'www.cholienquan.com' ||
-        hostname.endsWith('.vercel.app')
+        hostname === 'www.cholienquan.com'
       ) {
         rawApiUrl = 'https://api.cholienquan.com';
-      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        rawApiUrl = ''; // Use local dev proxy
       } else {
-        // Default to production API domain
-        rawApiUrl = 'https://api.cholienquan.com';
+        // Default to same-origin relative path for local development, preview environments (*.run.app), and container routing
+        rawApiUrl = '';
       }
     } else {
-      rawApiUrl = 'https://api.cholienquan.com';
+      rawApiUrl = '';
     }
   }
 
@@ -98,6 +95,16 @@ export async function apiRequest<T = any>(
   const token = getAuthToken();
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_id') : null;
+  if (currentUserId && !headers.has('X-User-Id')) {
+    headers.set('X-User-Id', currentUserId);
+  }
+
+  const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_role') : null;
+  if (currentUserRole && !headers.has('X-User-Role')) {
+    headers.set('X-User-Role', currentUserRole);
   }
 
   // Set 8-second timeout controller so UI never hangs indefinitely

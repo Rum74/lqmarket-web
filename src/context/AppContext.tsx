@@ -105,7 +105,7 @@ interface AppContextType {
 
   // Coupons & Discounts
   coupons: CouponItem[];
-  adminCreateCoupon: (couponData: Omit<CouponItem, 'id' | 'usedCount' | 'validFrom' | 'validTo' | 'isActive'>) => void;
+  adminCreateCoupon: (couponData: Omit<CouponItem, 'id' | 'usedCount' | 'validFrom' | 'validTo' | 'isActive'>) => Promise<any> | void;
   adminToggleCoupon: (id: string) => void;
   adminDeleteCoupon: (id: string) => void;
   applyCouponCode: (code: string, orderPrice: number) => { success: boolean; discount: number; message: string; coupon?: CouponItem };
@@ -115,7 +115,7 @@ interface AppContextType {
 
   // Seller Center & Verification
   sellerVerificationRequests: SellerVerificationRequest[];
-  submitSellerVerification: (data: Partial<SellerVerificationRequest> & { idCardNumber: string; warrantyCommitment: boolean }) => void;
+  submitSellerVerification: (data: Partial<SellerVerificationRequest> & { idCardNumber: string; warrantyCommitment: boolean }) => Promise<any> | void;
   adminReviewSellerVerification: (id: string, status: 'approved' | 'rejected', reason?: string) => void;
 
   // Disputes (Khiếu Nại)
@@ -481,29 +481,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>(() => {
     try {
       const saved = localStorage.getItem('lqmarket_audit_logs');
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 'log_01',
-          timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-          adminId: 'admin_1',
-          adminName: 'Super Admin',
-          action: 'APPROVE_WITHDRAWAL',
-          targetType: 'transaction',
-          targetId: 'tx_withdraw_101',
-          details: 'Duyệt yêu cầu rút tiền MBBank 0988776655 số tiền 850.000đ',
-          amount: 850000
-        },
-        {
-          id: 'log_02',
-          timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
-          adminId: 'admin_1',
-          adminName: 'Super Admin',
-          action: 'APPROVE_SELLER',
-          targetType: 'user',
-          targetId: 'u2',
-          details: 'Xác minh hồ sơ người bán uy tín Tuấn Shop LQ (CCCD 001202008899)'
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((l: any) => l.id !== 'log_01' && l.id !== 'log_02');
         }
-      ];
+      }
+      return [];
     } catch {
       return [];
     }
@@ -680,7 +664,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const loadedLogs = payload.adminAuditLogs || bootRes.adminAuditLogs;
-        if (Array.isArray(loadedLogs) && loadedLogs.length > 0) {
+        if (Array.isArray(loadedLogs)) {
           setAdminAuditLogs(loadedLogs);
         }
 
@@ -860,6 +844,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return GUEST_USER;
   }, [isLoggedIn, currentUserId, allUsers]);
+
+  // Synchronize active authentication credentials to localStorage for API headers
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (isLoggedIn && currentUser && currentUser.id) {
+        localStorage.setItem('lqmarket_current_user_id', currentUser.id);
+        localStorage.setItem('lqmarket_current_user_role', currentUser.role);
+        localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('lqmarket_current_user_id');
+        localStorage.removeItem('lqmarket_current_user_role');
+        localStorage.removeItem('lqmarket_saved_user_profile');
+      }
+    }
+  }, [isLoggedIn, currentUser]);
 
   // Auth Operations
   const openLoginModal = () => {
@@ -1571,19 +1570,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Coupons Actions
-  const adminCreateCoupon = (couponData: Omit<CouponItem, 'id' | 'usedCount' | 'validFrom' | 'validTo' | 'isActive'>) => {
+  const adminCreateCoupon = async (couponData: Omit<CouponItem, 'id' | 'usedCount' | 'validFrom' | 'validTo' | 'isActive'>) => {
+    const tempId = `cpn_${Date.now()}`;
     const newCoupon: CouponItem = {
       ...couponData,
-      id: `cpn_${Date.now()}`,
+      id: tempId,
       usedCount: 0,
       validFrom: new Date().toISOString(),
       validTo: new Date(Date.now() + 30 * 86400000).toISOString(),
       isActive: true
     };
-    setCoupons(prev => [newCoupon, ...prev]);
+    setCoupons(prev => [newCoupon, ...prev.filter(c => c.code !== newCoupon.code)]);
     logAdminAction('CREATE_COUPON', 'coupon', newCoupon.code, `Tạo mã giảm giá mới: ${newCoupon.code}`);
-    api.post('/api/coupons', newCoupon)
-      .catch(err => console.warn('Coupon create API notice:', err));
+    try {
+      const res = await api.post('/api/coupons', newCoupon);
+      if (res && res.success && (res.coupon || res.data)) {
+        const savedCoupon = res.coupon || res.data;
+        setCoupons(prev => [savedCoupon, ...prev.filter(c => c.id !== tempId && c.id !== savedCoupon.id && c.code !== savedCoupon.code)]);
+      }
+      return { success: true, coupon: res?.coupon || newCoupon };
+    } catch (err: any) {
+      console.warn('Coupon create API notice:', err);
+      return { success: false, message: err?.message || 'Lỗi tạo mã giảm giá' };
+    }
   };
 
   const adminToggleCoupon = (id: string) => {
@@ -1645,10 +1654,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Seller Verification Actions
-  const submitSellerVerification = (data: Partial<SellerVerificationRequest> & { idCardNumber: string; warrantyCommitment: boolean }) => {
+  const submitSellerVerification = async (data: Partial<SellerVerificationRequest> & { idCardNumber: string; warrantyCommitment: boolean }) => {
+    const tempId = `svr_${Date.now()}`;
     const newReq: SellerVerificationRequest = {
       ...data,
-      id: `svr_${Date.now()}`,
+      id: tempId,
       userId: currentUser.id,
       userName: currentUser.name,
       userEmail: currentUser.email,
@@ -1661,18 +1671,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'pending',
       appliedAt: new Date().toISOString()
     };
-    setSellerVerificationRequests(prev => [newReq, ...prev]);
-    api.post('/api/seller-verifications/apply', {
-      fullName: newReq.fullName,
-      idCardNumber: newReq.idCardNumber,
-      userPhone: newReq.userPhone,
-      zaloPhone: (data as any).zaloPhone || newReq.userPhone,
-      socialLink: (data as any).socialLink || '',
-      idCardFront: (data as any).idCardFront || '',
-      idCardBack: (data as any).idCardBack || '',
-      portraitWithId: (data as any).portraitWithId || '',
-      agreedWarranty: newReq.warrantyCommitment
-    }).catch(err => console.warn('Seller verification API notice:', err));
+    setSellerVerificationRequests(prev => [newReq, ...prev.filter(r => r.userId !== currentUser.id)]);
+    try {
+      const res = await api.post('/api/seller-verifications/apply', {
+        fullName: newReq.fullName,
+        idCardNumber: newReq.idCardNumber,
+        phone: newReq.userPhone,
+        userPhone: newReq.userPhone,
+        zaloPhone: (data as any).zaloPhone || newReq.userPhone,
+        socialLink: (data as any).socialLink || '',
+        idCardFrontImage: (data as any).idCardFront || (data as any).idCardFrontImage || '',
+        idCardBackImage: (data as any).idCardBack || (data as any).idCardBackImage || '',
+        portraitWithId: (data as any).portraitWithId || '',
+        agreedWarranty: newReq.warrantyCommitment,
+        warrantyCommitment: newReq.warrantyCommitment
+      });
+      if (res && res.success && (res.request || res.data)) {
+        const savedReq = res.request || res.data;
+        setSellerVerificationRequests(prev => [savedReq, ...prev.filter(r => r.id !== tempId && r.id !== savedReq.id)]);
+      }
+      return { success: true, message: res?.message || 'Gửi hồ sơ xác minh thành công' };
+    } catch (err: any) {
+      console.warn('Seller verification API notice:', err);
+      return { success: false, message: err?.message || 'Lỗi gửi hồ sơ xác minh' };
+    }
   };
 
   const adminReviewSellerVerification = (id: string, status: 'approved' | 'rejected', reason?: string) => {

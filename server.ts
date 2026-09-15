@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
 import { connectDB, getDBConnectionStatus } from './backend/src/config/db';
+import { seedMemoryMarketData } from './backend/src/config/memoryStore';
 
 // Modular Route Handlers
 import authRoutes from './backend/src/routes/authRoutes';
@@ -65,6 +66,9 @@ async function startServer() {
   // Connect Database (MongoDB Atlas) in background so server binds to port 3000 immediately
   connectDB().catch(err => {
     console.warn('Initial MongoDB connection notice:', err?.message || err);
+  });
+  seedMemoryMarketData().catch(err => {
+    console.warn('Seed memory store notice:', err?.message || err);
   });
 
   // ==========================================

@@ -63,7 +63,15 @@ router.get('/:sellerId/reviews', async (req: Request, res: Response) => {
     const { sellerId } = req.params;
     const sellerData = await getSellerStats(sellerId);
     if (!sellerData) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
+      return res.json({
+        success: true,
+        data: [],
+        reviews: [],
+        count: 0,
+        reviewsCount: 0,
+        rating: 5.0,
+        averageRating: '5.0'
+      });
     }
     return res.json({
       success: true,

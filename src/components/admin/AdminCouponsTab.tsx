@@ -13,24 +13,38 @@ export const AdminCouponsTab: React.FC = () => {
   const [maxDiscount, setMaxDiscount] = useState(100000);
   const [maxUses, setMaxUses] = useState(200);
   const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) return;
+    setIsSubmitting(true);
+    setErrorMsg('');
 
-    adminCreateCoupon({
-      code: code.trim().toUpperCase(),
-      discountPercent: discountType === 'percent' ? discountVal : undefined,
-      discountAmount: discountType === 'fixed' ? discountVal : undefined,
-      minOrder,
-      maxDiscount: discountType === 'percent' ? maxDiscount : undefined,
-      maxUses,
-      description: description || `Mã giảm giá ${code.toUpperCase()}`
-    });
+    try {
+      const res: any = await adminCreateCoupon({
+        code: code.trim().toUpperCase(),
+        discountPercent: discountType === 'percent' ? discountVal : undefined,
+        discountAmount: discountType === 'fixed' ? discountVal : undefined,
+        minOrder,
+        maxDiscount: discountType === 'percent' ? maxDiscount : undefined,
+        maxUses,
+        description: description || `Mã giảm giá ${code.toUpperCase()}`
+      });
 
-    setIsCreating(false);
-    setCode('');
-    setDescription('');
+      if (res && res.success === false) {
+        setErrorMsg(res.message || 'Lỗi tạo mã giảm giá');
+      } else {
+        setIsCreating(false);
+        setCode('');
+        setDescription('');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Lỗi khi lưu mã giảm giá');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,6 +83,12 @@ export const AdminCouponsTab: React.FC = () => {
           </div>
 
           <form onSubmit={handleCreate} className="space-y-4">
+            {errorMsg && (
+              <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle size={14} />
+                <span>{errorMsg}</span>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
@@ -177,9 +197,10 @@ export const AdminCouponsTab: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition-all cursor-pointer"
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl transition-all cursor-pointer"
               >
-                Lưu Mã Giảm Giá
+                {isSubmitting ? 'Đang lưu...' : 'Lưu Mã Giảm Giá'}
               </button>
             </div>
           </form>

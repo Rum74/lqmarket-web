@@ -262,17 +262,25 @@ router.get('/seller/:sellerId/reviews', async (req: Request, res: Response) => {
     const { sellerId } = req.params;
     const sellerData = await getSellerStats(sellerId);
     if (!sellerData) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người bán' });
+      return res.json({
+        success: true,
+        reviews: [],
+        count: 0,
+        reviewsCount: 0,
+        rating: 5.0,
+        averageRating: '5.0'
+      });
     }
     return res.json({
       success: true,
       reviews: sellerData.reviews,
       count: sellerData.reviewsCount,
+      reviewsCount: sellerData.reviewsCount,
       rating: sellerData.rating,
       averageRating: sellerData.averageRating
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi tải đánh giá người bán' });
+    return res.status(500).json({ success: false, message: 'Lỗi tải đánh giá người bán', reviews: [], count: 0 });
   }
 });
 

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
-// Enable command buffering so queries wait safely until connection completes
-mongoose.set('bufferCommands', true);
+// Disable command buffering so queries do not hang indefinitely when disconnected
+mongoose.set('bufferCommands', false);
 
 let isConnected = false;
 
@@ -53,9 +53,5 @@ mongoose.connection.on('disconnected', () => {
 });
 
 export function getDBConnectionStatus(): boolean {
-  // If MONGODB_URI is provided, prioritize MongoDB connection
-  if (process.env.MONGODB_URI) {
-    return mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2;
-  }
   return isConnected && mongoose.connection.readyState === 1;
 }

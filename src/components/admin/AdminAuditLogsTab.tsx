@@ -1,17 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShieldAlert, Search, Filter, Clock, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { api } from '../../lib/apiClient';
+import { AdminAuditLog } from '../../types';
+import { ShieldAlert, Search, Filter, Clock, CheckCircle2, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 
 export const AdminAuditLogsTab: React.FC = () => {
   const { adminAuditLogs } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
+  const [dbLogs, setDbLogs] = useState<AdminAuditLog[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const filteredLogs = adminAuditLogs.filter(log => {
+  const fetchLogs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get('/api/admin/audit-logs');
+      if (res && res.success) {
+        const list = res.logs || res.data || res.auditLogs;
+        if (Array.isArray(list)) {
+          setDbLogs(list);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch audit logs:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  const rawLogs = dbLogs !== null ? dbLogs : adminAuditLogs;
+  // Exclude legacy mock logs
+  const realLogs = rawLogs.filter(log => log.id !== 'log_01' && log.id !== 'log_02');
+
+  const filteredLogs = realLogs.filter(log => {
     const matchesSearch =
-      log.adminName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.targetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchTerm.toLowerCase());
+      (log.adminName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.targetId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.details || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesAction = actionFilter === 'all' ? true : log.action === actionFilter;
     return matchesSearch && matchesAction;
   });
@@ -53,6 +82,15 @@ export const AdminAuditLogsTab: React.FC = () => {
             <option value="APPROVE_SELLER">Duyệt Verified Seller</option>
             <option value="CREATE_COUPON">Tạo mã giảm giá</option>
           </select>
+
+          <button
+            onClick={fetchLogs}
+            disabled={isLoading}
+            className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors cursor-pointer"
+            title="Làm mới nhật ký từ máy chủ"
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
         </div>
       </div>
 

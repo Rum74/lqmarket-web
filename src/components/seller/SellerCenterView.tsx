@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../lib/apiClient';
 import { RankBadge } from '../common/RankBadge';
 import { getDynamicSellerInfo, calculateSellerTrustScore } from '../../utils/sellerHelper';
 import {
@@ -53,6 +54,58 @@ export const SellerCenterView: React.FC = () => {
   const [warrantyCommitment, setWarrantyCommitment] = useState(false);
   const [isSubmittingVerification, setIsSubmittingVerification] = useState(false);
   const [verificationSuccessMsg, setVerificationSuccessMsg] = useState<string | null>(null);
+  const [verificationErrorMsg, setVerificationErrorMsg] = useState<string | null>(null);
+
+  // Real reviews fetched from backend
+  const [reviewsList, setReviewsList] = useState<any[]>([]);
+  const [reviewsCount, setReviewsCount] = useState<number | null>(null);
+  const [reviewsRating, setReviewsRating] = useState<number | null>(null);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
+  // Backend verification record
+  const [dbVerificationStatus, setDbVerificationStatus] = useState<any>(null);
+
+  // Fetch real reviews from backend for this seller
+  const fetchReviews = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setIsLoadingReviews(true);
+    try {
+      const res = await api.get(`/api/seller/${currentUser.id}/reviews`);
+      if (res && res.success) {
+        const list = res.reviews || res.data || [];
+        setReviewsList(Array.isArray(list) ? list : []);
+        setReviewsCount(typeof res.total === 'number' ? res.total : list.length);
+        if (res.averageRating !== undefined && res.averageRating !== null) {
+          setReviewsRating(Number(res.averageRating));
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch seller reviews:', err);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  // Fetch backend verification status
+  const fetchVerificationStatus = useCallback(async () => {
+    if (!currentUser?.id) return;
+    try {
+      const res = await api.get('/api/seller-verifications/my-status');
+      if (res && res.success && res.request) {
+        setDbVerificationStatus(res.request);
+      }
+    } catch (err) {
+      // quiet fallback
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    fetchVerificationStatus();
+  }, [fetchVerificationStatus]);
 
   // Filter seller's accounts
   const myAccounts = useMemo(() => {
@@ -103,25 +156,49 @@ export const SellerCenterView: React.FC = () => {
 
   // Check verification status
   const existingReq = sellerVerificationRequests.find(r => r.userId === currentUser.id);
-  const isVerified = currentUser.isVerifiedSeller || existingReq?.status === 'approved';
-  const isPendingVerification = existingReq?.status === 'pending';
+  const effectiveReq = dbVerificationStatus || existingReq;
+  const isVerified = currentUser.isVerifiedSeller || effectiveReq?.status === 'approved';
+  const isPendingVerification = effectiveReq?.status === 'pending';
 
-  const handleApplyVerification = (e: React.FormEvent) => {
+  const effectiveReviewsCount = reviewsCount !== null ? reviewsCount : sellerInfo.reviewsCount;
+  const effectiveRating = reviewsRating !== null ? reviewsRating.toFixed(1) : sellerInfo.averageRating;
+
+  const handleApplyVerification = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!warrantyCommitment) return;
+    if (!warrantyCommitment) {
+      setVerificationErrorMsg('Vui lòng đồng ý và cam kết chính sách bảo hành.');
+      return;
+    }
+    if (!idCardNumber.trim()) {
+      setVerificationErrorMsg('Vui lòng nhập số CCCD/CMND.');
+      return;
+    }
+
     setIsSubmittingVerification(true);
-    setTimeout(() => {
-      submitSellerVerification({
-        fullName,
-        phone,
-        idCardNumber,
+    setVerificationErrorMsg(null);
+    setVerificationSuccessMsg(null);
+
+    try {
+      const res: any = await submitSellerVerification({
+        fullName: fullName || currentUser.name,
+        phone: phone || currentUser.phone || '',
+        idCardNumber: idCardNumber.trim(),
         socialLink,
         zaloPhone,
         warrantyCommitment
       });
+
+      if (res && res.success === false) {
+        setVerificationErrorMsg(res.message || 'Lỗi gửi hồ sơ xác minh');
+      } else {
+        setVerificationSuccessMsg(res?.message || 'Hồ sơ xác minh người bán đã gửi thành công và đã được lưu vào hệ thống! Super Admin sẽ duyệt trong 2-4 giờ.');
+        await fetchVerificationStatus();
+      }
+    } catch (err: any) {
+      setVerificationErrorMsg(err?.message || 'Đã xảy ra lỗi khi gửi hồ sơ xác minh.');
+    } finally {
       setIsSubmittingVerification(false);
-      setVerificationSuccessMsg('Hồ sơ xác minh người bán đã gửi thành công! Super Admin sẽ duyệt trong 2-4 giờ.');
-    }, 600);
+    }
   };
 
   return (
@@ -168,8 +245,8 @@ export const SellerCenterView: React.FC = () => {
 
               <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 mt-2">
                 <span className="flex items-center gap-1 text-amber-400 font-semibold">
-                  <Star size={13} className="fill-amber-400" /> {sellerInfo.averageRating} / 5.0
-                  <span className="text-slate-500 font-normal">({sellerInfo.reviewsCount} đánh giá)</span>
+                  <Star size={13} className="fill-amber-400" /> {effectiveRating} / 5.0
+                  <span className="text-slate-500 font-normal">({effectiveReviewsCount} đánh giá)</span>
                 </span>
                 <span>
                   Đã bán: <strong className="text-slate-200">{totalSoldAccCount} acc</strong>
@@ -207,7 +284,7 @@ export const SellerCenterView: React.FC = () => {
           { id: 'overview', label: 'Tổng Quan & Biểu Đồ', icon: TrendingUp },
           { id: 'products', label: `Sản Phẩm Của Tôi (${myAccounts.length})`, icon: Store },
           { id: 'orders', label: `Đơn Hàng Bán (${mySellOrders.length})`, icon: ShoppingBag },
-          { id: 'reviews', label: `Đánh Giá Từ Khách (${sellerInfo.reviewsCount})`, icon: Star },
+          { id: 'reviews', label: `Đánh Giá Từ Khách (${effectiveReviewsCount})`, icon: Star },
           { id: 'verification', label: 'Xác Minh Danh Tính 🛡️', icon: ShieldCheck }
         ].map(tab => {
           const Icon = tab.icon;
@@ -546,49 +623,58 @@ export const SellerCenterView: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm sm:text-base font-bold text-white">
-              Đánh Giá & Nhận Xét Của Khách Hàng
+              Đánh Giá & Nhận Xét Của Khách Hàng ({effectiveReviewsCount})
             </h3>
             <div className="flex items-center gap-1.5 text-amber-400 text-sm font-bold">
               <Star size={16} className="fill-amber-400" />
-              <span>{sellerInfo.averageRating} / 5.0</span>
+              <span>{effectiveRating} / 5.0</span>
             </div>
           </div>
 
           <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl space-y-4">
-            <div className="space-y-3">
-              {/* Sample or real reviews */}
-              {[
-                {
-                  id: 'rev-1',
-                  buyer: 'Minh Tuan',
-                  rating: 5,
-                  date: '2 ngày trước',
-                  comment: 'Acc đúng chuẩn mô tả, trắng thông tin đổi mật khẩu siêu nhanh, chủ shop nhiệt tình!'
-                },
-                {
-                  id: 'rev-2',
-                  buyer: 'Hoang Nam',
-                  rating: 5,
-                  date: '5 ngày trước',
-                  comment: 'Giao dịch qua sàn yên tâm 100%, acc nhiều skin đẹp giá lại mềm.'
-                }
-              ].map(rev => (
-                <div key={rev.id} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-xs">{rev.buyer}</span>
-                      <div className="flex text-amber-400">
-                        {Array.from({ length: rev.rating }).map((_, i) => (
-                          <Star key={i} size={12} className="fill-amber-400" />
-                        ))}
+            {isLoadingReviews ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                Đang tải đánh giá từ máy chủ...
+              </div>
+            ) : reviewsList.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs space-y-1">
+                <p className="font-semibold text-slate-300">Chưa có đánh giá nào từ khách hàng.</p>
+                <p className="text-[11px] text-slate-500">
+                  Các đánh giá thực tế từ người mua sau khi hoàn tất đơn hàng và để lại review sẽ tự động cập nhật tại đây.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reviewsList.map(rev => (
+                  <div key={rev.id || rev.orderId} className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {rev.buyerAvatar && (
+                          <img
+                            src={rev.buyerAvatar}
+                            alt={rev.buyerName || rev.buyer}
+                            className="w-5 h-5 rounded-full object-cover border border-slate-700"
+                          />
+                        )}
+                        <span className="font-bold text-white text-xs">{rev.buyerName || rev.buyer || 'Khách Hàng'}</span>
+                        <div className="flex text-amber-400">
+                          {Array.from({ length: Math.min(5, Math.max(1, Number(rev.rating) || 5)) }).map((_, i) => (
+                            <Star key={i} size={12} className="fill-amber-400" />
+                          ))}
+                        </div>
                       </div>
+                      <span className="text-[10px] text-slate-500">{rev.date || 'Gần đây'}</span>
                     </div>
-                    <span className="text-[10px] text-slate-500">{rev.date}</span>
+                    <p className="text-xs text-slate-300 leading-relaxed">{rev.comment || 'Khách hàng không để lại nhận xét chi tiết.'}</p>
+                    {rev.accountTitle && (
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        Sản phẩm: {rev.accountTitle}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">{rev.comment}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -632,6 +718,12 @@ export const SellerCenterView: React.FC = () => {
                 {verificationSuccessMsg && (
                   <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-bold text-center">
                     {verificationSuccessMsg}
+                  </div>
+                )}
+                {verificationErrorMsg && (
+                  <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-bold text-center flex items-center justify-center gap-2">
+                    <AlertCircle size={14} />
+                    <span>{verificationErrorMsg}</span>
                   </div>
                 )}
 
