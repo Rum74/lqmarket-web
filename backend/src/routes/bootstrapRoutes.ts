@@ -17,6 +17,8 @@ import { Dispute } from '../models/Dispute';
 import { AuditLog } from '../models/AuditLog';
 import { PriceAlert } from '../models/PriceAlert';
 import { ensureCouponsSeeded } from './couponRoutes';
+import { ensureSellerVerificationsSeeded } from './sellerVerificationRoutes';
+import { ensureAuditLogsSeeded } from './auditLogRoutes';
 import {
   optionalAuth,
   AuthenticatedRequest
@@ -34,8 +36,12 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     const currentUserId = req.user?.userId;
     const isUserAdmin = req.user?.role === 'admin';
 
-    // Ensure initial coupons exist
-    await ensureCouponsSeeded().catch(() => {});
+    // Ensure initial coupons, seller verifications, and audit logs exist
+    await Promise.all([
+      ensureCouponsSeeded().catch(() => {}),
+      ensureSellerVerificationsSeeded().catch(() => {}),
+      ensureAuditLogsSeeded().catch(() => {})
+    ]);
 
     // 1. Fetch core marketplace collections in parallel
     const [

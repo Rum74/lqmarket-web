@@ -30,6 +30,8 @@ export interface IOrder {
     comment: string;
     createdAt: string;
   };
+  referralCode?: string;
+  affiliateUserId?: string;
   createdAt: string;
   completedAt?: string;
 }
@@ -50,6 +52,8 @@ const OrderSchema = new Schema<IOrder>(
     buyerName: { type: String, default: '' },
     sellerId: { type: String, required: true, index: true },
     sellerName: { type: String, default: '' },
+    referralCode: { type: String },
+    affiliateUserId: { type: String },
     status: {
       type: String,
       enum: ['pending_payment', 'escrow_hold', 'account_delivered', 'completed', 'disputed', 'refunded', 'cancelled'],

@@ -1,36 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShieldCheck, Check, X, Clock, ExternalLink, Phone, AlertCircle, Award } from 'lucide-react';
+import { api } from '../../lib/apiClient';
+import { SellerVerificationRequest } from '../../types';
+import { ShieldCheck, Check, X, Clock, ExternalLink, Phone, AlertCircle, Award, RefreshCw } from 'lucide-react';
 
 export const AdminSellerVerificationTab: React.FC = () => {
   const { sellerVerificationRequests, adminReviewSellerVerification } = useApp();
+  const [dbRequests, setDbRequests] = useState<SellerVerificationRequest[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const pendingRequests = sellerVerificationRequests.filter(r => r.status === 'pending');
-  const reviewedRequests = sellerVerificationRequests.filter(r => r.status !== 'pending');
+  const fetchVerifications = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get('/api/seller-verifications');
+      if (res && res.success) {
+        const list = res.data || res.requests;
+        if (Array.isArray(list)) {
+          setDbRequests(list);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load seller verifications:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const handleApprove = (reqId: string) => {
-    adminReviewSellerVerification(reqId, 'approved');
+  useEffect(() => {
+    fetchVerifications();
+  }, [fetchVerifications]);
+
+  const activeRequests = dbRequests !== null ? dbRequests : sellerVerificationRequests;
+  const pendingRequests = activeRequests.filter(r => r.status === 'pending');
+  const reviewedRequests = activeRequests.filter(r => r.status !== 'pending');
+
+  const handleApprove = async (reqId: string) => {
+    setDbRequests(prev => prev ? prev.map(r => r.id === reqId ? { ...r, status: 'approved' } : r) : null);
+    await adminReviewSellerVerification(reqId, 'approved');
+    fetchVerifications();
   };
 
-  const handleReject = (reqId: string) => {
+  const handleReject = async (reqId: string) => {
     if (!rejectionReason.trim()) return;
-    adminReviewSellerVerification(reqId, 'rejected', rejectionReason);
+    setDbRequests(prev => prev ? prev.map(r => r.id === reqId ? { ...r, status: 'rejected', rejectionReason } : r) : null);
+    await adminReviewSellerVerification(reqId, 'rejected', rejectionReason);
     setRejectingId(null);
     setRejectionReason('');
+    fetchVerifications();
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-base font-bold text-white flex items-center gap-2">
-          <ShieldCheck size={18} className="text-emerald-400" />
-          <span>Xét Duyệt Người Bán Xác Minh (Verified Seller Applications)</span>
-        </h3>
-        <p className="text-xs text-slate-400">
-          Kiểm tra CCCD/CMND, SĐT và cam kết bảo hành trước khi cấp huy hiệu 🛡️ Verified Seller
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <ShieldCheck size={18} className="text-emerald-400" />
+            <span>Xét Duyệt Người Bán Xác Minh (Verified Seller Applications)</span>
+          </h3>
+          <p className="text-xs text-slate-400">
+            Kiểm tra CCCD/CMND, SĐT và cam kết bảo hành trước khi cấp huy hiệu 🛡️ Verified Seller
+          </p>
+        </div>
+        <button
+          onClick={fetchVerifications}
+          disabled={isLoading}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition border border-slate-700 disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={isLoading ? 'animate-spin text-emerald-400' : 'text-slate-400'} />
+          <span>Làm mới danh sách</span>
+        </button>
       </div>
 
       {/* Pending requests */}

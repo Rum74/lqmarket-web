@@ -160,6 +160,7 @@ async function startServer() {
   app.use('/api/chat', resolvedChatRoutes); // Alias
   app.use('/api/messages', resolvedChatRoutes); // Alias
   app.use('/api/notifications', resolvedNotificationRoutes);
+  app.use('/api/admin/audit-logs', resolvedAuditLogRoutes);
   app.use('/api/admin', resolvedAdminRoutes);
   app.use('/api/upload', resolvedUploadRoutes);
   app.use('/api/bootstrap', resolvedBootstrapRoutes);
@@ -169,7 +170,6 @@ async function startServer() {
   app.use('/api/coupons', resolvedCouponRoutes);
   app.use('/api/seller-verifications', resolvedSellerVerificationRoutes);
   app.use('/api/disputes', resolvedDisputeRoutes);
-  app.use('/api/admin/audit-logs', resolvedAuditLogRoutes);
   app.use('/api/price-alerts', resolvedPriceAlertRoutes);
   app.use('/api/affiliate', resolvedAffiliateRoutes);
 

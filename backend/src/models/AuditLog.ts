@@ -9,6 +9,7 @@ export interface IAuditLog {
   targetType: string;
   targetId?: string;
   details: string;
+  amount?: number;
   timestamp: string;
   ip?: string;
 }
@@ -22,6 +23,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
     targetType: { type: String, required: true, index: true },
     targetId: { type: String, default: '' },
     details: { type: String, required: true },
+    amount: { type: Number },
     timestamp: { type: String, default: () => new Date().toISOString(), index: true },
     ip: { type: String, default: '' }
   },

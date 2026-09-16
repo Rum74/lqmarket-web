@@ -22,7 +22,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       return res.status(401).json({ success: false, message: 'Vui lòng đăng nhập để mua tài khoản.' });
     }
 
-    const { accountId, voucherCodeUsed, voucherDiscount = 0 } = req.body;
+    const { accountId, voucherCodeUsed, voucherDiscount = 0, referralCode } = req.body;
 
     const buyer = await User.findOne({ id: buyerId });
     if (!buyer) {
@@ -74,6 +74,17 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const orderCode = `#ORD${Math.floor(10000 + Math.random() * 90000)}`;
 
+    let affiliateUser: any = null;
+    const cleanRef = (referralCode || (buyer as any).referredBy || '').toString().trim();
+    if (cleanRef) {
+      affiliateUser = await User.findOne({
+        $or: [{ referralCode: cleanRef }, { id: cleanRef }, { username: cleanRef }]
+      });
+      if (affiliateUser && affiliateUser.id === buyer.id) {
+        affiliateUser = null; // Cannot refer self
+      }
+    }
+
     const newOrder = new Order({
       id: orderId,
       orderCode,
@@ -83,6 +94,8 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       accountPrice: account.price,
       voucherDiscount: Number(voucherDiscount) || 0,
       voucherCodeUsed,
+      referralCode: cleanRef || undefined,
+      affiliateUserId: affiliateUser?.id || undefined,
       fee,
       totalAmount,
       buyerId: buyer.id,
@@ -278,6 +291,47 @@ router.post('/:id/confirm-received', authenticateToken, async (req: Authenticate
         createdAt: new Date().toISOString()
       });
       await sellerNotif.save();
+    }
+
+    // Award affiliate commission if referred
+    if (order.affiliateUserId) {
+      try {
+        const commissionRate = 0.02; // 2% sàn
+        const commission = Math.round(order.totalAmount * commissionRate);
+        if (commission > 0) {
+          const referrer = await User.findOne({ id: order.affiliateUserId });
+          if (referrer) {
+            referrer.balance = (referrer.balance || 0) + commission;
+            await referrer.save();
+
+            const affTx = new WalletTransaction({
+              id: `tx_${Date.now()}_aff_${Math.random().toString(36).substring(2, 6)}`,
+              userId: referrer.id,
+              userName: referrer.name,
+              userEmail: referrer.email,
+              type: 'affiliate_commission',
+              amount: commission,
+              status: 'success',
+              note: `Hoa hồng tiếp thị 2% từ đơn hàng #${order.orderCode}`,
+              createdAt: new Date().toISOString()
+            });
+            await affTx.save();
+
+            const affNotif = new Notification({
+              id: `notif_${Date.now()}_aff`,
+              userId: referrer.id,
+              title: 'Nhận hoa hồng tiếp thị thành công',
+              message: `Bạn vừa nhận được +${commission.toLocaleString('vi-VN')}đ hoa hồng từ đơn hàng #${order.orderCode} qua liên kết giới thiệu của bạn!`,
+              type: 'wallet',
+              linkTarget: order.id,
+              createdAt: new Date().toISOString()
+            });
+            await affNotif.save();
+          }
+        }
+      } catch (affErr) {
+        console.warn('Affiliate commission payout error:', affErr);
+      }
     }
 
     return res.json({

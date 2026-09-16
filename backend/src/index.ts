@@ -18,6 +18,12 @@ import notificationRoutes from './routes/notificationRoutes';
 import adminRoutes from './routes/adminRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import bootstrapRoutes from './routes/bootstrapRoutes';
+import couponRoutes from './routes/couponRoutes';
+import sellerVerificationRoutes from './routes/sellerVerificationRoutes';
+import disputeRoutes from './routes/disputeRoutes';
+import auditLogRoutes from './routes/auditLogRoutes';
+import affiliateRoutes from './routes/affiliateRoutes';
+import priceAlertRoutes from './routes/priceAlertRoutes';
 
 async function startServer() {
   const app = express();
@@ -134,9 +140,15 @@ async function startServer() {
   app.use('/api/chat', chatRoutes);
   app.use('/api/messages', chatRoutes);
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api/admin/audit-logs', auditLogRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/bootstrap', bootstrapRoutes);
+  app.use('/api/coupons', couponRoutes);
+  app.use('/api/seller-verifications', sellerVerificationRoutes);
+  app.use('/api/disputes', disputeRoutes);
+  app.use('/api/affiliate', affiliateRoutes);
+  app.use('/api/price-alerts', priceAlertRoutes);
 
   // Global Webhook listeners
   app.all('/webhook', (req, res, next) => {

@@ -660,17 +660,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const loadedSvr = payload.sellerVerificationRequests || bootRes.sellerVerificationRequests;
-        if (Array.isArray(loadedSvr)) {
+        if (Array.isArray(loadedSvr) && loadedSvr.length > 0) {
           setSellerVerificationRequests(loadedSvr);
         }
 
         const loadedDisputes = payload.disputeTickets || bootRes.disputeTickets;
-        if (Array.isArray(loadedDisputes)) {
+        if (Array.isArray(loadedDisputes) && loadedDisputes.length > 0) {
           setDisputeTickets(loadedDisputes);
         }
 
         const loadedLogs = payload.adminAuditLogs || bootRes.adminAuditLogs;
-        if (Array.isArray(loadedLogs)) {
+        if (Array.isArray(loadedLogs) && loadedLogs.length > 0) {
           setAdminAuditLogs(loadedLogs);
         }
 
@@ -865,6 +865,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
   }, [isLoggedIn, currentUser]);
+
+  // Capture referral code from URL query parameters (?ref= or ?aff=)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const refCode = searchParams.get('ref') || searchParams.get('aff') || searchParams.get('referral');
+        if (refCode && refCode.trim()) {
+          const clean = refCode.trim();
+          localStorage.setItem('lqmarket_referred_by', clean);
+          api.post('/api/affiliate/track', { refCode: clean }).catch(() => {});
+        }
+      } catch {}
+    }
+  }, []);
 
   // Auth Operations
   const openLoginModal = () => {
@@ -1136,10 +1151,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     // Call MongoDB Order API
+    const storedRef = typeof window !== 'undefined' ? (localStorage.getItem('lqmarket_referred_by') || '') : '';
     api.post('/api/orders', {
       accountId: acc.id,
       voucherCodeUsed: voucherOptions?.code,
-      voucherDiscount: discountAmount
+      voucherDiscount: discountAmount,
+      referralCode: storedRef || undefined
     }).then(res => {
       if (res && res.success && res.order) {
         setOrders(prev => [res.order, ...prev.filter(o => o.id !== orderId && o.id !== res.order.id)]);
@@ -1521,6 +1538,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetId,
       details,
       amount
+    }).then(res => {
+      if (res && res.success && (res.log || res.data)) {
+        const saved = res.log || res.data;
+        setAdminAuditLogs(prev => [saved, ...prev.filter(l => l.id !== newLog.id && l.id !== saved.id)]);
+      }
     }).catch(err => console.warn('Audit log API notice:', err));
   }, [currentUser]);
 
@@ -1593,26 +1615,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res && res.success && (res.coupon || res.data)) {
         const savedCoupon = res.coupon || res.data;
         setCoupons(prev => [savedCoupon, ...prev.filter(c => c.id !== tempId && c.id !== savedCoupon.id && c.code !== savedCoupon.code)]);
+        return { success: true, coupon: savedCoupon };
       }
-      return { success: true, coupon: res?.coupon || newCoupon };
+      // If backend rejected or failed
+      setCoupons(prev => prev.filter(c => c.id !== tempId));
+      return { success: false, message: res?.message || 'Không thể tạo mã giảm giá trên máy chủ' };
     } catch (err: any) {
       console.warn('Coupon create API notice:', err);
-      return { success: false, message: err?.message || 'Lỗi tạo mã giảm giá' };
+      setCoupons(prev => prev.filter(c => c.id !== tempId));
+      return { success: false, message: err?.message || 'Lỗi kết nối khi tạo mã giảm giá' };
     }
   };
 
-  const adminToggleCoupon = (id: string) => {
-    setCoupons(prev =>
-      prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
-    );
-    api.put(`/api/coupons/${id}/toggle`, {})
-      .catch(err => console.warn('Coupon toggle API notice:', err));
+  const adminToggleCoupon = async (id: string) => {
+    try {
+      const res = await api.put(`/api/coupons/${id}/toggle`, {});
+      if (res && res.success && (res.coupon || res.data)) {
+        const updated = res.coupon || res.data;
+        setCoupons(prev => prev.map(c => (c.id === id ? { ...c, ...updated } : c)));
+      } else {
+        setCoupons(prev =>
+          prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+        );
+      }
+    } catch (err) {
+      console.warn('Coupon toggle API notice:', err);
+      setCoupons(prev =>
+        prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+      );
+    }
   };
 
-  const adminDeleteCoupon = (id: string) => {
+  const adminDeleteCoupon = async (id: string) => {
     setCoupons(prev => prev.filter(c => c.id !== id));
-    api.delete(`/api/coupons/${id}`)
-      .catch(err => console.warn('Coupon delete API notice:', err));
+    try {
+      await api.delete(`/api/coupons/${id}`);
+    } catch (err) {
+      console.warn('Coupon delete API notice:', err);
+    }
   };
 
   const applyCouponCode = (code: string, orderPrice: number): {
@@ -1703,7 +1743,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const adminReviewSellerVerification = (id: string, status: 'approved' | 'rejected', reason?: string) => {
+  const adminReviewSellerVerification = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
     setSellerVerificationRequests(prev =>
       prev.map(r => (r.id === id ? { ...r, status, rejectionReason: reason } : r))
     );
@@ -1724,8 +1764,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    api.put(`/api/seller-verifications/${id}/review`, { status, rejectionReason: reason })
-      .catch(err => console.warn('Seller review API notice:', err));
+    try {
+      const res = await api.put(`/api/seller-verifications/${id}/review`, {
+        status,
+        rejectionReason: reason,
+        userId: targetReq?.userId,
+        userName: targetReq?.userName,
+        fullName: targetReq?.fullName,
+        phone: targetReq?.userPhone,
+        idCardNumber: targetReq?.idCardNumber
+      });
+      if (res && res.success && (res.verification || res.data)) {
+        const updated = res.verification || res.data;
+        setSellerVerificationRequests(prev =>
+          prev.map(r => (r.id === id || r.id === updated.id ? { ...r, ...updated } : r))
+        );
+      }
+    } catch (err) {
+      console.warn('Seller review API notice:', err);
+    }
   };
 
   // Dispute Tickets Actions

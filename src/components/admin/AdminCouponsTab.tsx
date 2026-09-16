@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../lib/apiClient';
 import { CouponItem } from '../../types';
-import { Ticket, Plus, Check, X, Trash2, Power, AlertCircle, Percent, DollarSign } from 'lucide-react';
+import { Ticket, Plus, Check, X, Trash2, Power, AlertCircle, Percent, DollarSign, RefreshCw } from 'lucide-react';
 
 export const AdminCouponsTab: React.FC = () => {
   const { coupons, adminCreateCoupon, adminToggleCoupon, adminDeleteCoupon } = useApp();
+  const [dbCoupons, setDbCoupons] = useState<CouponItem[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [code, setCode] = useState('');
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
@@ -15,6 +18,29 @@ export const AdminCouponsTab: React.FC = () => {
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const fetchCoupons = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get('/api/coupons');
+      if (res && res.success) {
+        const list = res.data || res.coupons;
+        if (Array.isArray(list)) {
+          setDbCoupons(list);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load coupons from server:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCoupons();
+  }, [fetchCoupons]);
+
+  const activeCoupons = dbCoupons !== null ? dbCoupons : coupons;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,12 +65,25 @@ export const AdminCouponsTab: React.FC = () => {
         setIsCreating(false);
         setCode('');
         setDescription('');
+        fetchCoupons();
       }
     } catch (err: any) {
       setErrorMsg(err?.message || 'Lỗi khi lưu mã giảm giá');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleToggle = async (id: string) => {
+    setDbCoupons(prev => prev ? prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c) : null);
+    await adminToggleCoupon(id);
+    fetchCoupons();
+  };
+
+  const handleDelete = async (id: string) => {
+    setDbCoupons(prev => prev ? prev.filter(c => c.id !== id) : null);
+    await adminDeleteCoupon(id);
+    fetchCoupons();
   };
 
   return (
@@ -60,13 +99,23 @@ export const AdminCouponsTab: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreating(true)}
-          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
-        >
-          <Plus size={15} />
-          <span>TẠO MÃ COUPON MỚI</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchCoupons}
+            disabled={isLoading}
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700 disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin text-amber-400' : 'text-slate-400'} />
+            <span>Làm mới</span>
+          </button>
+          <button
+            onClick={() => setIsCreating(true)}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+          >
+            <Plus size={15} />
+            <span>TẠO MÃ COUPON MỚI</span>
+          </button>
+        </div>
       </div>
 
       {/* Create form modal */}
@@ -209,7 +258,7 @@ export const AdminCouponsTab: React.FC = () => {
 
       {/* Coupons Table */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {coupons.map(coupon => (
+        {activeCoupons.map(coupon => (
           <div
             key={coupon.id}
             className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-3"
@@ -233,14 +282,14 @@ export const AdminCouponsTab: React.FC = () => {
 
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => adminToggleCoupon(coupon.id)}
+                    onClick={() => handleToggle(coupon.id)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
                     title={coupon.isActive ? 'Tạm khóa' : 'Kích hoạt'}
                   >
                     <Power size={14} className={coupon.isActive ? 'text-emerald-400' : 'text-slate-500'} />
                   </button>
                   <button
-                    onClick={() => adminDeleteCoupon(coupon.id)}
+                    onClick={() => handleDelete(coupon.id)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
                     title="Xóa coupon"
                   >
