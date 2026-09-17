@@ -433,8 +433,12 @@ export async function getUserReferralStats(userId: string) {
   referredUsers.forEach(u => userMap.set(u.id, u));
 
   // Orders map for qualifying orders
-  const qualifyingOrderIds = allUserReferrals.map(r => r.qualifyingOrderId).filter(Boolean);
-  const orders = await Order.find({ id: { $in: qualifyingOrderIds } });
+  const qualifyingOrderIds: string[] = allUserReferrals
+    .map(r => r.qualifyingOrderId)
+    .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+  const orders = qualifyingOrderIds.length > 0
+    ? await Order.find({ id: { $in: qualifyingOrderIds } })
+    : [];
   const orderMap = new Map<string, IOrder>();
   orders.forEach(o => orderMap.set(o.id, o));
 
