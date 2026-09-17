@@ -6,6 +6,7 @@ import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
 import { Review } from '../models/Review';
 import { Coupon } from '../models/Coupon';
+import { processOrderReferralReward } from '../services/referralService';
 import {
   authenticateToken,
   requireAdmin,
@@ -332,6 +333,13 @@ router.post('/:id/confirm-received', authenticateToken, async (req: Authenticate
       } catch (affErr) {
         console.warn('Affiliate commission payout error:', affErr);
       }
+    }
+
+    // Process system referral reward if eligible
+    try {
+      await processOrderReferralReward(order.id);
+    } catch (refRewardErr) {
+      console.warn('Process order referral reward error:', refRewardErr);
     }
 
     return res.json({

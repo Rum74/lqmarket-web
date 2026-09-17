@@ -21,6 +21,10 @@ export interface IUser {
   bankAccountName?: string;
   bio?: string;
   wishlistIds: string[];
+  referralCode?: string;
+  referredBy?: string | null;
+  referralJoinedAt?: string | null;
+  referralRewardReceived?: boolean;
   status: 'active' | 'banned' | 'pending';
   createdAt: string;
   updatedAt?: string;
@@ -47,6 +51,10 @@ const UserSchema = new Schema<IUser>(
     bankAccountName: { type: String, default: '' },
     bio: { type: String, default: '' },
     wishlistIds: { type: [String], default: [] },
+    referralCode: { type: String, unique: true, sparse: true, uppercase: true, trim: true, index: true },
+    referredBy: { type: String, default: null, index: true },
+    referralJoinedAt: { type: String, default: null },
+    referralRewardReceived: { type: Boolean, default: false },
     status: { type: String, enum: ['active', 'banned', 'pending'], default: 'active' },
     createdAt: { type: String, default: () => new Date().toISOString() },
     updatedAt: { type: String, default: () => new Date().toISOString() }

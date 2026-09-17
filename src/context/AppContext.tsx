@@ -18,7 +18,10 @@ import {
   DisputeTicket,
   AffiliateStats,
   PriceAlertItem,
-  AdminAuditLog
+  AdminAuditLog,
+  ReferralItem,
+  ReferralSettings,
+  ReferralUserStats
 } from '../types';
 import { INITIAL_COUPONS } from '../data/couponData';
 import {
@@ -47,7 +50,8 @@ interface AppContextType {
     email: string,
     password: string,
     role: UserRole,
-    phone?: string
+    phone?: string,
+    referralCode?: string
   ) => Promise<{ success: boolean; message: string }>;
   logoutUser: () => void;
   quickSwitchUser: (userId: string) => void;
@@ -59,8 +63,8 @@ interface AppContextType {
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
 
   // Navigation & Views
-  currentView: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog';
-  setCurrentView: (view: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog') => void;
+  currentView: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog' | 'referral';
+  setCurrentView: (view: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog' | 'referral') => void;
   selectedAccountId: string | null;
   setSelectedAccountId: (id: string | null) => void;
   selectedSellerId: string | null;
@@ -225,6 +229,20 @@ interface AppContextType {
   adminDeleteUser: (userId: string) => Promise<{ success: boolean; message: string }>;
   adminAdjustUserBalance: (userId: string, amount: number, note: string) => Promise<{ success: boolean; message: string }>;
 
+  // Referral System
+  referralStats: ReferralUserStats;
+  referralHistory: ReferralItem[];
+  referralSettings: ReferralSettings;
+  userReferralCode: string;
+  userReferralLink: string;
+  fetchReferralData: () => Promise<void>;
+  validateReferralCode: (code: string) => Promise<{ valid: boolean; message: string; referrerName?: string }>;
+  claimReferralReward: () => Promise<{ success: boolean; message: string }>;
+  adminReferrals: ReferralItem[];
+  adminReferralSettings: ReferralSettings | null;
+  fetchAdminReferralData: () => Promise<void>;
+  adminUpdateReferralSettings: (settings: Partial<ReferralSettings>) => Promise<{ success: boolean; message: string }>;
+
   // System & Database Management
   totalSystemCompletedSales: number;
   totalSystemAvailableAccounts: number;
@@ -339,7 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedBoxTierForUnboxing, setSelectedBoxTierForUnboxing] = useState<string | null>(null);
 
   // View States
-  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog' | 'referral'>('home');
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -347,6 +365,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatRecipient, setChatRecipient] = useState<{ id: string; name: string; avatar: string; role: string } | null>(null);
+
+  // Referral Program State
+  const [referralStats, setReferralStats] = useState<ReferralUserStats>({
+    totalInvited: 0,
+    completedReferrals: 0,
+    pendingReferrals: 0,
+    totalEarned: 0
+  });
+  const [referralHistory, setReferralHistory] = useState<ReferralItem[]>([]);
+  const [referralSettings, setReferralSettings] = useState<ReferralSettings>({
+    enabled: true,
+    rewardType: 'fixed_amount',
+    referrerReward: 10000,
+    referredUserReward: 10000,
+    minOrderValue: 20000,
+    description: 'Giới thiệu bạn bè nhận 10.000đ khi bạn bè hoàn tất đơn hàng đầu tiên.'
+  });
+  const [adminReferrals, setAdminReferrals] = useState<ReferralItem[]>([]);
+  const [adminReferralSettings, setAdminReferralSettings] = useState<ReferralSettings | null>(null);
 
   // Comparison Tool State
   const [compareAccountIds, setCompareAccountIds] = useState<string[]>(() => {
@@ -876,10 +913,108 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const clean = refCode.trim();
           localStorage.setItem('lqmarket_referred_by', clean);
           api.post('/api/affiliate/track', { refCode: clean }).catch(() => {});
+          api.post('/api/referrals/validate', { referralCode: clean }).catch(() => {});
         }
       } catch {}
     }
   }, []);
+
+  // Referral computed code & link
+  const userReferralCode = currentUser?.referralCode || '';
+  const userReferralLink = typeof window !== 'undefined' && userReferralCode
+    ? `${window.location.origin}?ref=${userReferralCode}`
+    : `https://cholienquan.com?ref=${userReferralCode}`;
+
+  // Fetch Referral Data
+  const fetchReferralData = useCallback(async () => {
+    if (!isLoggedIn || !currentUser?.id) return;
+    try {
+      const res = await api.get('/api/referrals/me');
+      if (res && res.success) {
+        if (res.stats) setReferralStats(res.stats);
+        if (Array.isArray(res.history)) setReferralHistory(res.history);
+        if (res.settings) setReferralSettings(res.settings);
+        if (res.referralCode && currentUser && !currentUser.referralCode) {
+          setAllUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, referralCode: res.referralCode } : u));
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch referral data:', e);
+    }
+  }, [isLoggedIn, currentUser?.id]);
+
+  useEffect(() => {
+    if (isLoggedIn && currentUser?.id) {
+      fetchReferralData();
+    }
+  }, [isLoggedIn, currentUser?.id, fetchReferralData]);
+
+  const validateReferralCode = async (code: string): Promise<{ valid: boolean; message: string; referrerName?: string }> => {
+    try {
+      const res = await api.post('/api/referrals/validate', { referralCode: code });
+      return {
+        valid: Boolean(res.valid || res.success),
+        message: res.message || '',
+        referrerName: res.referrerName
+      };
+    } catch (e: any) {
+      return {
+        valid: false,
+        message: e.message || 'Mã giới thiệu không hợp lệ'
+      };
+    }
+  };
+
+  const claimReferralReward = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.post('/api/referrals/claim', {});
+      if (res.success) {
+        await Promise.all([fetchReferralData(), fetchAllMongoData()]);
+      }
+      return {
+        success: Boolean(res.success),
+        message: res.message || 'Xử lý nhận thưởng hoàn tất!'
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        message: e.message || 'Lỗi khi nhận thưởng referral'
+      };
+    }
+  };
+
+  const fetchAdminReferralData = useCallback(async () => {
+    try {
+      const [refRes, setRes] = await Promise.all([
+        api.get('/api/admin/referrals'),
+        api.get('/api/admin/referral-settings')
+      ]);
+      if (refRes && refRes.success) {
+        setAdminReferrals(refRes.referrals || refRes.data || []);
+      }
+      if (setRes && setRes.success) {
+        setAdminReferralSettings(setRes.settings);
+      }
+    } catch (e) {
+      console.warn('Could not fetch admin referral data:', e);
+    }
+  }, []);
+
+  const adminUpdateReferralSettings = async (settings: Partial<ReferralSettings>): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.put('/api/admin/referral-settings', settings);
+      if (res.success) {
+        setReferralSettings(prev => ({ ...prev, ...settings }));
+        if (res.settings) {
+          setAdminReferralSettings(res.settings);
+        }
+        return { success: true, message: res.message || 'Cập nhật cấu hình Referral thành công!' };
+      }
+      return { success: false, message: res.message || 'Không thể lưu cấu hình.' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Lỗi khi cập nhật cấu hình Referral.' };
+    }
+  };
 
   // Auth Operations
   const openLoginModal = () => {
@@ -915,6 +1050,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       // Reload user data & admin lists if applicable
       fetchAllMongoData();
+      fetchReferralData();
       return { success: true, message: res.message };
     }
     return { success: false, message: res.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!' };
@@ -925,9 +1061,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     usernameOrEmail: string,
     password: string,
     role: UserRole,
-    phone: string = ''
+    phone: string = '',
+    referralCode?: string
   ): Promise<{ success: boolean; message: string }> => {
-    const res = await apiRegisterUser(name, usernameOrEmail, password, role, phone);
+    const res = await apiRegisterUser(name, usernameOrEmail, password, role, phone, referralCode);
     if (res.success && res.user) {
       const regUser = res.user;
       setCurrentUserId(regUser.id);
@@ -935,6 +1072,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAllUsers(prev => [regUser, ...prev.filter(u => u && u.id !== regUser.id)]);
       setIsAuthModalOpen(false);
       fetchAllMongoData();
+      fetchReferralData();
       return { success: true, message: res.message };
     }
     return { success: false, message: res.message || 'Đăng ký thất bại. Vui lòng thử lại!' };
@@ -2022,6 +2160,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         amount,
         note: note || (amount >= 0 ? 'Admin nạp tiền điều chỉnh' : 'Admin trừ tiền ví')
       });
+      const resolvedBalance = typeof res?.newBalance === 'number' ? res.newBalance : newBalance;
+      setAllUsers(prev =>
+        prev.map(u => (u.id === userId ? { ...u, balance: resolvedBalance } : u))
+      );
+      if (currentUser?.id === userId || currentUserId === userId) {
+        try {
+          const raw = localStorage.getItem('lqmarket_saved_user_profile');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify({ ...parsed, balance: resolvedBalance }));
+          }
+        } catch {}
+      }
       fetchAllMongoData();
       return {
         success: true,
@@ -2374,6 +2525,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminApproveWithdrawal,
         adminRejectWithdrawal,
         adminDisburseEarly,
+
+        // Referral System
+        referralStats,
+        referralHistory,
+        referralSettings,
+        userReferralCode,
+        userReferralLink,
+        fetchReferralData,
+        validateReferralCode,
+        claimReferralReward,
+        adminReferrals,
+        adminReferralSettings,
+        fetchAdminReferralData,
+        adminUpdateReferralSettings,
 
         // Mystery Box
         mysteryBoxes,

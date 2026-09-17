@@ -6,17 +6,34 @@ import { Order } from '../models/Order';
 import { Review } from '../models/Review';
 import { Notification } from '../models/Notification';
 import { authenticateToken, generateToken, AuthenticatedRequest } from '../middleware/auth';
+import {
+  generateUniqueReferralCode,
+  createReferralOnRegister,
+  ensureUserHasReferralCode
+} from '../services/referralService';
 
 const router = Router();
 
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { name, username, email, usernameOrEmail, accountInput, password, phone, role = 'buyer' } = req.body;
+    const {
+      name,
+      username,
+      email,
+      usernameOrEmail,
+      accountInput,
+      password,
+      phone,
+      role = 'buyer',
+      referralCode,
+      ref
+    } = req.body;
 
     const rawName = (name || '').trim();
     const rawAccount = (username || email || usernameOrEmail || accountInput || '').trim();
     const rawPassword = (password || '').trim();
+    const incomingRefCode = (referralCode || ref || '').trim();
 
     if (!rawName || !rawAccount || !rawPassword) {
       return res.status(400).json({
@@ -60,6 +77,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername || userId}`;
+    const myReferralCode = await generateUniqueReferralCode();
 
     const newUser = await User.create({
       id: userId,
@@ -77,8 +95,29 @@ router.post('/register', async (req: Request, res: Response) => {
       isVerifiedSeller: role === 'seller',
       sellerTier: role === 'seller' ? 'BASIC' : 'FREE',
       wishlistIds: [],
+      referralCode: myReferralCode,
+      referredBy: null,
+      referralJoinedAt: null,
+      referralRewardReceived: false,
       status: 'active'
     });
+
+    // Handle incoming referral code
+    if (incomingRefCode) {
+      try {
+        const referral = await createReferralOnRegister(newUser, incomingRefCode);
+        if (referral) {
+          newUser.referredBy = referral.referrerId;
+          newUser.referralJoinedAt = referral.createdAt;
+          await User.findOneAndUpdate(
+            { id: newUser.id },
+            { $set: { referredBy: referral.referrerId, referralJoinedAt: referral.createdAt } }
+          );
+        }
+      } catch (refErr) {
+        console.warn('[Auth] Referral registration link warning:', refErr);
+      }
+    }
 
     const token = generateToken({
       userId: newUser.id,
@@ -202,6 +241,11 @@ router.post('/login', async (req: Request, res: Response) => {
       console.warn('Login notification notice:', notifErr);
     }
 
+    // Ensure referralCode exists for existing users
+    if (!user.referralCode) {
+      await ensureUserHasReferralCode(user);
+    }
+
     const userResponse = typeof user.toJSON === 'function' ? user.toJSON() : { ...user };
     delete userResponse.password;
 
@@ -234,6 +278,11 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
         success: false,
         message: 'Không tìm thấy thông tin tài khoản.'
       });
+    }
+
+    // Auto-generate referral code if missing
+    if (!user.referralCode) {
+      await ensureUserHasReferralCode(user);
     }
 
     return res.json({

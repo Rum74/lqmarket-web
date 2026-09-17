@@ -9,6 +9,7 @@ import { AdminSellerVerificationTab } from './AdminSellerVerificationTab';
 import { AdminDisputesTab } from './AdminDisputesTab';
 import { AdminCouponsTab } from './AdminCouponsTab';
 import { AdminAuditLogsTab } from './AdminAuditLogsTab';
+import { AdminReferralsTab } from './AdminReferralsTab';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -46,7 +47,8 @@ import {
   Database,
   Gamepad2,
   Tag,
-  FileText
+  FileText,
+  Gift
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -79,7 +81,7 @@ export const AdminDashboardView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'payouts' | 'users' | 'mystery_box' | 'audit_logs' | 'settings'
+    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'payouts' | 'users' | 'mystery_box' | 'audit_logs' | 'referrals' | 'settings'
   >('pending');
   const [rejectionModalAccId, setRejectionModalAccId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -535,6 +537,18 @@ export const AdminDashboardView: React.FC = () => {
           >
             <FileText size={13} />
             <span>Nhật Ký</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('referrals')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'referrals'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md'
+                : 'text-amber-400 hover:text-white bg-amber-400/10'
+            }`}
+          >
+            <Gift size={13} />
+            <span>Referral</span>
           </button>
 
           <button
@@ -1384,6 +1398,11 @@ export const AdminDashboardView: React.FC = () => {
       {/* TAB: AUDIT LOGS */}
       {activeTab === 'audit_logs' && (
         <AdminAuditLogsTab />
+      )}
+
+      {/* TAB: REFERRALS */}
+      {activeTab === 'referrals' && (
+        <AdminReferralsTab />
       )}
 
       {/* DISPUTE RESOLUTION CONFIRMATION MODAL */}

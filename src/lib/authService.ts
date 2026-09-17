@@ -52,7 +52,8 @@ export async function registerUser(
   emailOrUsername: string,
   password: string,
   role: UserRole = 'buyer',
-  phone?: string
+  phone?: string,
+  referralCode?: string
 ): Promise<{ success: boolean; message: string; user?: UserProfile; errorCode?: string }> {
   try {
     const rawName = (name || '').trim();
@@ -65,6 +66,7 @@ export async function registerUser(
       : asciiAccount.replace(/[^a-z0-9_]/g, '') || 'user';
     const formattedEmail = normalizeEmail(cleanAccount);
     const cleanPhone = (phone || '').trim();
+    const activeRefCode = referralCode || (typeof window !== 'undefined' ? localStorage.getItem('lqmarket_referred_by') || '' : '');
 
     if (!rawName || !rawAccount || !password) {
       return {
@@ -87,7 +89,8 @@ export async function registerUser(
       email: formattedEmail,
       password,
       role,
-      phone: cleanPhone
+      phone: cleanPhone,
+      referralCode: activeRefCode
     });
 
     if (response.success && response.user) {
@@ -111,6 +114,10 @@ export async function registerUser(
         isVerifiedSeller: Boolean(response.user.isVerifiedSeller),
         sellerTier: response.user.sellerTier || (role === 'seller' ? 'BASIC' : 'FREE'),
         wishlistIds: response.user.wishlistIds || [],
+        referralCode: response.user.referralCode,
+        referredBy: response.user.referredBy,
+        referralJoinedAt: response.user.referralJoinedAt,
+        referralRewardReceived: response.user.referralRewardReceived,
         createdAt: response.user.createdAt || new Date().toISOString()
       };
 

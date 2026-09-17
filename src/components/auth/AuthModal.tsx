@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  ArrowRight
+  ArrowRight,
+  Gift
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -24,13 +25,16 @@ export const AuthModal: React.FC = () => {
     authModalMode,
     setAuthModalMode,
     loginUser,
-    registerUser
+    registerUser,
+    validateReferralCode
   } = useApp();
 
   const [accountInput, setAccountInput] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState('');
+  const [referrerHint, setReferrerHint] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('buyer');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -44,10 +48,21 @@ export const AuthModal: React.FC = () => {
       setPassword('');
       setName('');
       setPhone('');
+      const savedRef = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_referred_by') || '' : '';
+      setReferralCodeInput(savedRef);
+      setReferrerHint('');
       setShowPassword(false);
       setErrorMessage('');
       setSuccessMessage('');
       setIsSubmitting(false);
+
+      if (savedRef) {
+        validateReferralCode(savedRef).then(res => {
+          if (res.valid && res.referrerName) {
+            setReferrerHint(`Được giới thiệu bởi ${res.referrerName}`);
+          }
+        }).catch(() => {});
+      }
     }
   }, [isAuthModalOpen, authModalMode]);
 
@@ -103,7 +118,14 @@ export const AuthModal: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await registerUser(name, accountInput, password, selectedRole, phone);
+      const res = await registerUser(
+        name,
+        accountInput,
+        password,
+        selectedRole,
+        phone,
+        referralCodeInput.trim() || undefined
+      );
       if (res.success) {
         setSuccessMessage(res.message);
         setTimeout(() => {
@@ -361,6 +383,42 @@ export const AuthModal: React.FC = () => {
                     <Lock size={14} className="absolute left-3 top-2.5 text-slate-400" />
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">
+                  Mã giới thiệu (tùy chọn, nhận thưởng chào mừng):
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={referralCodeInput}
+                    onChange={e => {
+                      const val = e.target.value.toUpperCase();
+                      setReferralCodeInput(val);
+                      if (val.trim()) {
+                        validateReferralCode(val.trim()).then(res => {
+                          if (res.valid && res.referrerName) {
+                            setReferrerHint(`Người giới thiệu: ${res.referrerName}`);
+                          } else {
+                            setReferrerHint('');
+                          }
+                        }).catch(() => setReferrerHint(''));
+                      } else {
+                        setReferrerHint('');
+                      }
+                    }}
+                    placeholder="Ví dụ: REF12345"
+                    className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono tracking-wider"
+                  />
+                  <Gift size={14} className="absolute left-3 top-2.5 text-amber-400" />
+                </div>
+                {referrerHint && (
+                  <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                    <CheckCircle2 size={12} />
+                    <span>{referrerHint}</span>
+                  </p>
+                )}
               </div>
 
               <button

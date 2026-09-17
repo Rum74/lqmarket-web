@@ -14,6 +14,7 @@ import { GuideView } from './components/guide/GuideView';
 import { MysteryBoxView } from './components/mysteryBox/MysteryBoxView';
 import { SellerCenterView } from './components/seller/SellerCenterView';
 import { AffiliateView } from './components/affiliate/AffiliateView';
+import { ReferralView } from './components/referral/ReferralView';
 import { BlogView } from './components/blog/BlogView';
 import { AccountDetailModal } from './components/accounts/AccountDetailModal';
 import { AccountCompareModal } from './components/compare/AccountCompareModal';
@@ -60,6 +61,7 @@ const MainLayout: React.FC = () => {
         {currentView === 'guide' && <GuideView />}
         {currentView === 'seller_center' && <SellerCenterView />}
         {currentView === 'affiliate' && <AffiliateView />}
+        {currentView === 'referral' && <ReferralView />}
         {currentView === 'blog' && <BlogView />}
       </main>
 

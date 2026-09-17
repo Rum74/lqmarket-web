@@ -12,7 +12,13 @@ import { Conversation } from '../models/Conversation';
 import { UserInventory } from '../models/UserInventory';
 import { MysteryHistory } from '../models/MysteryHistory';
 import { Review } from '../models/Review';
+import { AuditLog } from '../models/AuditLog';
 import { approvePayout, rejectPayout, getPayoutStats } from '../services/payoutService';
+import {
+  getAdminReferralsData,
+  getReferralSettings,
+  updateReferralSettings
+} from '../services/referralService';
 import {
   authenticateToken,
   requireAdmin,
@@ -122,6 +128,92 @@ router.put('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
     return res.json({ success: true, message: 'Cập nhật người dùng thành công', user: user.toJSON() });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi cập nhật người dùng' });
+  }
+});
+
+// POST /api/admin/users/:id/balance (Adjust user wallet balance with full transaction and notifications)
+router.post('/users/:id/balance', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { amount, note } = req.body;
+    const numericAmount = Number(amount);
+
+    if (isNaN(numericAmount) || numericAmount === 0) {
+      return res.status(400).json({ success: false, message: 'Số tiền điều chỉnh không hợp lệ (phải khác 0).' });
+    }
+
+    const user = await User.findOne({ id });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng trong hệ thống.' });
+    }
+
+    const previousBalance = user.balance || 0;
+    const newBalance = Math.max(0, previousBalance + numericAmount);
+    user.balance = newBalance;
+    await user.save();
+
+    // Create WalletTransaction
+    const isAdding = numericAmount > 0;
+    const tx = new WalletTransaction({
+      id: `tx_${Date.now()}_adj_${Math.random().toString(36).substring(2, 6)}`,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      type: isAdding ? 'deposit' : 'withdraw',
+      amount: numericAmount,
+      status: 'success',
+      note: note || (isAdding ? 'Admin nạp tiền điều chỉnh ví' : 'Admin trừ tiền điều chỉnh ví'),
+      description: `Admin điều chỉnh số dư: ${isAdding ? '+' : ''}${numericAmount.toLocaleString('vi-VN')}đ. Lý do: ${note || 'N/A'}`,
+      createdAt: new Date().toISOString()
+    });
+    await tx.save();
+
+    // Create In-App Notification for user
+    try {
+      const notif = new Notification({
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userId: user.id,
+        type: 'wallet',
+        title: isAdding ? 'Biến động số dư: Nạp tiền từ Quản trị viên' : 'Biến động số dư: Trừ tiền từ Quản trị viên',
+        message: `Tài khoản của bạn đã được Quản trị viên ${isAdding ? 'cộng' : 'trừ'} ${Math.abs(numericAmount).toLocaleString('vi-VN')}đ. Lý do: ${note || 'Điều chỉnh ví'}. Số dư mới: ${newBalance.toLocaleString('vi-VN')}đ.`,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      await notif.save();
+    } catch (e) {
+      console.warn('Notif error:', e);
+    }
+
+    // Audit log
+    try {
+      const audit = new AuditLog({
+        id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        adminId: req.user?.userId || 'admin',
+        adminName: req.user?.email || 'Super Admin',
+        action: isAdding ? 'ADD_USER_BALANCE' : 'DEDUCT_USER_BALANCE',
+        targetType: 'user',
+        targetId: user.id,
+        details: `${isAdding ? 'Cộng' : 'Trừ'} ${Math.abs(numericAmount).toLocaleString('vi-VN')}đ cho "${user.name}" (${user.email}). Lý do: ${note || 'Điều chỉnh ví'}`,
+        amount: Math.abs(numericAmount),
+        timestamp: new Date().toISOString()
+      });
+      await audit.save();
+    } catch (e) {
+      console.warn('AuditLog error:', e);
+    }
+
+    console.log(`✅ [Admin] Adjusted balance for user ${user.id} (${user.name}): ${isAdding ? '+' : ''}${numericAmount}đ -> New balance: ${newBalance}đ`);
+
+    return res.json({
+      success: true,
+      message: `Đã ${isAdding ? 'cộng' : 'trừ'} ${Math.abs(numericAmount).toLocaleString('vi-VN')}đ cho "${user.name}" thành công!`,
+      newBalance,
+      user: user.toJSON(),
+      transaction: tx.toJSON()
+    });
+  } catch (error: any) {
+    console.error('Admin adjust balance error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi máy chủ khi điều chỉnh số dư.' });
   }
 });
 
@@ -444,5 +536,63 @@ router.post('/clear-database', async (req: AuthenticatedRequest, res: Response) 
     return res.status(500).json({ success: false, message: 'Lỗi khi xóa dữ liệu trên MongoDB: ' + error.message });
   }
 });
+
+// ==========================================
+// REFERRAL MANAGEMENT (ADMIN)
+// ==========================================
+
+// GET /api/admin/referrals
+router.get('/referrals', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status, search, page, limit } = req.query;
+    const data = await getAdminReferralsData({
+      status: status as string,
+      search: search as string,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50
+    });
+    return res.json({
+      success: true,
+      ...data
+    });
+  } catch (error: any) {
+    console.error('Admin get referrals error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi tải danh sách referral' });
+  }
+});
+
+// GET /api/admin/referral-settings
+router.get('/referral-settings', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const settings = await getReferralSettings();
+    return res.json({
+      success: true,
+      settings
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tải cấu hình referral' });
+  }
+});
+
+// PATCH / PUT /api/admin/referral-settings
+const adminUpdateReferralSettingsHandler = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const adminContext = {
+      adminId: req.user?.userId || 'admin',
+      adminName: req.user?.email || 'Super Admin'
+    };
+    const updated = await updateReferralSettings(req.body, adminContext);
+    return res.json({
+      success: true,
+      message: 'Cập nhật cấu hình Referral thành công!',
+      settings: updated
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || 'Lỗi cập nhật cấu hình referral' });
+  }
+};
+
+router.patch('/referral-settings', adminUpdateReferralSettingsHandler);
+router.put('/referral-settings', adminUpdateReferralSettingsHandler);
 
 export default router;

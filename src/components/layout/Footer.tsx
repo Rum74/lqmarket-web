@@ -171,6 +171,14 @@ export const Footer: React.FC = () => {
                   Bảng Phí Sàn & Gói VIP Seller
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => setCurrentView('referral')}
+                  className="text-amber-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Giới Thiệu Bạn Bè (Nhận Thưởng)</span>
+                </button>
+              </li>
             </ul>
           </div>
 

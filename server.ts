@@ -27,6 +27,7 @@ import disputeRoutes from './backend/src/routes/disputeRoutes';
 import auditLogRoutes from './backend/src/routes/auditLogRoutes';
 import priceAlertRoutes from './backend/src/routes/priceAlertRoutes';
 import affiliateRoutes from './backend/src/routes/affiliateRoutes';
+import { referralRouter } from './backend/src/routes/referralRoutes';
 
 // Helper to resolve route modules across ESM and CJS imports
 const getRouter = (routeMod: any) => {
@@ -144,6 +145,7 @@ async function startServer() {
   const resolvedAuditLogRoutes = getRouter(auditLogRoutes);
   const resolvedPriceAlertRoutes = getRouter(priceAlertRoutes);
   const resolvedAffiliateRoutes = getRouter(affiliateRoutes);
+  const resolvedReferralRoutes = getRouter(referralRouter);
 
   app.use('/api/auth', resolvedAuthRoutes);
   app.use('/api/accounts', resolvedAccountRoutes);
@@ -172,6 +174,8 @@ async function startServer() {
   app.use('/api/disputes', resolvedDisputeRoutes);
   app.use('/api/price-alerts', resolvedPriceAlertRoutes);
   app.use('/api/affiliate', resolvedAffiliateRoutes);
+  app.use('/api/referrals', resolvedReferralRoutes);
+  app.use('/api/referral', resolvedReferralRoutes); // Alias
 
   // Global Webhook listeners (PayOS IPN)
   app.all('/webhook', (req, res, next) => {

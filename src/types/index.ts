@@ -99,6 +99,10 @@ export interface UserProfile {
   bankAccountName?: string;
   bio?: string;
   wishlistIds?: string[];
+  referralCode?: string;
+  referredBy?: string | null;
+  referralJoinedAt?: string | null;
+  referralRewardReceived?: boolean;
   createdAt: string;
 }
 
@@ -450,5 +454,43 @@ export interface BlogPostItem {
   publishedAt: string;
   readTime: string;
   relatedAccountTags?: string[];
+}
+
+// ----------------------------------------------------
+// REFERRAL SYSTEM TYPES
+// ----------------------------------------------------
+export interface ReferralItem {
+  id: string;
+  referrerId: string;
+  referrerName?: string;
+  referrerCode?: string;
+  referredUserId: string;
+  referredUserName?: string;
+  referredUserEmail?: string;
+  referredUserAvatar?: string;
+  status: 'pending' | 'completed' | 'cancelled';
+  rewardAmount: number;
+  referredRewardAmount: number;
+  rewardType: 'fixed_amount' | 'percentage';
+  qualifyingOrderId?: string | null;
+  qualifyingOrderCode?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export interface ReferralSettings {
+  enabled: boolean;
+  rewardType: 'fixed_amount' | 'percentage';
+  referrerReward: number;
+  referredUserReward: number;
+  minOrderValue: number;
+  description: string;
+}
+
+export interface ReferralUserStats {
+  totalInvited: number;
+  completedReferrals: number;
+  pendingReferrals: number;
+  totalEarned: number;
 }
 

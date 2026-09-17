@@ -24,7 +24,8 @@ import {
   Scale,
   Crown,
   Store,
-  Share2
+  Share2,
+  Gift
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -235,6 +236,23 @@ export const Navbar: React.FC = () => {
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Cẩm Nang</span>
+            </button>
+
+            {/* Giới Thiệu (Referral) */}
+            <button
+              id="nav-btn-referral"
+              onClick={() => setCurrentView('referral')}
+              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentView === 'referral'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
+              }`}
+            >
+              <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Giới Thiệu</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500 text-slate-950 uppercase tracking-wider leading-none">
+                TẶNG TIỀN
+              </span>
             </button>
           </nav>
 
@@ -482,6 +500,17 @@ export const Navbar: React.FC = () => {
                           <span>Tiếp Thị Liên Kết (Affiliate)</span>
                         </button>
 
+                        <button
+                          onClick={() => {
+                            setCurrentView('referral');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                        >
+                          <Gift className="w-4 h-4 text-amber-400" />
+                          <span>Giới thiệu bạn bè (Referral)</span>
+                        </button>
+
                         {currentUser.role !== 'buyer' && (
                           <button
                             onClick={() => {
@@ -723,6 +752,26 @@ export const Navbar: React.FC = () => {
             >
               <Share2 className="w-4 h-4 text-emerald-400" />
               <span>Kiếm Tiền Tiếp Thị (Affiliate)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentView('referral');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
+                currentView === 'referral'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
+              }`}
+            >
+              <Gift className="w-4 h-4 text-amber-400" />
+              <div className="flex items-center justify-between flex-1">
+                <span>Giới Thiệu Bạn Bè (Referral)</span>
+                <span className="text-[9px] font-black bg-emerald-500 text-slate-950 px-1.5 py-0.2 rounded-full uppercase">
+                  TẶNG TIỀN
+                </span>
+              </div>
             </button>
 
             <button

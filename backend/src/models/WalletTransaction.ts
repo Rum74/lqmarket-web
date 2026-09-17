@@ -6,10 +6,12 @@ export interface IWalletTransaction {
   userId: string;
   userName?: string;
   userEmail?: string;
-  type: 'deposit' | 'withdraw' | 'purchase' | 'seller_payout' | 'refund';
+  type: 'deposit' | 'withdraw' | 'purchase' | 'seller_payout' | 'refund' | 'referral_reward' | 'affiliate_commission' | 'admin_adjustment';
   amount: number;
   status: 'pending' | 'success' | 'failed' | 'cancelled';
   note: string;
+  description?: string;
+  referenceId?: string;
   bankName?: string;
   bankCode?: string;
   bankAccount?: string;
@@ -29,7 +31,7 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
     userEmail: { type: String, default: '' },
     type: {
       type: String,
-      enum: ['deposit', 'withdraw', 'purchase', 'seller_payout', 'refund'],
+      enum: ['deposit', 'withdraw', 'purchase', 'seller_payout', 'refund', 'referral_reward', 'affiliate_commission', 'admin_adjustment'],
       required: true,
       index: true
     },
@@ -41,6 +43,8 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
       index: true
     },
     note: { type: String, default: '' },
+    description: { type: String, default: '' },
+    referenceId: { type: String, default: null, index: true },
     bankName: { type: String },
     bankCode: { type: String },
     bankAccount: { type: String },
