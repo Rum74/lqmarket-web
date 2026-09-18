@@ -172,7 +172,9 @@ export const AccountCard: React.FC<AccountCardProps> = ({ account, onOpenDetail 
                 {sellerInfo.name}
               </span>
               {sellerInfo.isVerifiedSeller && (
-                <ShieldCheck size={12} className="text-emerald-400 shrink-0" title="Người bán đã xác thực" />
+                <span title="Người bán đã xác thực" className="inline-flex items-center">
+                  <ShieldCheck size={12} className="text-emerald-400 shrink-0" />
+                </span>
               )}
             </div>
             {sellerInfo.reviewsCount > 0 ? (

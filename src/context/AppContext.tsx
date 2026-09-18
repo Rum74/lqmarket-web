@@ -38,6 +38,7 @@ interface AppContextType {
   // Auth & User State
   currentUser: UserProfile;
   allUsers: UserProfile[];
+  setAllUsers: React.Dispatch<React.SetStateAction<UserProfile[]>>;
   isLoggedIn: boolean;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
@@ -178,8 +179,8 @@ interface AppContextType {
     }
   ) => boolean;
   withdrawFunds: (amount: number, bankInfo: string) => { success: boolean; message: string };
-  adminApproveWithdrawal: (txId: string, refNote?: string) => Promise<{ success: boolean; message: string }>;
-  adminRejectWithdrawal: (txId: string, reason: string) => Promise<{ success: boolean; message: string }>;
+  adminApproveWithdrawal: (txId: string, refNote?: string, extraContext?: any) => Promise<{ success: boolean; message: string }>;
+  adminRejectWithdrawal: (txId: string, reason: string, extraContext?: any) => Promise<{ success: boolean; message: string }>;
   adminDisburseEarly: (orderId: string) => Promise<{ success: boolean; message: string }>;
 
   // Chat
@@ -2064,8 +2065,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text: text.trim(),
       orderId
     }).then(res => {
-      if (res && res.message) {
-        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? res.message : m));
+      if (res && res.message && typeof res.message === 'object') {
+        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? (res.message as unknown as ChatMessage) : m));
+      } else if (res && res.data && typeof res.data === 'object') {
+        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? (res.data as unknown as ChatMessage) : m));
       }
     }).catch(e => console.warn('MongoDB message notice:', e));
   };
@@ -2098,8 +2101,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text: msgData.text.trim(),
       orderId: msgData.orderId
     }).then(res => {
-      if (res && res.message) {
-        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? res.message : m));
+      if (res && res.message && typeof res.message === 'object') {
+        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? (res.message as unknown as ChatMessage) : m));
+      } else if (res && res.data && typeof res.data === 'object') {
+        setChatMessages(prev => prev.map(m => m.id === newMsg.id ? (res.data as unknown as ChatMessage) : m));
       }
     }).catch(e => console.warn('MongoDB message notice:', e));
   };
@@ -2422,6 +2427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentUser,
         allUsers,
+        setAllUsers,
         isLoggedIn,
         isAuthModalOpen,
         setIsAuthModalOpen,

@@ -277,26 +277,30 @@ export const AdminDashboardView: React.FC = () => {
     return true;
   });
 
-  const handleCreateUserSubmit = (e: React.FormEvent) => {
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserForm.name.trim() || !newUserForm.email.trim() || !newUserForm.password.trim()) {
       alert('Vui lòng điền họ tên, email và mật khẩu.');
       return;
     }
     const balanceNum = Math.max(0, parseFloat(newUserForm.balance) || 0);
-    const created = adminCreateUser({
+    const result = await adminCreateUser({
       name: newUserForm.name.trim(),
       email: newUserForm.email.trim(),
       phone: newUserForm.phone.trim(),
       password: newUserForm.password.trim(),
       role: newUserForm.role,
       balance: balanceNum,
+      pendingBalance: 0,
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
+      rating: 5.0,
+      completedSales: 0,
       isVerifiedSeller: newUserForm.isVerifiedSeller,
       sellerTier: newUserForm.sellerTier,
       bio: newUserForm.bio.trim()
     });
-    if (created) {
-      showNotification(`Đã tạo thành công tài khoản "${created.name}"`);
+    if (result && result.success) {
+      showNotification(`Đã tạo thành công tài khoản "${newUserForm.name.trim()}"`);
       setIsAddUserModalOpen(false);
       setNewUserForm({
         name: '',
@@ -398,22 +402,31 @@ export const AdminDashboardView: React.FC = () => {
       )}
 
       {/* Admin Header Banner */}
-      <div className="p-4 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl bg-slate-900/95 border border-red-500/30 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-gradient-to-r from-red-950/40 via-slate-900 to-slate-950 shadow-2xl backdrop-blur-sm">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 text-[11px] font-black text-red-400 bg-red-500/15 border border-red-500/30 px-2.5 py-0.5 rounded-lg">
-            <ShieldAlert size={13} />
-            <span>SUPER ADMIN CONTROL CENTER • DỮ LIỆU ĐỒNG BỘ REAL-TIME</span>
+      <div className="p-4 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl bg-slate-900/95 border border-red-500/30 flex flex-col gap-4 bg-gradient-to-r from-red-950/40 via-slate-900 to-slate-950 shadow-2xl backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-black text-red-400 bg-red-500/15 border border-red-500/30 px-2.5 py-0.5 rounded-lg">
+              <ShieldAlert size={13} />
+              <span>SUPER ADMIN CONTROL CENTER • DỮ LIỆU ĐỒNG BỘ REAL-TIME</span>
+            </div>
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white tracking-tight">
+              TRUNG TÂM KIỂM DUYỆT & VẬN HÀNH LQMARKET
+            </h1>
+            <p className="text-xs text-slate-400">
+              Duyệt tin đăng bán, xử lý khiếu nại trung gian Escrow và quản trị thành viên toàn hệ thống.
+            </p>
           </div>
-          <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white tracking-tight">
-            TRUNG TÂM KIỂM DUYỆT & VẬN HÀNH LQMARKET
-          </h1>
-          <p className="text-xs text-slate-400">
-            Duyệt tin đăng bán, xử lý khiếu nại trung gian Escrow và quản trị thành viên toàn hệ thống.
-          </p>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800">
+              {accounts.length} Tài khoản • {allUsers.length} Thành viên
+            </span>
+          </div>
         </div>
 
-        {/* Tab Controls */}
-        <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl sm:rounded-2xl border border-slate-800/80 overflow-x-auto max-w-full scrollbar-none shrink-0">
+        {/* Tab Controls - Rộng rãi, toàn chiều ngang, không bị đè hay chèn ép */}
+        <div className="w-full pt-2 sm:pt-3 border-t border-slate-800/80">
+          <div className="flex items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-xl sm:rounded-2xl border border-slate-800/80 overflow-x-auto max-w-full scrollbar-thin scrollbar-thumb-slate-700">
           <button
             onClick={() => setActiveTab('pending')}
             className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
@@ -561,6 +574,7 @@ export const AdminDashboardView: React.FC = () => {
           >
             Hệ Thống
           </button>
+        </div>
         </div>
       </div>
 

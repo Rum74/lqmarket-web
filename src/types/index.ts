@@ -15,6 +15,8 @@ export type AccountStatus = 'pending' | 'approved' | 'rejected' | 'sold' | 'hidd
 export type UserRole = 'buyer' | 'seller' | 'admin';
 
 export type OrderStatus =
+  | 'pending'
+  | 'delivered'
   | 'pending_payment'
   | 'escrow_hold'
   | 'account_delivered'
@@ -23,7 +25,7 @@ export type OrderStatus =
   | 'disputed'
   | 'refunded';
 
-export type SellerTier = 'FREE' | 'BASIC' | 'PRO' | 'VIP';
+export type SellerTier = 'FREE' | 'BASIC' | 'STANDARD' | 'PRO' | 'VIP';
 
 export interface RareSkin {
   name: string;
@@ -37,6 +39,7 @@ export interface AccountCredentials {
   password: string;
   securityType: 'Trắng Thông Tin' | 'SĐT Có Thể Đổi' | 'Email Đã Đổi' | 'Facebook Đã Huỷ';
   secretNotes?: string;
+  securityNote?: string;
 }
 
 export interface AccountItem {
@@ -48,6 +51,7 @@ export interface AccountItem {
   rank: RankTier;
   level: number;
   heroesCount: number;
+  championsCount?: number;
   skinsCount: number;
   runePages: string; // e.g. "90/90 Full Ngọc III"
   server: string; // "Việt Nam", etc.
@@ -97,6 +101,8 @@ export interface UserProfile {
   bankName?: string;
   bankAccount?: string;
   bankAccountName?: string;
+  bankCode?: string;
+  soldCount?: number;
   bio?: string;
   wishlistIds?: string[];
   referralCode?: string;
@@ -129,6 +135,7 @@ export interface OrderItem {
   voucherCodeUsed?: string;
   fee: number;
   totalAmount: number;
+  sellerEarnings?: number;
   buyerId: string;
   buyerName: string;
   sellerId: string;
@@ -172,7 +179,7 @@ export interface WalletTransaction {
   userEmail?: string;
   type: 'deposit' | 'purchase' | 'seller_payout' | 'fee' | 'refund' | 'withdraw';
   amount: number;
-  status: 'success' | 'pending' | 'failed';
+  status: 'success' | 'pending' | 'failed' | 'approved' | 'completed' | 'rejected' | 'cancelled';
   note: string;
   bankName?: string;
   bankCode?: string;
@@ -214,6 +221,7 @@ export interface MysteryBoxTierConfig {
   originalPrice?: number;
   description: string;
   badge?: string; // 'HOT' | 'TIẾT KIỆM' | 'TỶ LỆ CAO' | 'VIP SSS'
+  tagText?: string;
   colorGradient: string;
   borderColor: string;
   iconBg: string;
@@ -350,6 +358,7 @@ export interface CouponItem {
 // DISPUTE (KHIẾU NẠI) TYPES
 // ----------------------------------------------------
 export type DisputeStatus =
+  | 'open'
   | 'pending'
   | 'under_review'
   | 'resolved_buyer_refund'

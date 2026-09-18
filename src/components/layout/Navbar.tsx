@@ -134,7 +134,7 @@ export const Navbar: React.FC = () => {
           {/* ====================================================
               2. CENTER GROUP: NAVIGATION LINKS
              ==================================================== */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink min-w-0">
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
             {/* Trang Chủ */}
             <button
               id="nav-btn-home"
@@ -216,7 +216,7 @@ export const Navbar: React.FC = () => {
               <span>Đơn Hàng</span>
             </button>
 
-            {/* Giới Thiệu (Referral) */}
+            {/* Giới Thiệu (Referral) - Đã xóa thẻ TẶNG TIỀN theo yêu cầu */}
             <button
               id="nav-btn-referral"
               onClick={() => setCurrentView('referral')}
@@ -228,16 +228,13 @@ export const Navbar: React.FC = () => {
             >
               <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Giới Thiệu</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500 text-slate-950 uppercase tracking-wider leading-none">
-                TẶNG TIỀN
-              </span>
             </button>
 
-            {/* Hướng Dẫn (Hiện trên xl+) */}
+            {/* Hướng Dẫn (Hiện riêng trên 2xl+) */}
             <button
               id="nav-btn-guide"
               onClick={() => setCurrentView('guide')}
-              className={`hidden xl:flex h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap items-center gap-1.5 ${
+              className={`hidden 2xl:flex h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap items-center gap-1.5 ${
                 currentView === 'guide'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -247,11 +244,11 @@ export const Navbar: React.FC = () => {
               <span>Hướng Dẫn</span>
             </button>
 
-            {/* Cẩm Nang / Blog (Hiện trên xl+) */}
+            {/* Cẩm Nang / Blog (Hiện riêng trên 2xl+) */}
             <button
               id="nav-btn-blog"
               onClick={() => setCurrentView('blog')}
-              className={`hidden xl:flex h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap items-center gap-1.5 ${
+              className={`hidden 2xl:flex h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap items-center gap-1.5 ${
                 currentView === 'blog'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -261,8 +258,8 @@ export const Navbar: React.FC = () => {
               <span>Cẩm Nang</span>
             </button>
 
-            {/* Menu 'Thêm' gọn cho màn hình lg (1024px - 1279px) */}
-            <div className="relative xl:hidden" ref={moreMenuRef}>
+            {/* Menu 'Thêm' gọn cho màn hình < 2xl (1024px - 1535px) */}
+            <div className="relative 2xl:hidden" ref={moreMenuRef}>
               <button
                 id="nav-btn-more-dropdown"
                 onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
@@ -277,7 +274,7 @@ export const Navbar: React.FC = () => {
               </button>
 
               {isMoreMenuOpen && (
-                <div className="absolute top-full left-0 mt-1.5 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl py-1 z-50 text-left animate-in fade-in duration-150">
+                <div className="absolute top-full right-0 mt-1.5 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl py-1 z-50 text-left animate-in fade-in duration-150">
                   <button
                     onClick={() => {
                       setCurrentView('guide');
