@@ -1,4 +1,8 @@
 import 'dotenv/config';
+
+// Force standard Vietnam Timezone (GMT+7)
+process.env.TZ = 'Asia/Ho_Chi_Minh';
+
 import express from 'express';
 import cors from 'cors';
 import { connectDB, getDBConnectionStatus } from './config/db';

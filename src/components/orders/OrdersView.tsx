@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { OrderItem } from '../../types';
 import confetti from '../../utils/confetti';
+import { formatVietnamDateTime } from '../../utils/dateUtils';
 import {
   ShoppingBag,
   ShieldCheck,
@@ -265,7 +266,7 @@ export const OrdersView: React.FC = () => {
                       Mã acc: <strong className="text-white">#{order.accountCode}</strong>
                     </span>
                     <span className="text-[11px] text-slate-500 hidden sm:inline">
-                      • {new Date(order.createdAt).toLocaleString('vi-VN')}
+                      • {formatVietnamDateTime(order.createdAt)}
                     </span>
                   </div>
 

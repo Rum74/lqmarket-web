@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { formatVietnamDateTime } from '../../utils/dateUtils';
 import {
   Gift,
   Users,
@@ -38,7 +39,9 @@ export const AdminReferralsTab: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rewarded'>('all');
 
   useEffect(() => {
-    fetchAdminReferrals();
+    if (typeof fetchAdminReferrals === 'function') {
+      fetchAdminReferrals();
+    }
   }, [fetchAdminReferrals]);
 
   useEffect(() => {
@@ -365,13 +368,7 @@ export const AdminReferralsTab: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-3 text-slate-400 text-[11px]">
-                      {new Date(item.createdAt).toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatVietnamDateTime(item.createdAt)}
                     </td>
                   </tr>
                 ))}

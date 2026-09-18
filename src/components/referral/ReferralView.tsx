@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ErrorBoundary } from '../common/ErrorBoundary';
+import { formatVietnamDateTime } from '../../utils/dateUtils';
 import {
   Gift,
   Users,
@@ -122,20 +122,7 @@ const ReferralContent: React.FC = () => {
   };
 
   const formatSafeDate = (dateVal: any) => {
-    if (!dateVal) return 'Vừa xong';
-    try {
-      const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return 'Vừa xong';
-      return d.toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return 'Vừa xong';
-    }
+    return formatVietnamDateTime(dateVal, 'Vừa xong');
   };
 
   const referrerDisplay = useMemo(() => {
@@ -501,7 +488,7 @@ const ReferralContent: React.FC = () => {
                   const rewardAmt = (item as any).rewardAmount || (item as any).referrerReward || 0;
                   const userNameDisplay = item.referredUserName || item.referredUserId || 'Thành viên mới';
                   const userSubDisplay = item.referredUserEmail || item.referredUserId || '';
-                  const isCompleted = item.status === 'rewarded' || item.status === 'completed';
+                  const isCompleted = (item.status as string) === 'rewarded' || (item.status as string) === 'completed';
 
                   return (
                     <tr key={itemId} className="hover:bg-slate-800/30 transition-colors">
@@ -534,7 +521,7 @@ const ReferralContent: React.FC = () => {
                       <td className="py-3 px-4">
                         {item.qualifyingOrderId ? (
                           <span className="font-mono text-slate-300">
-                            {String(item.qualifyingOrderId)} {item.orderAmount ? `(${formatCurrency(item.orderAmount)})` : ''}
+                            {String(item.qualifyingOrderId)} {(item as any).orderAmount ? `(${formatCurrency((item as any).orderAmount)})` : ''}
                           </span>
                         ) : (
                           <span className="text-slate-500 italic">Chưa phát sinh</span>
@@ -601,10 +588,4 @@ const ReferralContent: React.FC = () => {
   );
 };
 
-export const ReferralView: React.FC = () => {
-  return (
-    <ErrorBoundary fallbackTitle="Đang tải chương trình Giới Thiệu">
-      <ReferralContent />
-    </ErrorBoundary>
-  );
-};
+export const ReferralView: React.FC = ReferralContent;

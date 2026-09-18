@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { formatVietnamDateTime } from '../../utils/dateUtils';
 import {
   MysteryBoxTierConfig,
   MysteryBoxRewardItem,
@@ -564,7 +565,7 @@ export const MysteryBoxView: React.FC = () => {
                         <div>
                           <h4 className="font-bold text-sm text-white">{item.title}</h4>
                           <span className="text-[11px] text-slate-400">
-                            Nhận lúc: {new Date(item.receivedAt).toLocaleString('vi-VN')}
+                            Nhận lúc: {formatVietnamDateTime(item.receivedAt)}
                           </span>
                         </div>
                       </div>

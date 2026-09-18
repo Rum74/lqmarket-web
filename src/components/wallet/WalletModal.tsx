@@ -4,6 +4,7 @@ import { api } from '../../lib/apiClient';
 import confetti from '../../utils/confetti';
 import { LQMARKET_LOGO } from '../../assets/logo';
 import { VIETQR_BANKS, getBankBinCode, getBankInfo } from '../../utils/vietqrBanks';
+import { formatVietnamDateTime } from '../../utils/dateUtils';
 import {
   Wallet,
   X,
@@ -1373,7 +1374,7 @@ export const WalletModal: React.FC = () => {
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">{t.note}</div>
                       <div className="text-[10px] text-slate-500">
-                        {new Date(t.createdAt).toLocaleTimeString('vi-VN')} {new Date(t.createdAt).toLocaleDateString('vi-VN')}
+                        {formatVietnamDateTime(t.createdAt)}
                       </div>
                     </div>
 

@@ -464,13 +464,17 @@ export interface ReferralItem {
   referrerId: string;
   referrerName?: string;
   referrerCode?: string;
+  referralCode?: string;
   referredUserId: string;
   referredUserName?: string;
   referredUserEmail?: string;
   referredUserAvatar?: string;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: 'pending' | 'completed' | 'cancelled' | 'rewarded';
   rewardAmount: number;
   referredRewardAmount: number;
+  referrerReward?: number;
+  referredUserReward?: number;
+  orderAmount?: number;
   rewardType: 'fixed_amount' | 'percentage';
   qualifyingOrderId?: string | null;
   qualifyingOrderCode?: string | null;

@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { api } from '../../lib/apiClient';
 import { RankBadge } from '../common/RankBadge';
 import { getDynamicSellerInfo, calculateSellerTrustScore } from '../../utils/sellerHelper';
+import { formatVietnamDate } from '../../utils/dateUtils';
 import {
   Store,
   DollarSign,
@@ -601,7 +602,7 @@ export const SellerCenterView: React.FC = () => {
                     <h4 className="text-xs sm:text-sm font-bold text-white">{order.accountTitle}</h4>
                     <div className="text-[11px] text-slate-400">
                       Người mua: <strong className="text-slate-300">{order.buyerName}</strong> • Ngày tạo:{' '}
-                      {new Date(order.createdAt).toLocaleDateString('vi-VN')}
+                      {formatVietnamDate(order.createdAt)}
                     </div>
                   </div>
 

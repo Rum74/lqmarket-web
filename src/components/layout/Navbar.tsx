@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { LQMARKET_LOGO } from '../../assets/logo';
+import { formatVietnamTime } from '../../utils/dateUtils';
 import {
   Heart,
   Wallet,
@@ -53,9 +54,11 @@ export const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const currentUserNotifications = currentUser.id ? notifications.filter(n => n.userId === currentUser.id) : [];
   const unreadNotifs = currentUserNotifications.filter(n => !n.read);
@@ -72,16 +75,19 @@ export const Navbar: React.FC = () => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full transition-all">
+    <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full overflow-x-clip transition-all">
       {/* Main Header Container (Synchronized with 1536px canvas) */}
-      <div className="w-full max-w-[1536px] mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-[64px] sm:h-[68px] w-full gap-3 xl:gap-4">
+      <div className="w-full max-w-[1536px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8">
+        <div className="flex items-center justify-between h-[64px] sm:h-[68px] w-full gap-2 xl:gap-4">
 
           {/* ====================================================
               1. LEFT GROUP: LOGO & DESKTOP SEARCH
@@ -118,7 +124,7 @@ export const Navbar: React.FC = () => {
                 <span className="text-base sm:text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors leading-none">
                   LQ<span className="text-amber-400">MARKET</span>
                 </span>
-                <p className="text-[10px] text-slate-400 font-medium tracking-tight mt-0.5 hidden sm:block leading-tight">
+                <p className="text-[10px] text-slate-400 font-medium tracking-tight mt-0.5 hidden 2xl:block leading-tight">
                   Sàn Mua Bán Acc Liên Quân Uy Tín - Chất Lượng
                 </p>
               </div>
@@ -128,12 +134,12 @@ export const Navbar: React.FC = () => {
           {/* ====================================================
               2. CENTER GROUP: NAVIGATION LINKS
              ==================================================== */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink min-w-0">
             {/* Trang Chủ */}
             <button
               id="nav-btn-home"
               onClick={() => setCurrentView('home')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 currentView === 'home'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -147,7 +153,7 @@ export const Navbar: React.FC = () => {
             <button
               id="nav-btn-accounts"
               onClick={() => setCurrentView('accounts')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 currentView === 'accounts'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -161,7 +167,7 @@ export const Navbar: React.FC = () => {
             <button
               id="nav-btn-mystery-box"
               onClick={() => setCurrentView('mystery_box')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 currentView === 'mystery_box'
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
                   : 'text-amber-400 bg-amber-400/10 border border-amber-400/30 hover:bg-amber-400/20 font-bold'
@@ -185,7 +191,7 @@ export const Navbar: React.FC = () => {
                     setCurrentView('sell');
                   }
                 }}
-                className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                className={`h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   currentView === 'sell'
                     ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -200,7 +206,7 @@ export const Navbar: React.FC = () => {
             <button
               id="nav-btn-orders"
               onClick={() => setCurrentView('orders')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 currentView === 'orders'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -210,39 +216,11 @@ export const Navbar: React.FC = () => {
               <span>Đơn Hàng</span>
             </button>
 
-            {/* Hướng Dẫn */}
-            <button
-              id="nav-btn-guide"
-              onClick={() => setCurrentView('guide')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                currentView === 'guide'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>Hướng Dẫn</span>
-            </button>
-
-            {/* Cẩm Nang / Blog */}
-            <button
-              id="nav-btn-blog"
-              onClick={() => setCurrentView('blog')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                currentView === 'blog'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Cẩm Nang</span>
-            </button>
-
             {/* Giới Thiệu (Referral) */}
             <button
               id="nav-btn-referral"
               onClick={() => setCurrentView('referral')}
-              className={`h-[35px] px-2.5 xl:px-3 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              className={`h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 currentView === 'referral'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
@@ -254,6 +232,79 @@ export const Navbar: React.FC = () => {
                 TẶNG TIỀN
               </span>
             </button>
+
+            {/* Hướng Dẫn (Hiện trên xl+) */}
+            <button
+              id="nav-btn-guide"
+              onClick={() => setCurrentView('guide')}
+              className={`hidden xl:flex h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap items-center gap-1.5 ${
+                currentView === 'guide'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>Hướng Dẫn</span>
+            </button>
+
+            {/* Cẩm Nang / Blog (Hiện trên xl+) */}
+            <button
+              id="nav-btn-blog"
+              onClick={() => setCurrentView('blog')}
+              className={`hidden xl:flex h-[35px] px-2 xl:px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap items-center gap-1.5 ${
+                currentView === 'blog'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Cẩm Nang</span>
+            </button>
+
+            {/* Menu 'Thêm' gọn cho màn hình lg (1024px - 1279px) */}
+            <div className="relative xl:hidden" ref={moreMenuRef}>
+              <button
+                id="nav-btn-more-dropdown"
+                onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+                className={`h-[35px] px-2 rounded-lg text-xs font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                  currentView === 'guide' || currentView === 'blog'
+                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
+                }`}
+              >
+                <span>Thêm</span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isMoreMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isMoreMenuOpen && (
+                <div className="absolute top-full left-0 mt-1.5 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl py-1 z-50 text-left animate-in fade-in duration-150">
+                  <button
+                    onClick={() => {
+                      setCurrentView('guide');
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 text-xs font-medium flex items-center gap-2 text-left cursor-pointer ${
+                      currentView === 'guide' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>Hướng Dẫn</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentView('blog');
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 text-xs font-medium flex items-center gap-2 text-left cursor-pointer ${
+                      currentView === 'blog' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Cẩm Nang</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* ====================================================
@@ -373,10 +424,7 @@ export const Navbar: React.FC = () => {
                                   {n.title}
                                 </h4>
                                 <span className="text-[10px] text-slate-500 whitespace-nowrap">
-                                  {new Date(n.createdAt).toLocaleTimeString('vi-VN', {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
+                                  {formatVietnamTime(n.createdAt)}
                                 </span>
                               </div>
                               <p className="text-xs text-slate-400 mt-1 leading-relaxed">{n.message}</p>

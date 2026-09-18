@@ -242,6 +242,7 @@ interface AppContextType {
   adminReferrals: ReferralItem[];
   adminReferralSettings: ReferralSettings | null;
   fetchAdminReferralData: () => Promise<void>;
+  fetchAdminReferrals: () => Promise<void>;
   adminUpdateReferralSettings: (settings: Partial<ReferralSettings>) => Promise<{ success: boolean; message: string }>;
 
   // System & Database Management
@@ -2570,6 +2571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminReferrals,
         adminReferralSettings,
         fetchAdminReferralData,
+        fetchAdminReferrals: fetchAdminReferralData,
         adminUpdateReferralSettings,
 
         // Mystery Box

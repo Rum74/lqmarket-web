@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { WalletTransaction, OrderItem } from '../../types';
 import confetti from '../../utils/confetti';
 import { VIETQR_BANKS, getBankInfo, getBankBinCode, buildVietQrUrl } from '../../utils/vietqrBanks';
+import { formatVietnamDateTime } from '../../utils/dateUtils';
 import {
   Wallet,
   CheckCircle2,
@@ -508,10 +509,10 @@ export const AdminPayoutManagement: React.FC = () => {
                       </div>
 
                       <div className="text-xs text-slate-400 font-mono">
-                        Yêu cầu lúc: {new Date(tx.createdAt).toLocaleTimeString('vi-VN')} {new Date(tx.createdAt).toLocaleDateString('vi-VN')}
+                        Yêu cầu lúc: {formatVietnamDateTime(tx.createdAt)}
                         {tx.processedAt && (
                           <span className="text-emerald-400 block sm:inline sm:ml-2">
-                            • Xử lý lúc: {new Date(tx.processedAt).toLocaleTimeString('vi-VN')}
+                            • Xử lý lúc: {formatVietnamDateTime(tx.processedAt)}
                           </span>
                         )}
                       </div>
@@ -738,7 +739,7 @@ export const AdminPayoutManagement: React.FC = () => {
 
                   <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-800 text-xs">
                     <span className="text-slate-400 text-[11px]">
-                      Tạo lúc: {new Date(order.createdAt).toLocaleTimeString('vi-VN')} {new Date(order.createdAt).toLocaleDateString('vi-VN')}
+                      Tạo lúc: {formatVietnamDateTime(order.createdAt)}
                     </span>
 
                     <button

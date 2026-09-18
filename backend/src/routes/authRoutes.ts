@@ -226,7 +226,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     // Create login Notification
     try {
-      const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ngày ' + new Date().toLocaleDateString('vi-VN');
+      const nowStr = new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false }) + ' ngày ' + new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' });
       const loginNotif = new Notification({
         id: `notif_login_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         userId: user.id,

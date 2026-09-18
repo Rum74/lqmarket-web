@@ -1,4 +1,8 @@
 import 'dotenv/config';
+
+// Force standard Vietnam Timezone (GMT+7) for all server dates
+process.env.TZ = 'Asia/Ho_Chi_Minh';
+
 import express from 'express';
 import path from 'path';
 import fs from 'fs';

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { api } from '../../lib/apiClient';
 import { SellerVerificationRequest } from '../../types';
+import { formatVietnamDate } from '../../utils/dateUtils';
 import { ShieldCheck, Check, X, Clock, ExternalLink, Phone, AlertCircle, Award, RefreshCw } from 'lucide-react';
 
 export const AdminSellerVerificationTab: React.FC = () => {
@@ -109,7 +110,7 @@ export const AdminSellerVerificationTab: React.FC = () => {
                   </div>
 
                   <div className="text-right text-xs text-slate-400">
-                    <div>Ngày nộp: {new Date(req.appliedAt).toLocaleDateString('vi-VN')}</div>
+                    <div>Ngày nộp: {formatVietnamDate(req.appliedAt)}</div>
                   </div>
                 </div>
 

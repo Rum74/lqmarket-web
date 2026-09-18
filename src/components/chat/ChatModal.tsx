@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import { formatVietnamTime } from '../../utils/dateUtils';
 import {
   MessageCircle,
   X,
@@ -221,10 +222,7 @@ export const ChatModal: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1 text-[9px] text-slate-500 mt-1 px-1">
                   <span>
-                    {new Date(msg.timestamp).toLocaleTimeString('vi-VN', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {formatVietnamTime(msg.timestamp)}
                   </span>
                   {isMe && <CheckCheck size={11} className="text-emerald-400" />}
                 </div>
