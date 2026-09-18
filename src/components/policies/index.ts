@@ -1,0 +1,10 @@
+export { PolicyLayout } from './PolicyLayout';
+export { OperatingRegulationsView } from './OperatingRegulationsView';
+export { PrivacyPolicyView } from './PrivacyPolicyView';
+export { BuyerPolicyView } from './BuyerPolicyView';
+export { GameAccountPolicyView } from './GameAccountPolicyView';
+export { DisputeResolutionPolicyView } from './DisputeResolutionPolicyView';
+export { ViolationReportingPolicyView } from './ViolationReportingPolicyView';
+export { IntellectualPropertyPolicyView } from './IntellectualPropertyPolicyView';
+export { CompanyInfoPolicyView } from './CompanyInfoPolicyView';
+export { TermsOfServicePolicyView } from './TermsOfServicePolicyView';

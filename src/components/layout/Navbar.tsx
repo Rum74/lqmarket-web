@@ -491,17 +491,6 @@ export const Navbar: React.FC = () => {
 
                         <button
                           onClick={() => {
-                            setCurrentView('affiliate');
-                            setIsUserMenuOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
-                        >
-                          <Share2 className="w-4 h-4 text-emerald-400" />
-                          <span>Tiếp Thị Liên Kết (Affiliate)</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
                             setCurrentView('referral');
                             setIsUserMenuOpen(false);
                           }}
@@ -737,21 +726,6 @@ export const Navbar: React.FC = () => {
             >
               <BookOpen className="w-4 h-4 text-amber-400" />
               <span>Cẩm Nang Leo Rank & Tin Tức</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setCurrentView('affiliate');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors ${
-                currentView === 'affiliate'
-                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
-                  : 'text-slate-300 hover:bg-slate-900'
-              }`}
-            >
-              <Share2 className="w-4 h-4 text-emerald-400" />
-              <span>Kiếm Tiền Tiếp Thị (Affiliate)</span>
             </button>
 
             <button

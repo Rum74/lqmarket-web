@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
   Gift,
   Users,
   Share2,
   Copy,
   Check,
-  ExternalLink,
   ShieldCheck,
   Clock,
-  ArrowRight,
   Sparkles,
   Info,
   Coins,
@@ -20,7 +19,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-export const ReferralView: React.FC = () => {
+const ReferralContent: React.FC = () => {
   const {
     currentUser,
     isLoggedIn,
@@ -36,23 +35,29 @@ export const ReferralView: React.FC = () => {
     setCurrentView
   } = useApp();
 
-  const safeSettings = referralSettings || {
-    enabled: true,
-    rewardType: 'fixed_amount',
-    referrerReward: 10000,
-    referredUserReward: 10000,
-    minOrderValue: 20000,
-    description: 'Giới thiệu bạn bè nhận 10.000đ khi hoàn tất đơn hàng đầu tiên.'
-  };
+  const safeSettings = useMemo(() => {
+    return {
+      enabled: referralSettings?.enabled ?? true,
+      rewardType: referralSettings?.rewardType || 'fixed_amount',
+      referrerReward: Number(referralSettings?.referrerReward) || 20000,
+      referredUserReward: Number(referralSettings?.referredUserReward) || 10000,
+      minOrderValue: Number(referralSettings?.minOrderValue ?? (referralSettings as any)?.minimumOrderValue) || 200000,
+      description: referralSettings?.description || 'Giới thiệu bạn bè nhận thưởng tiền mặt hấp dẫn!'
+    };
+  }, [referralSettings]);
 
-  const safeStats = referralStats || {
-    totalInvited: 0,
-    completedReferrals: 0,
-    pendingReferrals: 0,
-    totalEarned: 0
-  };
+  const safeStats = useMemo(() => {
+    return {
+      totalInvited: Number(referralStats?.totalInvited) || 0,
+      completedReferrals: Number(referralStats?.completedReferrals ?? (referralStats as any)?.rewardedCount) || 0,
+      pendingReferrals: Number(referralStats?.pendingReferrals ?? (referralStats as any)?.pendingCount) || 0,
+      totalEarned: Number(referralStats?.totalEarned ?? (referralStats as any)?.totalRewardEarned) || 0
+    };
+  }, [referralStats]);
 
-  const historyList = Array.isArray(referralHistory) ? referralHistory : [];
+  const historyList = useMemo(() => {
+    return Array.isArray(referralHistory) ? referralHistory.filter(Boolean) : [];
+  }, [referralHistory]);
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -61,28 +66,41 @@ export const ReferralView: React.FC = () => {
   const [claimStatus, setClaimStatus] = useState<{ message: string; isError?: boolean } | null>(null);
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && typeof fetchReferralData === 'function') {
       fetchReferralData();
     }
   }, [isLoggedIn, fetchReferralData]);
 
   const handleCopyCode = () => {
     if (!userReferralCode) return;
-    navigator.clipboard.writeText(userReferralCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
+    try {
+      navigator.clipboard.writeText(userReferralCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
   };
 
   const handleCopyLink = () => {
-    if (!userReferralLink) return;
-    navigator.clipboard.writeText(userReferralLink);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    const link = userReferralLink || (userReferralCode ? `https://cholienquan.com?ref=${userReferralCode}` : '');
+    if (!link) return;
+    try {
+      navigator.clipboard.writeText(link);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
   };
 
   const handleShareFacebook = () => {
-    const url = encodeURIComponent(userReferralLink || 'https://cholienquan.com');
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=400');
+    const url = encodeURIComponent(userReferralLink || (typeof window !== 'undefined' ? window.location.href : 'https://cholienquan.com'));
+    if (typeof window !== 'undefined') {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=400');
+    }
   };
 
   const handleClaim = async () => {
@@ -90,17 +108,44 @@ export const ReferralView: React.FC = () => {
     setClaimStatus(null);
     try {
       const res = await claimReferralReward();
-      setClaimStatus({ message: res.message, isError: !res.success });
+      setClaimStatus({ message: res.message || 'Thành công', isError: !res.success });
     } catch (err: any) {
-      setClaimStatus({ message: err.message || 'Lỗi khi nhận thưởng', isError: true });
+      setClaimStatus({ message: err?.message || 'Lỗi khi nhận thưởng', isError: true });
     } finally {
       setIsClaiming(false);
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return (val || 0).toLocaleString('vi-VN') + 'đ';
+  const formatCurrency = (val: any) => {
+    const num = typeof val === 'number' ? val : (Number(val) || 0);
+    return num.toLocaleString('vi-VN') + 'đ';
   };
+
+  const formatSafeDate = (dateVal: any) => {
+    if (!dateVal) return 'Vừa xong';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return 'Vừa xong';
+      return d.toLocaleDateString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Vừa xong';
+    }
+  };
+
+  const referrerDisplay = useMemo(() => {
+    if (!currentUser?.referredBy) return null;
+    if (typeof currentUser.referredBy === 'string') return currentUser.referredBy;
+    if (typeof currentUser.referredBy === 'object') {
+      return (currentUser.referredBy as any)?.name || (currentUser.referredBy as any)?.code || (currentUser.referredBy as any)?.id || 'Thành viên';
+    }
+    return String(currentUser.referredBy);
+  }, [currentUser?.referredBy]);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-6">
@@ -222,7 +267,7 @@ export const ReferralView: React.FC = () => {
               <label className="text-xs text-slate-400 font-medium">Đường dẫn chia sẻ trực tiếp:</label>
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-300 font-mono truncate select-all">
-                  {userReferralLink}
+                  {userReferralLink || (userReferralCode ? `https://cholienquan.com?ref=${userReferralCode}` : 'https://cholienquan.com')}
                 </div>
                 <button
                   onClick={handleCopyLink}
@@ -266,21 +311,21 @@ export const ReferralView: React.FC = () => {
                 <span>Trạng Thái Của Bạn</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                {currentUser?.referredBy ? (
+                {referrerDisplay ? (
                   <>
-                    Bạn được giới thiệu bởi thành viên: <strong className="text-amber-400 font-mono">{currentUser.referredBy}</strong>
+                    Bạn được giới thiệu bởi thành viên: <strong className="text-amber-400 font-mono">{referrerDisplay}</strong>
                   </>
                 ) : (
                   'Bạn chưa liên kết người giới thiệu nào.'
                 )}
               </p>
 
-              {currentUser?.referredBy && (
+              {referrerDisplay && (
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 mb-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">Thưởng chào mừng:</span>
-                    <span className={`font-semibold ${currentUser.referralRewardReceived ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {currentUser.referralRewardReceived ? 'Đã nhận thưởng' : 'Chưa nhận'}
+                    <span className={`font-semibold ${currentUser?.referralRewardReceived ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {currentUser?.referralRewardReceived ? 'Đã nhận thưởng' : 'Chưa nhận'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
@@ -291,7 +336,7 @@ export const ReferralView: React.FC = () => {
               )}
             </div>
 
-            {currentUser?.referredBy && !currentUser?.referralRewardReceived && (
+            {referrerDisplay && !currentUser?.referralRewardReceived && (
               <div className="space-y-2">
                 <button
                   onClick={handleClaim}
@@ -303,7 +348,7 @@ export const ReferralView: React.FC = () => {
                 </button>
                 {claimStatus && (
                   <p className={`text-[11px] text-center ${claimStatus.isError ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {claimStatus.message}
+                    {typeof claimStatus.message === 'string' ? claimStatus.message : JSON.stringify(claimStatus.message)}
                   </p>
                 )}
               </div>
@@ -451,29 +496,30 @@ export const ReferralView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {historyList.map((item) => {
+                {historyList.map((item, idx) => {
+                  const itemId = item.id || (item as any)._id || `ref_${idx}`;
                   const rewardAmt = (item as any).rewardAmount || (item as any).referrerReward || 0;
+                  const userNameDisplay = item.referredUserName || item.referredUserId || 'Thành viên mới';
+                  const userSubDisplay = item.referredUserEmail || item.referredUserId || '';
+                  const isCompleted = item.status === 'rewarded' || item.status === 'completed';
+
                   return (
-                    <tr key={item.id} className="hover:bg-slate-800/30 transition-colors">
+                    <tr key={itemId} className="hover:bg-slate-800/30 transition-colors">
                       <td className="py-3 px-4">
                         <div className="font-medium text-slate-200">
-                          {item.referredUserName || item.referredUserId || 'Thành viên'}
+                          {typeof userNameDisplay === 'string' ? userNameDisplay : 'Thành viên'}
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {item.referredUserId}
-                        </div>
+                        {userSubDisplay && (
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {typeof userSubDisplay === 'string' ? userSubDisplay : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-slate-400">
-                        {new Date(item.createdAt).toLocaleDateString('vi-VN', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        {formatSafeDate(item.createdAt)}
                       </td>
                       <td className="py-3 px-4">
-                        {item.status === 'rewarded' || item.status === 'completed' ? (
+                        {isCompleted ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium text-[11px]">
                             <Check size={12} />
                             <span>Đã trả thưởng</span>
@@ -488,7 +534,7 @@ export const ReferralView: React.FC = () => {
                       <td className="py-3 px-4">
                         {item.qualifyingOrderId ? (
                           <span className="font-mono text-slate-300">
-                            {item.qualifyingOrderId} ({formatCurrency(item.orderAmount || 0)})
+                            {String(item.qualifyingOrderId)} {item.orderAmount ? `(${formatCurrency(item.orderAmount)})` : ''}
                           </span>
                         ) : (
                           <span className="text-slate-500 italic">Chưa phát sinh</span>
@@ -534,13 +580,13 @@ export const ReferralView: React.FC = () => {
             </p>
             <div className="bg-white p-4 rounded-xl inline-block mx-auto">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(userReferralLink)}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(userReferralLink || (userReferralCode ? `https://cholienquan.com?ref=${userReferralCode}` : 'https://cholienquan.com'))}`}
                 alt="QR Code"
                 className="w-48 h-48"
               />
             </div>
             <div className="font-mono text-xs text-amber-400 font-bold bg-slate-950 py-2 rounded-lg border border-slate-800">
-              Mã: {userReferralCode}
+              Mã: {userReferralCode || 'LQMARKET'}
             </div>
             <button
               onClick={() => setShowQrModal(false)}
@@ -552,5 +598,13 @@ export const ReferralView: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+export const ReferralView: React.FC = () => {
+  return (
+    <ErrorBoundary fallbackTitle="Đang tải chương trình Giới Thiệu">
+      <ReferralContent />
+    </ErrorBoundary>
   );
 };

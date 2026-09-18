@@ -57,9 +57,9 @@ export const Footer: React.FC = () => {
 
       {/* Main Footer Links */}
       <div className="w-full max-w-[1536px] mx-auto px-3 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
           {/* Col 1: Brand & Bio */}
-          <div className="space-y-4 md:col-span-1">
+          <div className="space-y-4 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2.5">
               <img
                 src={LQMARKET_LOGO}
@@ -182,7 +182,113 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Col 4: Payment Partners & Hotline */}
+          {/* Col 4: Chính Sách & Quy Định Mới */}
+          <div>
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Chính Sách & Quy Định</h3>
+            <ul className="space-y-2 text-xs">
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('quy_che_hoat_dong');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Quy chế hoạt động
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('dieu_khoan_su_dung');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Điều khoản sử dụng
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('chinh_sach_nguoi_mua');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Chính sách người mua
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('chinh_sach_bao_mat');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Chính sách bảo mật
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('chinh_sach_tai_khoan_game');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Chính sách tài khoản game
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('giai_quyet_tranh_chap');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Giải quyết tranh chấp
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('bao_cao_vi_pham');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Báo cáo vi phạm
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('so_huu_tri_tue');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Sở hữu trí tuệ
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
+                    setCurrentView('thong_tin_chu_quan');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-amber-400 transition-colors cursor-pointer text-left"
+                >
+                  Thông tin chủ quản
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          {/* Col 5: Payment Partners & Hotline */}
           <div>
             <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Thanh Toán & Liên Hệ</h3>
             <p className="text-xs text-slate-400 mb-2">Hỗ trợ nạp rút tự động 24/7 qua QR Pay:</p>

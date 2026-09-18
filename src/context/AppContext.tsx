@@ -32,6 +32,7 @@ import {
 } from '../lib/authService';
 import api, { getAuthToken, setAuthToken } from '../lib/apiClient';
 import { getBankBinCode } from '../utils/vietqrBanks';
+import { AppView, getViewFromPath, VIEW_TO_PATH } from '../utils/policyRoutes';
 
 interface AppContextType {
   // Auth & User State
@@ -63,8 +64,8 @@ interface AppContextType {
   cloudSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
 
   // Navigation & Views
-  currentView: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog' | 'referral';
-  setCurrentView: (view: 'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog' | 'referral') => void;
+  currentView: AppView;
+  setCurrentView: (view: AppView) => void;
   selectedAccountId: string | null;
   setSelectedAccountId: (id: string | null) => void;
   selectedSellerId: string | null;
@@ -357,7 +358,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedBoxTierForUnboxing, setSelectedBoxTierForUnboxing] = useState<string | null>(null);
 
   // View States
-  const [currentView, setCurrentView] = useState<'home' | 'accounts' | 'mystery_box' | 'sell' | 'orders' | 'wishlist' | 'admin' | 'guide' | 'seller_center' | 'affiliate' | 'blog' | 'referral'>('home');
+  const [currentView, setCurrentViewState] = useState<AppView>(() => {
+    if (typeof window !== 'undefined') {
+      const policyView = getViewFromPath(window.location.pathname);
+      if (policyView) return policyView;
+    }
+    return 'home';
+  });
+
+  const setCurrentView = useCallback((view: AppView) => {
+    setCurrentViewState(view);
+    if (typeof window !== 'undefined') {
+      const targetPath = VIEW_TO_PATH[view] || (view === 'home' ? '/' : undefined);
+      if (targetPath && window.location.pathname !== targetPath) {
+        window.history.pushState(null, '', targetPath);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        const policyView = getViewFromPath(window.location.pathname);
+        if (policyView) {
+          setCurrentViewState(policyView);
+        } else if (window.location.pathname === '/' || window.location.pathname === '') {
+          setCurrentViewState('home');
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);

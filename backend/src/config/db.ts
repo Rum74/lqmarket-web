@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { ensureReferralCollection } from '../models/Referral';
+import { ensureReferralSettingCollection } from '../models/ReferralSetting';
 
 // Disable command buffering so queries do not hang indefinitely when disconnected
 mongoose.set('bufferCommands', false);
@@ -10,6 +12,7 @@ export async function connectDB(): Promise<boolean> {
 
   if (isConnected || mongoose.connection.readyState === 1) {
     isConnected = true;
+    await syncCollections();
     return true;
   }
 
@@ -21,7 +24,14 @@ export async function connectDB(): Promise<boolean> {
 
   try {
     const opts: mongoose.ConnectOptions = {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 15000,
+      connectTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      family: 4, // Force IPv4 to prevent IPv6 DNS timeout delays on cloud containers
+      maxPoolSize: 25,
+      minPoolSize: 2,
+      retryWrites: true,
+      retryReads: true,
       autoIndex: true
     };
 
@@ -29,6 +39,7 @@ export async function connectDB(): Promise<boolean> {
     await mongoose.connect(MONGODB_URI, opts);
     isConnected = true;
     console.log('✅ Connected to MongoDB Atlas successfully!');
+    await syncCollections();
     return true;
   } catch (error: any) {
     console.error('❌ MongoDB Atlas connection error:', error.message || error);
@@ -37,9 +48,21 @@ export async function connectDB(): Promise<boolean> {
   }
 }
 
-mongoose.connection.on('connected', () => {
+async function syncCollections(): Promise<void> {
+  try {
+    await Promise.all([
+      ensureReferralCollection(),
+      ensureReferralSettingCollection()
+    ]);
+  } catch (err: any) {
+    console.warn('Sync collections notice:', err?.message || err);
+  }
+}
+
+mongoose.connection.on('connected', async () => {
   isConnected = true;
   console.log('📡 MongoDB Atlas connection established.');
+  await syncCollections();
 });
 
 mongoose.connection.on('error', (err) => {

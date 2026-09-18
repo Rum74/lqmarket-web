@@ -16,6 +16,18 @@ import { SellerCenterView } from './components/seller/SellerCenterView';
 import { AffiliateView } from './components/affiliate/AffiliateView';
 import { ReferralView } from './components/referral/ReferralView';
 import { BlogView } from './components/blog/BlogView';
+import {
+  OperatingRegulationsView,
+  PrivacyPolicyView,
+  BuyerPolicyView,
+  GameAccountPolicyView,
+  DisputeResolutionPolicyView,
+  ViolationReportingPolicyView,
+  IntellectualPropertyPolicyView,
+  CompanyInfoPolicyView,
+  TermsOfServicePolicyView
+} from './components/policies';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AccountDetailModal } from './components/accounts/AccountDetailModal';
 import { AccountCompareModal } from './components/compare/AccountCompareModal';
 import { PriceAlertModal } from './components/accounts/PriceAlertModal';
@@ -51,18 +63,29 @@ const MainLayout: React.FC = () => {
 
       {/* Main App Canvas */}
       <main className="flex-1 w-full max-w-[1536px] mx-auto px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4">
-        {currentView === 'home' && <HomeView />}
-        {currentView === 'accounts' && <AccountsListView />}
-        {currentView === 'mystery_box' && <MysteryBoxView />}
-        {currentView === 'sell' && <SellAccountView />}
-        {currentView === 'orders' && <OrdersView />}
-        {currentView === 'admin' && <AdminDashboardView />}
-        {currentView === 'wishlist' && <WishlistView />}
-        {currentView === 'guide' && <GuideView />}
-        {currentView === 'seller_center' && <SellerCenterView />}
-        {currentView === 'affiliate' && <AffiliateView />}
-        {currentView === 'referral' && <ReferralView />}
-        {currentView === 'blog' && <BlogView />}
+        <ErrorBoundary fallbackTitle="Đã có sự cố khi hiển thị giao diện này">
+          {currentView === 'home' && <HomeView />}
+          {currentView === 'accounts' && <AccountsListView />}
+          {currentView === 'mystery_box' && <MysteryBoxView />}
+          {currentView === 'sell' && <SellAccountView />}
+          {currentView === 'orders' && <OrdersView />}
+          {currentView === 'admin' && <AdminDashboardView />}
+          {currentView === 'wishlist' && <WishlistView />}
+          {currentView === 'guide' && <GuideView />}
+          {currentView === 'seller_center' && <SellerCenterView />}
+          {currentView === 'affiliate' && <AffiliateView />}
+          {currentView === 'referral' && <ReferralView />}
+          {currentView === 'blog' && <BlogView />}
+          {currentView === 'quy_che_hoat_dong' && <OperatingRegulationsView />}
+          {currentView === 'chinh_sach_bao_mat' && <PrivacyPolicyView />}
+          {currentView === 'chinh_sach_nguoi_mua' && <BuyerPolicyView />}
+          {currentView === 'chinh_sach_tai_khoan_game' && <GameAccountPolicyView />}
+          {currentView === 'giai_quyet_tranh_chap' && <DisputeResolutionPolicyView />}
+          {currentView === 'bao_cao_vi_pham' && <ViolationReportingPolicyView />}
+          {currentView === 'so_huu_tri_tue' && <IntellectualPropertyPolicyView />}
+          {currentView === 'thong_tin_chu_quan' && <CompanyInfoPolicyView />}
+          {currentView === 'dieu_khoan_su_dung' && <TermsOfServicePolicyView />}
+        </ErrorBoundary>
       </main>
 
       {/* Account Detail Modal */}

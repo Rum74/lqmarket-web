@@ -35,6 +35,7 @@ const ReferralSchema = new Schema<IReferral>(
     updatedAt: { type: String, default: () => new Date().toISOString() }
   },
   {
+    collection: 'referrals',
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: any) => {
@@ -46,10 +47,29 @@ const ReferralSchema = new Schema<IReferral>(
   }
 );
 
-const MongooseReferral: Model<IReferral> =
-  (mongoose.models.Referral as any) || mongoose.model<IReferral>('Referral', ReferralSchema);
+export const MongooseReferral: Model<IReferral> =
+  (mongoose.models.Referral as any) || mongoose.model<IReferral>('Referral', ReferralSchema, 'referrals');
 
 export const Referral: Model<IReferral> = createHybridModel<IReferral>(
   MongooseReferral,
   memoryStore.referrals
 );
+
+/**
+ * Ensures the 'referrals' collection exists in MongoDB Atlas,
+ * creating it physically and indexing it if needed.
+ */
+export async function ensureReferralCollection(): Promise<void> {
+  try {
+    if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      const collections = await mongoose.connection.db.listCollections({ name: 'referrals' }).toArray();
+      if (!collections || collections.length === 0) {
+        await mongoose.connection.db.createCollection('referrals');
+        console.log('✅ Created MongoDB Atlas collection: referrals');
+      }
+      await MongooseReferral.createIndexes().catch(() => {});
+    }
+  } catch (err: any) {
+    console.warn('[ReferralModel] ensureReferralCollection notice:', err?.message || err);
+  }
+}

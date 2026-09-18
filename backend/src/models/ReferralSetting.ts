@@ -30,6 +30,7 @@ const ReferralSettingSchema = new Schema<IReferralSetting>(
     updatedAt: { type: String, default: () => new Date().toISOString() }
   },
   {
+    collection: 'referralsettings',
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: any) => {
@@ -41,11 +42,26 @@ const ReferralSettingSchema = new Schema<IReferralSetting>(
   }
 );
 
-const MongooseReferralSetting: Model<IReferralSetting> =
+export const MongooseReferralSetting: Model<IReferralSetting> =
   (mongoose.models.ReferralSetting as any) ||
-  mongoose.model<IReferralSetting>('ReferralSetting', ReferralSettingSchema);
+  mongoose.model<IReferralSetting>('ReferralSetting', ReferralSettingSchema, 'referralsettings');
 
 export const ReferralSetting: Model<IReferralSetting> = createHybridModel<IReferralSetting>(
   MongooseReferralSetting,
   memoryStore.referralSettings
 );
+
+export async function ensureReferralSettingCollection(): Promise<void> {
+  try {
+    if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      const collections = await mongoose.connection.db.listCollections({ name: 'referralsettings' }).toArray();
+      if (!collections || collections.length === 0) {
+        await mongoose.connection.db.createCollection('referralsettings');
+        console.log('✅ Created MongoDB Atlas collection: referralsettings');
+      }
+      await MongooseReferralSetting.createIndexes().catch(() => {});
+    }
+  } catch (err: any) {
+    console.warn('[ReferralSettingModel] ensureReferralSettingCollection notice:', err?.message || err);
+  }
+}
