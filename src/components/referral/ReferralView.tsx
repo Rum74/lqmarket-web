@@ -36,6 +36,24 @@ export const ReferralView: React.FC = () => {
     setCurrentView
   } = useApp();
 
+  const safeSettings = referralSettings || {
+    enabled: true,
+    rewardType: 'fixed_amount',
+    referrerReward: 10000,
+    referredUserReward: 10000,
+    minOrderValue: 20000,
+    description: 'Giới thiệu bạn bè nhận 10.000đ khi hoàn tất đơn hàng đầu tiên.'
+  };
+
+  const safeStats = referralStats || {
+    totalInvited: 0,
+    completedReferrals: 0,
+    pendingReferrals: 0,
+    totalEarned: 0
+  };
+
+  const historyList = Array.isArray(referralHistory) ? referralHistory : [];
+
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -124,8 +142,8 @@ export const ReferralView: React.FC = () => {
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
               Mời bạn bè tham gia sàn <strong className="text-amber-400">LQMarket</strong>. Khi bạn bè đăng ký bằng mã của bạn và hoàn tất giao dịch mua acc đầu tiên từ{' '}
-              <strong className="text-amber-400">{formatCurrency(referralSettings.minOrderValue)}</strong>, bạn nhận ngay{' '}
-              <strong className="text-emerald-400">+{formatCurrency(referralSettings.referrerReward)}</strong> vào số dư ví rút tiền!
+              <strong className="text-amber-400">{formatCurrency(safeSettings.minOrderValue)}</strong>, bạn nhận ngay{' '}
+              <strong className="text-emerald-400">+{formatCurrency(safeSettings.referrerReward)}</strong> vào số dư ví rút tiền!
             </p>
           </div>
 
@@ -267,7 +285,7 @@ export const ReferralView: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">Giá trị thưởng:</span>
-                    <span className="font-bold text-emerald-400">+{formatCurrency(referralSettings.referredUserReward)}</span>
+                    <span className="font-bold text-emerald-400">+{formatCurrency(safeSettings.referredUserReward)}</span>
                   </div>
                 </div>
               )}
@@ -306,7 +324,7 @@ export const ReferralView: React.FC = () => {
             <Users size={16} className="text-amber-400" />
           </div>
           <div className="text-xl md:text-2xl font-black text-slate-100 font-mono">
-            {referralStats.totalInvited}
+            {safeStats.totalInvited}
           </div>
           <div className="text-[10px] text-slate-500">Đã đăng ký tài khoản</div>
         </div>
@@ -317,7 +335,7 @@ export const ReferralView: React.FC = () => {
             <ShieldCheck size={16} className="text-emerald-400" />
           </div>
           <div className="text-xl md:text-2xl font-black text-emerald-400 font-mono">
-            {referralStats.completedReferrals}
+            {safeStats.completedReferrals}
           </div>
           <div className="text-[10px] text-slate-500">Đủ điều kiện nhận thưởng</div>
         </div>
@@ -328,7 +346,7 @@ export const ReferralView: React.FC = () => {
             <Clock size={16} className="text-amber-400" />
           </div>
           <div className="text-xl md:text-2xl font-black text-amber-400 font-mono">
-            {referralStats.pendingReferrals}
+            {safeStats.pendingReferrals}
           </div>
           <div className="text-[10px] text-slate-500">Chờ mua acc đầu tiên</div>
         </div>
@@ -339,7 +357,7 @@ export const ReferralView: React.FC = () => {
             <Coins size={16} className="text-amber-400" />
           </div>
           <div className="text-xl md:text-2xl font-black text-amber-400 font-mono">
-            {formatCurrency(referralStats.totalEarned)}
+            {formatCurrency(safeStats.totalEarned)}
           </div>
           <div className="text-[10px] text-slate-500">Cộng trực tiếp vào ví</div>
         </div>
@@ -373,7 +391,7 @@ export const ReferralView: React.FC = () => {
             </div>
             <h3 className="text-sm font-bold text-slate-200">Bạn bè mua acc đầu tiên</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Người được giới thiệu đăng ký tài khoản và hoàn tất đơn hàng mua acc Liên Quân từ {formatCurrency(referralSettings.minOrderValue)}.
+              Người được giới thiệu đăng ký tài khoản và hoàn tất đơn hàng mua acc Liên Quân từ {formatCurrency(safeSettings.minOrderValue)}.
             </p>
           </div>
 
@@ -397,11 +415,11 @@ export const ReferralView: React.FC = () => {
             <h3 className="text-sm font-bold text-slate-200">Danh Sách Bạn Bè Đã Mời</h3>
           </div>
           <span className="text-xs text-slate-400">
-            Tổng cộng: <strong className="text-slate-200">{referralHistory.length}</strong> người
+            Tổng cộng: <strong className="text-slate-200">{historyList.length}</strong> người
           </span>
         </div>
 
-        {referralHistory.length === 0 ? (
+        {historyList.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-slate-800/80 text-slate-500 mx-auto flex items-center justify-center">
               <Users size={24} />
@@ -433,56 +451,59 @@ export const ReferralView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {referralHistory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-slate-200">
-                        {item.referredUserName || item.referredUserId || 'Thành viên'}
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        {item.referredUserId}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-400">
-                      {new Date(item.createdAt).toLocaleDateString('vi-VN', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </td>
-                    <td className="py-3 px-4">
-                      {item.status === 'rewarded' || item.status === 'completed' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium text-[11px]">
-                          <Check size={12} />
-                          <span>Đã trả thưởng</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-medium text-[11px]">
-                          <Clock size={12} />
-                          <span>Chờ đơn hàng</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      {item.qualifyingOrderId ? (
-                        <span className="font-mono text-slate-300">
-                          {item.qualifyingOrderId} ({formatCurrency(item.orderAmount || 0)})
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 italic">Chưa phát sinh</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right font-bold font-mono">
-                      {item.referrerReward > 0 ? (
-                        <span className="text-emerald-400">+{formatCurrency(item.referrerReward)}</span>
-                      ) : (
-                        <span className="text-slate-500">0đ</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {historyList.map((item) => {
+                  const rewardAmt = (item as any).rewardAmount || (item as any).referrerReward || 0;
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-slate-200">
+                          {item.referredUserName || item.referredUserId || 'Thành viên'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          {item.referredUserId}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-400">
+                        {new Date(item.createdAt).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </td>
+                      <td className="py-3 px-4">
+                        {item.status === 'rewarded' || item.status === 'completed' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium text-[11px]">
+                            <Check size={12} />
+                            <span>Đã trả thưởng</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-medium text-[11px]">
+                            <Clock size={12} />
+                            <span>Chờ đơn hàng</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {item.qualifyingOrderId ? (
+                          <span className="font-mono text-slate-300">
+                            {item.qualifyingOrderId} ({formatCurrency(item.orderAmount || 0)})
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 italic">Chưa phát sinh</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold font-mono">
+                        {rewardAmt > 0 ? (
+                          <span className="text-emerald-400">+{formatCurrency(rewardAmt)}</span>
+                        ) : (
+                          <span className="text-slate-500">0đ</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

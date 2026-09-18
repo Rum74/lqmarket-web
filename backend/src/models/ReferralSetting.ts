@@ -4,9 +4,11 @@ import { memoryStore, createHybridModel } from '../config/memoryStore';
 export interface IReferralSetting {
   id: string;
   enabled: boolean;
+  rewardType?: string;
   referrerReward: number;
   referredUserReward: number;
   minimumOrderValue: number;
+  description?: string;
   requireFirstOrderCompleted: boolean;
   requireAccountVerification: boolean;
   maxRewardsPerUser: number;
@@ -17,9 +19,11 @@ const ReferralSettingSchema = new Schema<IReferralSetting>(
   {
     id: { type: String, required: true, unique: true, default: 'default_referral_settings' },
     enabled: { type: Boolean, default: true },
+    rewardType: { type: String, default: 'fixed_amount' },
     referrerReward: { type: Number, default: 20000 },
     referredUserReward: { type: Number, default: 10000 },
     minimumOrderValue: { type: Number, default: 200000 },
+    description: { type: String, default: 'Giới thiệu bạn bè nhận thưởng tiền mặt hấp dẫn!' },
     requireFirstOrderCompleted: { type: Boolean, default: true },
     requireAccountVerification: { type: Boolean, default: true },
     maxRewardsPerUser: { type: Number, default: 100 },

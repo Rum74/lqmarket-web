@@ -24,6 +24,7 @@ import disputeRoutes from './routes/disputeRoutes';
 import auditLogRoutes from './routes/auditLogRoutes';
 import affiliateRoutes from './routes/affiliateRoutes';
 import priceAlertRoutes from './routes/priceAlertRoutes';
+import referralRoutes, { referralRouter } from './routes/referralRoutes';
 
 async function startServer() {
   const app = express();
@@ -149,6 +150,9 @@ async function startServer() {
   app.use('/api/disputes', disputeRoutes);
   app.use('/api/affiliate', affiliateRoutes);
   app.use('/api/price-alerts', priceAlertRoutes);
+  const resolvedReferralRoutes = referralRoutes || referralRouter;
+  app.use('/api/referrals', resolvedReferralRoutes);
+  app.use('/api/referral', resolvedReferralRoutes);
 
   // Global Webhook listeners
   app.all('/webhook', (req, res, next) => {

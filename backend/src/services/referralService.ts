@@ -405,15 +405,18 @@ export async function processOrderReferralReward(orderId: string): Promise<{
 
 // User stats aggregator
 export async function getUserReferralStats(userId: string) {
-  const user = await User.findOne({ id: userId });
+  const user = await User.findOne({
+    $or: [{ id: userId }, { email: userId }, { username: userId }]
+  });
   if (!user) {
     throw new Error('User not found');
   }
 
+  const actualUserId = user.id;
   const referralCode = await ensureUserHasReferralCode(user);
   const settings = await getReferralSettings();
 
-  const allUserReferrals = await Referral.find({ referrerId: userId }).sort({ createdAt: -1 });
+  const allUserReferrals = await Referral.find({ referrerId: actualUserId }).sort({ createdAt: -1 });
 
   const totalInvited = allUserReferrals.length;
   const pendingCount = allUserReferrals.filter(r => r.status === 'pending').length;
@@ -448,16 +451,20 @@ export async function getUserReferralStats(userId: string) {
 
     return {
       id: r.id,
+      referrerId: r.referrerId,
       referredUserId: r.referredUserId,
       referredUserName: referredUser?.name || 'Thành viên LQMarket',
       referredUserEmail: referredUser ? `${referredUser.email.slice(0, 3)}***@${referredUser.email.split('@')[1] || 'com'}` : '***',
       referredUserAvatar: referredUser?.avatar || '',
       referralCode: r.referralCode,
-      status: r.status,
+      status: r.status === 'rewarded' ? 'completed' : (r.status === 'cancelled' ? 'cancelled' : 'pending'),
+      rawStatus: r.status,
+      rewardType: 'fixed_amount',
       rewardAmount: r.referrerReward || settings.referrerReward,
       referredRewardAmount: r.referredReward || settings.referredUserReward,
       qualifyingOrderId: r.qualifyingOrderId || null,
       qualifyingOrderCode: order?.orderCode || null,
+      completedAt: r.rewardedAt || null,
       rewardedAt: r.rewardedAt || null,
       createdAt: r.createdAt
     };
@@ -468,15 +475,21 @@ export async function getUserReferralStats(userId: string) {
     referralLink: `https://cholienquan.com/?ref=${referralCode}`,
     settings: {
       enabled: settings.enabled,
+      rewardType: settings.rewardType || 'fixed_amount',
       referrerReward: settings.referrerReward,
       referredUserReward: settings.referredUserReward,
+      minOrderValue: settings.minimumOrderValue,
       minimumOrderValue: settings.minimumOrderValue,
+      description: settings.description || 'Giới thiệu bạn bè nhận 10.000đ khi hoàn tất đơn hàng đầu tiên.',
       requireFirstOrderCompleted: settings.requireFirstOrderCompleted,
       requireAccountVerification: settings.requireAccountVerification,
       maxRewardsPerUser: settings.maxRewardsPerUser
     },
     stats: {
       totalInvited,
+      completedReferrals: rewardedCount,
+      pendingReferrals: pendingCount,
+      totalEarned: totalRewardEarned,
       pendingCount,
       qualifiedCount,
       rewardedCount,

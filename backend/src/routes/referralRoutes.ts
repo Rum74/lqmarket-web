@@ -22,6 +22,32 @@ export const referralRouter = Router();
 // ==========================================
 
 // Validate referral code (for register page or URL ?ref= checking)
+referralRouter.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const settings = await getReferralSettings();
+    return res.json({
+      success: true,
+      settings: {
+        enabled: settings.enabled,
+        rewardType: settings.rewardType || 'fixed_amount',
+        referrerReward: settings.referrerReward,
+        referredUserReward: settings.referredUserReward,
+        minOrderValue: settings.minimumOrderValue,
+        minimumOrderValue: settings.minimumOrderValue,
+        description: settings.description || 'Giới thiệu bạn bè nhận thưởng tiền mặt hấp dẫn!',
+        requireFirstOrderCompleted: settings.requireFirstOrderCompleted,
+        requireAccountVerification: settings.requireAccountVerification,
+        maxRewardsPerUser: settings.maxRewardsPerUser
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi khi lấy cấu hình giới thiệu'
+    });
+  }
+});
+
 referralRouter.post('/validate', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { referralCode } = req.body;
@@ -218,3 +244,22 @@ const updateSettingsHandler = async (req: AuthenticatedRequest, res: Response) =
 
 referralRouter.patch('/admin/settings', authenticateToken, requireAdmin, updateSettingsHandler);
 referralRouter.put('/admin/settings', authenticateToken, requireAdmin, updateSettingsHandler);
+referralRouter.get('/admin/referrals', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status, search, page, limit } = req.query;
+    const data = await getAdminReferralsData({
+      status: status as string,
+      search: search as string,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50
+    });
+    return res.json({
+      success: true,
+      ...data
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message || 'Lỗi tải danh sách referral admin' });
+  }
+});
+
+export default referralRouter;
