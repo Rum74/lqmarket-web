@@ -828,6 +828,100 @@ router.post('/open', authenticateToken, handleOpenMysteryBox);
 router.post('/open/:id', authenticateToken, handleOpenMysteryBox);
 router.post('/:id/open', authenticateToken, handleOpenMysteryBox);
 
+// POST /api/mystery-boxes (Admin create new box tier / blind bag)
+router.post('/', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = req.body || {};
+    const name = (data.name || '').trim();
+    const price = Number(data.price);
+
+    if (!name || isNaN(price) || price < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập tên Túi Mù và mức giá hợp lệ (từ 0đ trở lên).'
+      });
+    }
+
+    // Auto-generate ID if not provided or clean it
+    let id = (data.id || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    if (!id) {
+      id = `box_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    }
+
+    // Check duplicate
+    const existing = await MysteryBox.findOne({
+      $or: [{ id }, { tier: id }]
+    });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: `Mã Túi Mù "${id}" đã tồn tại. Vui lòng chọn mã khác.`
+      });
+    }
+
+    const newBox = await MysteryBox.create({
+      id,
+      tier: id,
+      name,
+      price,
+      originalPrice: data.originalPrice ? Number(data.originalPrice) : undefined,
+      description: data.description || 'Túi mù mở ngẫu nhiên nhận quà giá trị cao',
+      badge: data.badge || 'HOT',
+      tagText: data.tagText || data.badge || '',
+      colorGradient: data.colorGradient || 'from-amber-600/80 via-yellow-700/60 to-slate-950',
+      borderColor: data.borderColor || 'border-amber-500/60 hover:border-amber-400',
+      iconBg: data.iconBg || 'bg-amber-500/20 text-amber-300',
+      color: data.color || 'from-amber-500 to-yellow-600',
+      accentColor: data.accentColor || '#F59E0B',
+      stockRemaining: data.stockRemaining !== undefined ? Number(data.stockRemaining) : 999,
+      totalOpened: 0,
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+      jackpotPreview: data.jackpotPreview || '',
+      highlightText: data.highlightText || '',
+      iconName: data.iconName || 'Gift',
+      tagline: data.tagline || ''
+    });
+
+    console.log(`[MYSTERY BOX CREATED] ID: ${id}, Name: ${name}, Price: ${price}`);
+
+    return res.status(201).json({
+      success: true,
+      message: `Đã tạo mới Túi Mù "${name}" thành công!`,
+      box: newBox.toJSON ? newBox.toJSON() : newBox
+    });
+  } catch (error: any) {
+    console.error('Error creating mystery box tier:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ khi tạo mới Túi Mù: ' + (error.message || 'Unknown')
+    });
+  }
+});
+
+// DELETE /api/mystery-boxes/:id (Admin delete box tier)
+router.delete('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = await MysteryBox.findOneAndDelete({
+      $or: [{ id }, { tier: id }]
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy Túi Mù để xóa.' });
+    }
+
+    console.log(`[MYSTERY BOX DELETED] ID: ${id}`);
+
+    return res.json({
+      success: true,
+      message: `Đã xóa Túi Mù "${deleted.name || id}" thành công!`
+    });
+  } catch (error: any) {
+    console.error('Error deleting mystery box tier:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi xóa Túi Mù: ' + error.message });
+  }
+});
+
 // PUT /api/mystery-boxes/:id (Admin update box tier config)
 router.put('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -850,22 +944,31 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: AuthenticatedReq
     }
 
     if (updates.price !== undefined) box.price = Number(updates.price);
+    if (updates.originalPrice !== undefined) box.originalPrice = updates.originalPrice ? Number(updates.originalPrice) : undefined;
     if (updates.stockRemaining !== undefined) box.stockRemaining = Number(updates.stockRemaining);
     if (updates.isActive !== undefined) box.isActive = Boolean(updates.isActive);
-    if (updates.name) box.name = updates.name;
-    if (updates.description) box.description = updates.description;
-    if (updates.badge) box.badge = updates.badge;
-    if (updates.color) box.color = updates.color;
+    if (updates.name !== undefined) box.name = updates.name;
+    if (updates.description !== undefined) box.description = updates.description;
+    if (updates.badge !== undefined) box.badge = updates.badge;
+    if (updates.tagText !== undefined) box.tagText = updates.tagText;
+    if (updates.color !== undefined) box.color = updates.color;
+    if (updates.colorGradient !== undefined) box.colorGradient = updates.colorGradient;
+    if (updates.borderColor !== undefined) box.borderColor = updates.borderColor;
+    if (updates.iconBg !== undefined) box.iconBg = updates.iconBg;
+    if (updates.accentColor !== undefined) box.accentColor = updates.accentColor;
+    if (updates.highlightText !== undefined) box.highlightText = updates.highlightText;
+    if (updates.jackpotPreview !== undefined) box.jackpotPreview = updates.jackpotPreview;
+    if (updates.tagline !== undefined) box.tagline = updates.tagline;
 
     await box.save();
 
     return res.json({
       success: true,
       message: `Đã cập nhật hạng "${box.name}" thành công!`,
-      box: box.toJSON()
+      box: box.toJSON ? box.toJSON() : box
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Lỗi cập nhật Túi Mù' });
+    return res.status(500).json({ success: false, message: 'Lỗi cập nhật Túi Mù: ' + error.message });
   }
 });
 

@@ -128,7 +128,7 @@ router.get('/admin/accounts/:id/reveal-password', authenticateToken, requireAdmi
  */
 const handleBulkImport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { rawText, blindBagId, defaultStatus = 'available' } = req.body;
+    const { rawText, blindBagId, defaultStatus = 'available', overwrite = false } = req.body;
 
     if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập danh sách tài khoản cần import.' });
@@ -155,41 +155,57 @@ const handleBulkImport = async (req: AuthenticatedRequest, res: Response) => {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      // Hỗ trợ phân cách bằng '|', '\t', hoặc dấu cách nếu chia 2 từ
-      let parts: string[] = [];
+      let u = '';
+      let p = '';
+
       if (line.includes('|')) {
-        parts = line.split('|');
+        const idx = line.indexOf('|');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 1).trim();
       } else if (line.includes('\t')) {
-        parts = line.split('\t');
+        const idx = line.indexOf('\t');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 1).trim();
       } else if (line.includes(' - ')) {
-        parts = line.split(' - ');
+        const idx = line.indexOf(' - ');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 3).trim();
       } else if (line.includes(':') && !line.startsWith('http')) {
-        parts = line.split(':');
+        const idx = line.indexOf(':');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 1).trim();
       } else {
-        parts = line.split(/\s+/);
+        const parts = line.split(/\s+/);
+        u = (parts[0] || '').trim();
+        p = parts.slice(1).join(' ').trim();
       }
-
-      if (parts.length < 2) {
-        errorCount++;
-        errors.push(`Dòng ${i + 1}: Sai định dạng (cần: TK | MK)`);
-        continue;
-      }
-
-      const u = parts[0].trim();
-      const p = parts.slice(1).join('|').trim();
 
       if (!u || !p) {
         errorCount++;
-        errors.push(`Dòng ${i + 1}: Thiếu TK hoặc MK`);
+        errors.push(`Dòng ${i + 1}: Sai định dạng hoặc thiếu thông tin (cần: TK | MK)`);
         continue;
       }
 
       // Check trùng
       const existing = await BlindBagAccount.findOne({ username: u });
       if (existing) {
-        duplicateCount++;
-        duplicates.push(u);
-        continue;
+        if (overwrite) {
+          existing.password = p;
+          existing.blindBagId = blindBagId;
+          existing.status = defaultStatus || 'available';
+          existing.claimedBy = null;
+          existing.claimedByName = null;
+          existing.claimedAt = null;
+          existing.notes = `Cập nhật ghi đè ngày ${new Date().toLocaleDateString('vi-VN')}`;
+          existing.updatedAt = new Date().toISOString();
+          await existing.save();
+          successCount++;
+          continue;
+        } else {
+          duplicateCount++;
+          duplicates.push(u);
+          continue;
+        }
       }
 
       try {
@@ -212,10 +228,11 @@ const handleBulkImport = async (req: AuthenticatedRequest, res: Response) => {
 
     return res.json({
       success: true,
-      message: `Import hoàn tất: ${successCount} thành công, ${duplicateCount} trùng, ${errorCount} lỗi.`,
+      message: `Import hoàn tất: ${successCount} thành công, ${duplicateCount} trùng lặp, ${errorCount} lỗi.`,
       stats: {
         totalProcessed: lines.length,
         successCount,
+        inserted: successCount,
         duplicateCount,
         errorCount,
         duplicates,

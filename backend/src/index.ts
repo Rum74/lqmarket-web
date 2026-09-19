@@ -29,6 +29,7 @@ import auditLogRoutes from './routes/auditLogRoutes';
 import affiliateRoutes from './routes/affiliateRoutes';
 import priceAlertRoutes from './routes/priceAlertRoutes';
 import referralRoutes, { referralRouter } from './routes/referralRoutes';
+import blindBagRoutes from './routes/blindBagRoutes';
 
 async function startServer() {
   const app = express();
@@ -139,6 +140,8 @@ async function startServer() {
   app.use('/api/payos', paymentRoutes);
   app.use('/api/mystery-boxes', mysteryBoxRoutes);
   app.use('/api/mystery-box', mysteryBoxRoutes);
+  app.use('/api/blind-bags', blindBagRoutes);
+  app.use('/api/blind-bag', blindBagRoutes);
   app.use('/api/inventory', inventoryRoutes);
   app.use('/api/favorites', favoriteRoutes);
   app.use('/api/conversations', chatRoutes);

@@ -207,7 +207,7 @@ export interface FilterOptions {
 // ----------------------------------------------------
 // MYSTERY BOX (TÚI MÙ MAY MẮN) TYPES
 // ----------------------------------------------------
-export type MysteryBoxTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'special';
+export type MysteryBoxTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'special' | string;
 
 export type MysteryBoxRewardType = 'account' | 'cash' | 'voucher' | 'free_turn';
 

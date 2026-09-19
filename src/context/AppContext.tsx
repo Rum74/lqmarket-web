@@ -224,7 +224,9 @@ interface AppContextType {
   adminAddMysteryReward: (reward: Omit<MysteryBoxRewardItem, 'id'>) => Promise<{ success: boolean; message: string }>;
   adminUpdateMysteryReward: (id: string, updates: Partial<MysteryBoxRewardItem>) => Promise<{ success: boolean; message: string }>;
   adminDeleteMysteryReward: (id: string) => Promise<{ success: boolean; message: string }>;
+  adminCreateBoxTier: (boxData: Partial<MysteryBoxTierConfig>) => Promise<{ success: boolean; message: string; box?: MysteryBoxTierConfig }>;
   adminUpdateBoxTier: (tierId: string, updates: Partial<MysteryBoxTierConfig>) => Promise<{ success: boolean; message: string }>;
+  adminDeleteBoxTier: (tierId: string) => Promise<{ success: boolean; message: string }>;
   adminImportAccountToMysteryBox: (accountId: string, targetTierId: string) => Promise<{ success: boolean; message: string }>;
   adminResetMysteryBoxes: () => Promise<{ success: boolean; message: string }>;
 
@@ -236,7 +238,7 @@ interface AppContextType {
   fetchBlindBagStats: () => Promise<void>;
   fetchBlindBagClaims: (filter?: { blindBagId?: string; search?: string }) => Promise<void>;
   adminAddBlindBagAccount: (data: { username: string; password: string; blindBagId: string; status?: string; notes?: string }) => Promise<{ success: boolean; message: string }>;
-  adminImportBlindBagAccounts: (data: { rawText: string; blindBagId: string; defaultStatus?: string }) => Promise<{ success: boolean; message: string; stats?: any }>;
+  adminImportBlindBagAccounts: (data: { rawText: string; blindBagId: string; defaultStatus?: string; overwrite?: boolean }) => Promise<{ success: boolean; message: string; stats?: any }>;
   adminUpdateBlindBagAccount: (id: string, data: Partial<BlindBagAccountItem>) => Promise<{ success: boolean; message: string }>;
   adminDeleteBlindBagAccount: (id: string) => Promise<{ success: boolean; message: string }>;
   adminRevealBlindBagPassword: (id: string) => Promise<string | null>;

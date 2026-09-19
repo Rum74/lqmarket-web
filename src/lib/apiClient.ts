@@ -97,17 +97,27 @@ export async function apiRequest<T = any>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  // Attach fallback identity headers only if Authorization token is absent
-  // This prevents unnecessary custom header CORS preflight rejections
-  if (!token) {
-    const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_id') : null;
+  // Attach identity headers for authentication resilience
+  if (typeof window !== 'undefined') {
+    const currentUserId = localStorage.getItem('lqmarket_current_user_id');
     const cleanUserId = currentUserId && currentUserId !== 'null' && currentUserId !== 'undefined' ? currentUserId.trim() : null;
     if (cleanUserId && !headers.has('X-User-Id')) {
       headers.set('X-User-Id', cleanUserId);
     }
 
-    const currentUserRole = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_current_user_role') : null;
-    const cleanUserRole = currentUserRole && currentUserRole !== 'null' && currentUserRole !== 'undefined' ? currentUserRole.trim() : null;
+    const currentUserRole = localStorage.getItem('lqmarket_current_user_role');
+    let cleanUserRole = currentUserRole && currentUserRole !== 'null' && currentUserRole !== 'undefined' ? currentUserRole.trim() : null;
+    if (!cleanUserRole) {
+      try {
+        const saved = localStorage.getItem('lqmarket_saved_user_profile');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.role) {
+            cleanUserRole = String(parsed.role).trim();
+          }
+        }
+      } catch {}
+    }
     if (cleanUserRole && !headers.has('X-User-Role')) {
       headers.set('X-User-Role', cleanUserRole);
     }

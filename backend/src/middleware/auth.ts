@@ -47,7 +47,7 @@ export async function authenticateToken(
 
   // Fallback: Verify identity via X-User-Id / X-User-Role against User database
   const fallbackUserId = (req.headers['x-user-id'] as string) || (req.body && req.body.userId) || (req.body && req.body.adminId);
-  const roleHeader = (req.headers['x-user-role'] as string) || '';
+  const roleHeader = String(req.headers['x-user-role'] || '').trim().toLowerCase();
 
   if (roleHeader === 'admin' || fallbackUserId === 'admin' || fallbackUserId === 'user_admin_super') {
     req.user = {
@@ -74,7 +74,7 @@ export async function authenticateToken(
         req.user = {
           userId: user.id,
           email: user.email,
-          role: user.role,
+          role: user.role || (roleHeader === 'admin' ? 'admin' : 'buyer'),
           username: user.username,
           name: user.name
         };
@@ -86,7 +86,7 @@ export async function authenticateToken(
     req.user = {
       userId: fallbackUserId,
       email: `${fallbackUserId}@cholienquan.com`,
-      role: (roleHeader === 'seller' ? 'seller' : 'buyer') as any,
+      role: (roleHeader === 'admin' ? 'admin' : (roleHeader === 'seller' ? 'seller' : 'buyer')) as any,
       username: fallbackUserId,
       name: fallbackUserId
     };
