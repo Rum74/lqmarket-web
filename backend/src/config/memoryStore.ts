@@ -313,6 +313,9 @@ export const memoryStore = {
   priceAlerts: new MemoryCollection<any>('priceAlerts'),
   referrals: new MemoryCollection<any>('referrals'),
   referralSettings: new MemoryCollection<any>('referralSettings'),
+  blindBagAccounts: new MemoryCollection<any>('blindBagAccounts'),
+  blindBagClaims: new MemoryCollection<any>('blindBagClaims'),
+  createCollection: <T extends { id?: string; _id?: any } = any>(name: string) => new MemoryCollection<T>(name),
 };
 
 // Seed initial memory store with admin account if empty

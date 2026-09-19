@@ -39,7 +39,7 @@ const MongooseBlindBagClaim: Model<IBlindBagClaim> =
   (mongoose.models.BlindBagClaim as any) ||
   mongoose.model<IBlindBagClaim>('BlindBagClaim', BlindBagClaimSchema);
 
-export const BlindBagClaim = createHybridModel<IBlindBagClaim>(
+export const BlindBagClaim: Model<IBlindBagClaim> = createHybridModel<IBlindBagClaim>(
   MongooseBlindBagClaim,
-  memoryStore.createCollection<IBlindBagClaim>('blindbagclaims')
+  memoryStore.blindBagClaims
 );

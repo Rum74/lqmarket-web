@@ -53,7 +53,7 @@ const MongooseBlindBagAccount: Model<IBlindBagAccount> =
   (mongoose.models.BlindBagAccount as any) ||
   mongoose.model<IBlindBagAccount>('BlindBagAccount', BlindBagAccountSchema);
 
-export const BlindBagAccount = createHybridModel<IBlindBagAccount>(
+export const BlindBagAccount: Model<IBlindBagAccount> = createHybridModel<IBlindBagAccount>(
   MongooseBlindBagAccount,
-  memoryStore.createCollection<IBlindBagAccount>('blindbagaccounts')
+  memoryStore.blindBagAccounts
 );
