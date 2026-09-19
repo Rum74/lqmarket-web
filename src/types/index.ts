@@ -500,6 +500,47 @@ export interface ReferralSettings {
   description: string;
 }
 
+// ----------------------------------------------------
+// BLIND BAG ACCOUNT WAREHOUSE (KHO ACC TÚI MÙ) TYPES
+// ----------------------------------------------------
+export type BlindBagAccountStatus = 'available' | 'reserved' | 'claimed' | 'disabled';
+
+export interface BlindBagAccountItem {
+  id: string; // "bga_xxxxx"
+  username: string; // Tên đăng nhập
+  password?: string; // Mật khẩu (ẩn mặc định trên frontend)
+  blindBagId: string; // ID hạng túi mù, ví dụ: "box_bronze", "blindbag_1000", "box_gold", etc.
+  blindBagName?: string; // Tên hiển thị túi mù
+  status: BlindBagAccountStatus;
+  claimedBy?: string | null;
+  claimedByName?: string | null;
+  claimedAt?: string | null;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BlindBagClaimItem {
+  id: string; // "bbc_xxxxx"
+  userId: string;
+  userName?: string;
+  blindBagId: string;
+  blindBagName?: string;
+  blindBagAccountId: string;
+  username: string;
+  claimedAt: string;
+  status: 'success' | 'failed';
+}
+
+export interface BlindBagStats {
+  total: number;
+  available: number;
+  claimed: number;
+  reserved: number;
+  disabled: number;
+}
+
+
 export interface ReferralUserStats {
   totalInvited: number;
   completedReferrals: number;

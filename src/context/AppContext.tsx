@@ -21,7 +21,10 @@ import {
   AdminAuditLog,
   ReferralItem,
   ReferralSettings,
-  ReferralUserStats
+  ReferralUserStats,
+  BlindBagAccountItem,
+  BlindBagClaimItem,
+  BlindBagStats
 } from '../types';
 import { INITIAL_COUPONS } from '../data/couponData';
 import {
@@ -225,6 +228,19 @@ interface AppContextType {
   adminImportAccountToMysteryBox: (accountId: string, targetTierId: string) => Promise<{ success: boolean; message: string }>;
   adminResetMysteryBoxes: () => Promise<{ success: boolean; message: string }>;
 
+  // Blind Bag Account Warehouse (Kho ACC Túi Mù)
+  blindBagAccounts: BlindBagAccountItem[];
+  blindBagClaims: BlindBagClaimItem[];
+  blindBagStats: BlindBagStats;
+  fetchBlindBagAccounts: (filter?: { status?: string; blindBagId?: string; search?: string }) => Promise<void>;
+  fetchBlindBagStats: () => Promise<void>;
+  fetchBlindBagClaims: (filter?: { blindBagId?: string; search?: string }) => Promise<void>;
+  adminAddBlindBagAccount: (data: { username: string; password: string; blindBagId: string; status?: string; notes?: string }) => Promise<{ success: boolean; message: string }>;
+  adminImportBlindBagAccounts: (data: { rawText: string; blindBagId: string; defaultStatus?: string }) => Promise<{ success: boolean; message: string; stats?: any }>;
+  adminUpdateBlindBagAccount: (id: string, data: Partial<BlindBagAccountItem>) => Promise<{ success: boolean; message: string }>;
+  adminDeleteBlindBagAccount: (id: string) => Promise<{ success: boolean; message: string }>;
+  adminRevealBlindBagPassword: (id: string) => Promise<string | null>;
+
   // Admin User Management
   adminCreateUser: (userData: Omit<UserProfile, 'id' | 'createdAt'>) => Promise<{ success: boolean; message: string; userId?: string }>;
   adminUpdateUser: (userId: string, data: Partial<UserProfile>) => Promise<{ success: boolean; message: string }>;
@@ -358,6 +374,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userFreeTurns, setUserFreeTurns] = useState<Record<string, number>>({});
   const [isMysteryBoxEventActive, setIsMysteryBoxEventActive] = useState<boolean>(true);
   const [selectedBoxTierForUnboxing, setSelectedBoxTierForUnboxing] = useState<string | null>(null);
+
+  // Blind Bag Account Warehouse (Kho ACC Túi Mù Riêng) States
+  const [blindBagAccounts, setBlindBagAccounts] = useState<BlindBagAccountItem[]>([]);
+  const [blindBagClaims, setBlindBagClaims] = useState<BlindBagClaimItem[]>([]);
+  const [blindBagStats, setBlindBagStats] = useState<BlindBagStats>({
+    total: 0,
+    available: 0,
+    claimed: 0,
+    reserved: 0,
+    disabled: 0
+  });
 
   // View States
   const [currentView, setCurrentViewState] = useState<AppView>(() => {
@@ -2374,6 +2401,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // --- KHO ACC TÚI MÙ (Blind Bag Account Warehouse) API Handlers ---
+  const fetchBlindBagStats = async () => {
+    try {
+      const res = await api.get('/api/blind-bags/admin/stats');
+      if (res && res.success && res.stats) {
+        setBlindBagStats(res.stats);
+      }
+    } catch (e) {
+      console.warn('Could not fetch blind bag stats:', e);
+    }
+  };
+
+  const fetchBlindBagAccounts = async (filter?: { status?: string; blindBagId?: string; search?: string }) => {
+    try {
+      const params = new URLSearchParams();
+      if (filter?.status && filter.status !== 'all') params.append('status', filter.status);
+      if (filter?.blindBagId && filter.blindBagId !== 'all') params.append('blindBagId', filter.blindBagId);
+      if (filter?.search) params.append('search', filter.search);
+      const res = await api.get(`/api/blind-bags/admin/accounts?${params.toString()}`);
+      if (res && res.success && Array.isArray(res.accounts)) {
+        setBlindBagAccounts(res.accounts);
+      }
+    } catch (e) {
+      console.warn('Could not fetch blind bag accounts:', e);
+    }
+  };
+
+  const fetchBlindBagClaims = async (filter?: { blindBagId?: string; search?: string }) => {
+    try {
+      const params = new URLSearchParams();
+      if (filter?.blindBagId && filter.blindBagId !== 'all') params.append('blindBagId', filter.blindBagId);
+      if (filter?.search) params.append('search', filter.search);
+      const res = await api.get(`/api/blind-bags/admin/claims?${params.toString()}`);
+      if (res && res.success && Array.isArray(res.claims)) {
+        setBlindBagClaims(res.claims);
+      }
+    } catch (e) {
+      console.warn('Could not fetch blind bag claims:', e);
+    }
+  };
+
+  const adminAddBlindBagAccount = async (data: {
+    username: string;
+    password: string;
+    blindBagId: string;
+    status?: string;
+    notes?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.post('/api/blind-bags/admin/accounts', data);
+      if (res && res.success) {
+        await fetchBlindBagAccounts();
+        await fetchBlindBagStats();
+        return { success: true, message: res.message || 'Thêm tài khoản vào kho thành công!' };
+      }
+      return { success: false, message: res.message || 'Thêm thất bại.' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi khi thêm tài khoản vào kho.' };
+    }
+  };
+
+  const adminImportBlindBagAccounts = async (data: {
+    rawText: string;
+    blindBagId: string;
+    defaultStatus?: string;
+  }): Promise<{ success: boolean; message: string; stats?: any }> => {
+    try {
+      const res = await api.post('/api/blind-bags/admin/import', data);
+      if (res && res.success) {
+        await fetchBlindBagAccounts();
+        await fetchBlindBagStats();
+        return {
+          success: true,
+          message: res.message || `Đã nhập ${res.stats?.inserted || 0} tài khoản thành công!`,
+          stats: res.stats
+        };
+      }
+      return { success: false, message: res.message || 'Nhập danh sách thất bại.' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi khi nhập hàng loạt.' };
+    }
+  };
+
+  const adminUpdateBlindBagAccount = async (
+    id: string,
+    data: Partial<BlindBagAccountItem>
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.patch(`/api/blind-bags/admin/accounts/${id}`, data);
+      if (res && res.success) {
+        await fetchBlindBagAccounts();
+        await fetchBlindBagStats();
+        return { success: true, message: res.message || 'Cập nhật thành công!' };
+      }
+      return { success: false, message: res.message || 'Cập nhật thất bại.' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi cập nhật.' };
+    }
+  };
+
+  const adminDeleteBlindBagAccount = async (id: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.delete(`/api/blind-bags/admin/accounts/${id}`);
+      if (res && res.success) {
+        await fetchBlindBagAccounts();
+        await fetchBlindBagStats();
+        return { success: true, message: res.message || 'Đã xóa tài khoản khỏi kho!' };
+      }
+      return { success: false, message: res.message || 'Xóa thất bại.' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi khi xóa.' };
+    }
+  };
+
+  const adminRevealBlindBagPassword = async (id: string): Promise<string | null> => {
+    try {
+      const res = await api.get(`/api/blind-bags/admin/accounts/${id}/reveal-password`);
+      if (res && res.success && res.password) {
+        return res.password;
+      }
+      return null;
+    } catch (err: any) {
+      console.warn('Cannot reveal password:', err);
+      return null;
+    }
+  };
+
   const adminToggleAutoApproveAccounts = async (enabled: boolean): Promise<{ success: boolean; message: string }> => {
     try {
       setIsAutoApproveAccounts(enabled);
@@ -2599,6 +2753,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminUpdateBoxTier,
         adminImportAccountToMysteryBox,
         adminResetMysteryBoxes,
+
+        // Blind Bag Account Warehouse
+        blindBagAccounts,
+        blindBagClaims,
+        blindBagStats,
+        fetchBlindBagAccounts,
+        fetchBlindBagStats,
+        fetchBlindBagClaims,
+        adminAddBlindBagAccount,
+        adminImportBlindBagAccounts,
+        adminUpdateBlindBagAccount,
+        adminDeleteBlindBagAccount,
+        adminRevealBlindBagPassword,
 
         resetToDefaultData,
         clearAllDatabaseData,

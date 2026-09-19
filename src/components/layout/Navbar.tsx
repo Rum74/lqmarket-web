@@ -132,9 +132,9 @@ export const Navbar: React.FC = () => {
           </div>
 
           {/* ====================================================
-              2. CENTER GROUP: NAVIGATION LINKS
+              2. CENTER GROUP: NAVIGATION LINKS (Streamlined & Non-overlapping)
              ==================================================== */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
+          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 2xl:gap-1.5 shrink-0">
             {/* Trang Chủ */}
             <button
               id="nav-btn-home"
@@ -175,7 +175,7 @@ export const Navbar: React.FC = () => {
             >
               <HelpCircle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
               <span>Xé Túi Mù</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white uppercase tracking-wider leading-none animate-pulse">
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white uppercase tracking-wider leading-none">
                 HOT
               </span>
             </button>
@@ -216,7 +216,7 @@ export const Navbar: React.FC = () => {
               <span>Đơn Hàng</span>
             </button>
 
-            {/* Giới Thiệu (Referral) - Đã xóa thẻ TẶNG TIỀN theo yêu cầu */}
+            {/* Giới Thiệu (Referral) - Đã xóa thẻ tặng tiền gọn gàng */}
             <button
               id="nav-btn-referral"
               onClick={() => setCurrentView('referral')}
@@ -785,12 +785,7 @@ export const Navbar: React.FC = () => {
               }`}
             >
               <Gift className="w-4 h-4 text-amber-400" />
-              <div className="flex items-center justify-between flex-1">
-                <span>Giới Thiệu Bạn Bè (Referral)</span>
-                <span className="text-[9px] font-black bg-emerald-500 text-slate-950 px-1.5 py-0.2 rounded-full uppercase">
-                  TẶNG TIỀN
-                </span>
-              </div>
+              <span>Giới Thiệu Bạn Bè (Referral)</span>
             </button>
 
             <button

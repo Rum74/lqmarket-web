@@ -32,6 +32,7 @@ import auditLogRoutes from './backend/src/routes/auditLogRoutes';
 import priceAlertRoutes from './backend/src/routes/priceAlertRoutes';
 import affiliateRoutes from './backend/src/routes/affiliateRoutes';
 import { referralRouter } from './backend/src/routes/referralRoutes';
+import blindBagRoutes from './backend/src/routes/blindBagRoutes';
 
 // Helper to resolve route modules across ESM and CJS imports
 const getRouter = (routeMod: any) => {
@@ -150,6 +151,7 @@ async function startServer() {
   const resolvedPriceAlertRoutes = getRouter(priceAlertRoutes);
   const resolvedAffiliateRoutes = getRouter(affiliateRoutes);
   const resolvedReferralRoutes = getRouter(referralRouter);
+  const resolvedBlindBagRoutes = getRouter(blindBagRoutes);
 
   app.use('/api/auth', resolvedAuthRoutes);
   app.use('/api/accounts', resolvedAccountRoutes);
@@ -160,6 +162,8 @@ async function startServer() {
   app.use('/api/payos', resolvedPaymentRoutes); // Alias for PayOS callbacks
   app.use('/api/mystery-boxes', resolvedMysteryBoxRoutes);
   app.use('/api/mystery-box', resolvedMysteryBoxRoutes); // Alias
+  app.use('/api/blind-bags', resolvedBlindBagRoutes);
+  app.use('/api/blind-bag', resolvedBlindBagRoutes); // Alias
   app.use('/api/inventory', resolvedInventoryRoutes);
   app.use('/api/favorites', resolvedFavoriteRoutes);
   app.use('/api/conversations', resolvedChatRoutes);

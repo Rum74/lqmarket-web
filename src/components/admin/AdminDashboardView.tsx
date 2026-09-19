@@ -10,6 +10,7 @@ import { AdminDisputesTab } from './AdminDisputesTab';
 import { AdminCouponsTab } from './AdminCouponsTab';
 import { AdminAuditLogsTab } from './AdminAuditLogsTab';
 import { AdminReferralsTab } from './AdminReferralsTab';
+import { AdminBlindBagWarehouseTab } from './AdminBlindBagWarehouseTab';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -81,7 +82,7 @@ export const AdminDashboardView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'payouts' | 'users' | 'mystery_box' | 'audit_logs' | 'referrals' | 'settings'
+    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'payouts' | 'users' | 'mystery_box' | 'blind_bag_warehouse' | 'audit_logs' | 'referrals' | 'settings'
   >('pending');
   const [rejectionModalAccId, setRejectionModalAccId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -538,6 +539,18 @@ export const AdminDashboardView: React.FC = () => {
           >
             <PackageOpen size={13} />
             <span>Túi Mù</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('blind_bag_warehouse')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'blind_bag_warehouse'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 font-black shadow-md'
+                : 'text-cyan-400 hover:text-white bg-cyan-400/10 border border-cyan-400/20'
+            }`}
+          >
+            <Database size={13} />
+            <span>Kho ACC Túi Mù</span>
           </button>
 
           <button
@@ -1397,6 +1410,11 @@ export const AdminDashboardView: React.FC = () => {
       {/* TAB: MYSTERY BOX MANAGEMENT */}
       {activeTab === 'mystery_box' && (
         <AdminMysteryBoxManagement />
+      )}
+
+      {/* TAB: BLIND BAG WAREHOUSE MANAGEMENT */}
+      {activeTab === 'blind_bag_warehouse' && (
+        <AdminBlindBagWarehouseTab />
       )}
 
       {/* TAB: SELLER VERIFICATION */}

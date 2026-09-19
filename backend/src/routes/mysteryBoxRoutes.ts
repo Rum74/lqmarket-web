@@ -9,6 +9,8 @@ import { Account } from '../models/Account';
 import { Setting } from '../models/Setting';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
+import { BlindBagAccount } from '../models/BlindBagAccount';
+import { BlindBagClaim } from '../models/BlindBagClaim';
 import {
   authenticateToken,
   optionalAuth,
@@ -494,7 +496,176 @@ const handleOpenMysteryBox = async (req: AuthenticatedRequest, res: Response) =>
       });
     }
 
-    // 2. Load Eligible Rewards
+    // 2. Check if this tier has accounts in the BlindBagAccount warehouse
+    const candidateBagIds = [box.id, box.tier];
+    if (box.price === 1000) candidateBagIds.push('blindbag_1000');
+    if (box.price === 5000) candidateBagIds.push('blindbag_5000');
+    if (box.price === 10000) candidateBagIds.push('blindbag_10000');
+    if (box.price === 19000 || box.price === 20000) candidateBagIds.push('blindbag_20000', 'box_bronze');
+
+    const availableBagAccountsCount = await BlindBagAccount.countDocuments({
+      blindBagId: { $in: candidateBagIds },
+      status: 'available'
+    });
+
+    // If there are accounts in the warehouse, prioritize popping an account atomically from BlindBagAccount
+    if (availableBagAccountsCount > 0) {
+      const nowIso = new Date().toISOString();
+      const claimedAcc = await BlindBagAccount.findOneAndUpdate(
+        {
+          blindBagId: { $in: candidateBagIds },
+          status: 'available'
+        },
+        {
+          $set: {
+            status: 'claimed',
+            claimedBy: user.id,
+            claimedByName: user.name || user.email,
+            claimedAt: nowIso,
+            updatedAt: nowIso
+          }
+        },
+        { new: true }
+      );
+
+      if (!claimedAcc) {
+        return res.status(400).json({
+          success: false,
+          code: 'OUT_OF_STOCK',
+          message: 'Kho tài khoản phần thưởng hiện đã hết.'
+        });
+      }
+
+      // Deduct wallet
+      user.balance -= boxPrice;
+      await user.save();
+
+      // Record wallet transaction
+      if (boxPrice > 0) {
+        const boxTx = new WalletTransaction({
+          id: `tx_mb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          type: 'purchase',
+          amount: -boxPrice,
+          status: 'success',
+          note: `Mở Túi Mù: ${box.name} (Kho ACC: ${claimedAcc.username})`,
+          createdAt: nowIso
+        });
+        await boxTx.save();
+      }
+
+      // Record BlindBagClaim
+      const claimRecord = new BlindBagClaim({
+        id: `bbc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: user.id,
+        userName: user.name || user.email,
+        blindBagId: box.id,
+        blindBagAccountId: claimedAcc.id,
+        username: claimedAcc.username,
+        claimedAt: nowIso,
+        status: 'success'
+      });
+      await claimRecord.save();
+
+      // Add to inventory
+      const inventoryId = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const inventoryItem = new UserInventory({
+        id: inventoryId,
+        userId: user.id,
+        source: 'mystery_box',
+        rewardType: 'account',
+        title: `Tài Khoản Liên Quân [${claimedAcc.username}]`,
+        value: box.price,
+        rarity: 'epic',
+        accountData: {
+          rank: 'Tinh Anh',
+          heroesCount: 45,
+          skinsCount: 30,
+          credentials: {
+            username: claimedAcc.username,
+            password: claimedAcc.password,
+            securityType: 'Trắng Thông Tin',
+            secretNotes: claimedAcc.notes || ''
+          }
+        },
+        isUsed: false,
+        receivedAt: nowIso
+      });
+      await inventoryItem.save();
+
+      // Record History
+      const historyItem = new MysteryHistory({
+        id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: user.id,
+        userName: user.name,
+        userAvatar: user.avatar,
+        boxTierId: box.tier || box.id,
+        boxName: box.name,
+        rewardId: claimedAcc.id,
+        rewardType: 'account',
+        rewardTitle: `Tài Khoản Liên Quân: ${claimedAcc.username}`,
+        rewardValue: box.price,
+        rewardRarity: 'epic',
+        accountDelivered: {
+          username: claimedAcc.username,
+          password: claimedAcc.password,
+          securityType: 'Trắng Thông Tin',
+          secretNotes: claimedAcc.notes || ''
+        },
+        openedAt: nowIso
+      });
+      await historyItem.save();
+
+      // Update box stats
+      box.totalOpened = (box.totalOpened || 0) + 1;
+      if (box.stockRemaining && box.stockRemaining > 0) {
+        box.stockRemaining -= 1;
+      }
+      await box.save();
+
+      // Send notification
+      const notif = new Notification({
+        id: `notif_${Date.now()}`,
+        userId: user.id,
+        title: 'Chúc mừng mở Túi Mù thành công!',
+        message: `Bạn vừa mở ${box.name} và nhận được: Tài khoản Liên Quân ${claimedAcc.username}. Kiểm tra tại Kho Đồ!`,
+        type: 'system',
+        createdAt: nowIso
+      });
+      await notif.save();
+
+      return res.json({
+        success: true,
+        message: `🎉 CHÚC MỪNG! Bạn đã nhận được: Tài Khoản Liên Quân [${claimedAcc.username}]!`,
+        reward: {
+          id: claimedAcc.id,
+          accountId: claimedAcc.id,
+          type: 'account',
+          title: `Tài Khoản Liên Quân [${claimedAcc.username}]`,
+          username: claimedAcc.username,
+          password: claimedAcc.password,
+          value: box.price,
+          rarity: 'epic',
+          accountData: {
+            rank: 'Tinh Anh',
+            heroesCount: 45,
+            skinsCount: 30,
+            credentials: {
+              username: claimedAcc.username,
+              password: claimedAcc.password,
+              securityType: 'Trắng Thông Tin',
+              secretNotes: claimedAcc.notes || ''
+            }
+          }
+        },
+        inventoryItem: inventoryItem.toJSON(),
+        newBalance: user.balance
+      });
+    }
+
+    // 2. Load Eligible Rewards (Voucher/Cash or fallback)
     let rewards = await MysteryReward.find({
       boxTierId: { $in: [box.tier, box.id, 'all'] },
       $or: [{ stock: { $exists: false } }, { stock: { $gt: 0 } }, { stock: null }]
@@ -513,7 +684,8 @@ const handleOpenMysteryBox = async (req: AuthenticatedRequest, res: Response) =>
     if (!rewards || rewards.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Kho phần thưởng của Túi Mù này đang được bổ sung, vui lòng thử lại sau.'
+        code: 'OUT_OF_STOCK',
+        message: 'Kho tài khoản phần thưởng hiện đã hết.'
       });
     }
 
