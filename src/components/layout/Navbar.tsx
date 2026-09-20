@@ -48,7 +48,8 @@ export const Navbar: React.FC = () => {
     accounts,
     compareAccountIds,
     setIsCompareModalOpen,
-    setIsLoyaltyModalOpen
+    setIsLoyaltyModalOpen,
+    userInventory
   } = useApp();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -510,6 +511,22 @@ export const Navbar: React.FC = () => {
                           <span>Quản lý đơn hàng</span>
                         </button>
 
+                        <button
+                          onClick={() => {
+                            setCurrentView('mystery_box');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center gap-2 cursor-pointer font-medium"
+                        >
+                          <Gift className="w-4 h-4 text-amber-400" />
+                          <span>Túi đồ của tôi (Phần thưởng)</span>
+                          {userInventory.filter(i => i.userId === currentUser.id || (currentUser.role === 'admin' && (i.userId === 'user_admin_super' || i.userId === 'admin' || !i.userId))).length > 0 && (
+                            <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">
+                              {userInventory.filter(i => i.userId === currentUser.id || (currentUser.role === 'admin' && (i.userId === 'user_admin_super' || i.userId === 'admin' || !i.userId))).length}
+                            </span>
+                          )}
+                        </button>
+
                         {currentUser.role !== 'buyer' && (
                           <button
                             onClick={() => {
@@ -719,6 +736,28 @@ export const Navbar: React.FC = () => {
             >
               <ShoppingBag className="w-4 h-4 text-cyan-400" />
               <span>Quản Lý Đơn Hàng</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentView('mystery_box');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors ${
+                currentView === 'mystery_box'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Gift className="w-4 h-4 text-amber-400" />
+                <span>Túi Đồ Của Tôi</span>
+              </div>
+              {userInventory.filter(i => i.userId === currentUser.id || (currentUser.role === 'admin' && (i.userId === 'user_admin_super' || i.userId === 'admin' || !i.userId))).length > 0 && (
+                <span className="text-[10px] bg-amber-500 text-slate-950 font-bold px-2 py-0.5 rounded-full">
+                  {userInventory.filter(i => i.userId === currentUser.id || (currentUser.role === 'admin' && (i.userId === 'user_admin_super' || i.userId === 'admin' || !i.userId))).length}
+                </span>
+              )}
             </button>
 
             <button

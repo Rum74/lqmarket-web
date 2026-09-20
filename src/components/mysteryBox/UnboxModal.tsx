@@ -237,15 +237,45 @@ export const UnboxModal: React.FC<UnboxModalProps> = ({
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800 text-slate-400">
-                        <span>Bảo mật:</span>
-                        <span className="text-emerald-400 font-bold flex items-center gap-1">
-                          <ShieldCheck size={12} /> {rewardResult.accountData.credentials.securityType}
+                        <span className="flex items-center gap-1">
+                          Bảo mật: <strong className="text-emerald-400 font-bold flex items-center gap-1"><ShieldCheck size={12} /> {rewardResult.accountData.credentials.securityType || 'Trắng Thông Tin'}</strong>
+                        </span>
+                        <span>
+                          Server: <strong className="text-sky-400 font-bold">Việt Nam</strong>
                         </span>
                       </div>
                     </div>
 
                     <p className="text-[11px] text-amber-400/90 italic">
-                      * Tài khoản đã được tự động lưu vào mục <strong>Túi Đồ</strong> &amp; <strong>Đơn Hàng</strong> của bạn để xem lại bất cứ lúc nào.
+                      * Tài khoản đã được tự động lưu vào mục <strong>Túi Đồ Của Tôi</strong> để xem lại bất cứ lúc nào.
+                    </p>
+                  </div>
+                )}
+
+                {/* 1.5. If Custom: Show Custom Details */}
+                {rewardResult.type === 'custom' && (
+                  <div className="p-3.5 bg-purple-950/40 border border-purple-800/60 rounded-xl text-xs space-y-2 text-left">
+                    <div className="text-purple-300 font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-purple-400" />
+                        <span>Phần Thưởng Tuỳ Chỉnh (Custom)</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold">
+                        Quà Tặng
+                      </span>
+                    </div>
+                    {rewardResult.customData?.description && (
+                      <div className="text-slate-200 text-xs bg-slate-900/80 p-2.5 rounded-lg border border-purple-900/40 font-medium">
+                        {rewardResult.customData.description}
+                      </div>
+                    )}
+                    {rewardResult.customData?.contactInfo && (
+                      <div className="text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                        <strong>Cách thức nhận:</strong> {rewardResult.customData.contactInfo}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-purple-300/80 italic">
+                      * Quà tặng đã được lưu vào <strong>Túi Đồ Của Tôi</strong>.
                     </p>
                   </div>
                 )}
@@ -315,24 +345,26 @@ export const UnboxModal: React.FC<UnboxModalProps> = ({
 
                 {rewardResult.type === 'account' ? (
                   <button
-                    onClick={() => {
-                      onClose();
-                      onGoToOrders();
-                    }}
-                    className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <span>Xem Đơn Hàng</span>
-                    <ExternalLink size={14} />
-                  </button>
-                ) : (
-                  <button
+                    id="unbox-view-order-inventory-btn"
                     onClick={() => {
                       onClose();
                       onGoToInventory();
                     }}
                     className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Xem Túi Đồ</span>
+                    <span>Xem Đơn Hàng (Túi Đồ)</span>
+                    <ArrowRight size={14} />
+                  </button>
+                ) : (
+                  <button
+                    id="unbox-view-inventory-btn"
+                    onClick={() => {
+                      onClose();
+                      onGoToInventory();
+                    }}
+                    className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Xem Túi Đồ Của Tôi</span>
                     <ArrowRight size={14} />
                   </button>
                 )}

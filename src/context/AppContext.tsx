@@ -851,11 +851,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsLoggedIn(true);
 
           if (userObj.role === 'admin') {
-            const [adminUsersRes, adminProductsRes, adminOrdersRes, adminTxRes] = await Promise.all([
+            const [adminUsersRes, adminProductsRes, adminOrdersRes, adminTxRes, adminInvRes] = await Promise.all([
               api.get('/api/admin/users').catch(() => null),
               api.get('/api/admin/products').catch(() => null),
               api.get('/api/admin/orders').catch(() => null),
-              api.get('/api/admin/transactions').catch(() => null)
+              api.get('/api/admin/transactions').catch(() => null),
+              api.get('/api/mystery-boxes/user/inventory').catch(() => null)
             ]);
 
             if (adminUsersRes?.success && Array.isArray(adminUsersRes.data || adminUsersRes.users)) {
@@ -869,6 +870,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             if (adminTxRes?.success && Array.isArray(adminTxRes.data || adminTxRes.transactions)) {
               setTransactions(adminTxRes.data || adminTxRes.transactions);
+            }
+            if (adminInvRes?.success && Array.isArray(adminInvRes.data || adminInvRes.inventory || adminInvRes.items)) {
+              setUserInventory(adminInvRes.data || adminInvRes.inventory || adminInvRes.items);
             }
           } else {
             const [ordRes, userTxRes, notifRes, invRes] = await Promise.all([

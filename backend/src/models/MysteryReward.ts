@@ -4,7 +4,7 @@ import { memoryStore, createHybridModel } from '../config/memoryStore';
 export interface IMysteryReward {
   id: string;
   boxTierId: string;
-  type: 'account' | 'cash' | 'voucher' | 'free_turn';
+  type: 'account' | 'cash' | 'voucher' | 'free_turn' | 'custom' | string;
   title: string;
   description: string;
   value: number;
@@ -15,6 +15,7 @@ export interface IMysteryReward {
   stock?: number;
   accountData?: {
     rank: string;
+    server?: string;
     heroesCount: number;
     skinsCount: number;
     rareSkinName: string;
@@ -27,13 +28,18 @@ export interface IMysteryReward {
   };
   voucherCode?: string;
   voucherDiscount?: number;
+  customData?: {
+    description?: string;
+    notes?: string;
+    contactInfo?: string;
+  };
 }
 
 const MysteryRewardSchema = new Schema<IMysteryReward>(
   {
     id: { type: String, required: true, unique: true, index: true },
     boxTierId: { type: String, required: true, index: true },
-    type: { type: String, enum: ['account', 'cash', 'voucher', 'free_turn'], required: true },
+    type: { type: String, enum: ['account', 'cash', 'voucher', 'free_turn', 'custom'], required: true },
     title: { type: String, required: true },
     description: { type: String, default: '' },
     value: { type: Number, required: true },
@@ -44,6 +50,7 @@ const MysteryRewardSchema = new Schema<IMysteryReward>(
     stock: { type: Number },
     accountData: {
       rank: { type: String },
+      server: { type: String, default: 'Việt Nam' },
       heroesCount: { type: Number },
       skinsCount: { type: Number },
       rareSkinName: { type: String },
@@ -55,7 +62,12 @@ const MysteryRewardSchema = new Schema<IMysteryReward>(
       }
     },
     voucherCode: { type: String },
-    voucherDiscount: { type: Number }
+    voucherDiscount: { type: Number },
+    customData: {
+      description: { type: String },
+      notes: { type: String },
+      contactInfo: { type: String }
+    }
   },
   {
     timestamps: true,

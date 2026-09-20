@@ -209,9 +209,13 @@ router.post('/rewards', authenticateToken, requireAdmin, async (req: Authenticat
       dropWeight: Number(rewardData.dropWeight) || 10,
       dropRate: Number(rewardData.dropRate) || 10,
       stock: rewardData.stock,
-      accountData: rewardData.accountData,
+      accountData: rewardData.accountData ? {
+        ...rewardData.accountData,
+        server: rewardData.accountData.server || 'Việt Nam'
+      } : undefined,
       voucherCode: rewardData.voucherCode,
-      voucherDiscount: rewardData.voucherDiscount
+      voucherDiscount: rewardData.voucherDiscount,
+      customData: rewardData.customData
     });
 
     await newReward.save();
@@ -238,6 +242,7 @@ router.put('/rewards/:id', authenticateToken, requireAdmin, async (req: Authenti
     }
 
     if (updates.title !== undefined) reward.title = updates.title;
+    if (updates.type !== undefined) reward.type = updates.type;
     if (updates.subtitle !== undefined) (reward as any).subtitle = updates.subtitle;
     if (updates.description !== undefined) reward.description = updates.description;
     if (updates.boxTierId !== undefined) reward.boxTierId = updates.boxTierId;
@@ -246,7 +251,13 @@ router.put('/rewards/:id', authenticateToken, requireAdmin, async (req: Authenti
     if (updates.dropWeight !== undefined) reward.dropWeight = Number(updates.dropWeight);
     if (updates.voucherCode !== undefined) reward.voucherCode = updates.voucherCode;
     if (updates.voucherDiscount !== undefined) reward.voucherDiscount = Number(updates.voucherDiscount);
-    if (updates.accountData !== undefined) reward.accountData = updates.accountData;
+    if (updates.accountData !== undefined) {
+      reward.accountData = {
+        ...updates.accountData,
+        server: updates.accountData?.server || 'Việt Nam'
+      };
+    }
+    if (updates.customData !== undefined) reward.customData = updates.customData;
     if (updates.stock !== undefined) reward.stock = updates.stock;
 
     await reward.save();
@@ -371,7 +382,11 @@ router.get('/user/inventory', authenticateToken, async (req: AuthenticatedReques
       return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
     }
 
-    const items = await UserInventory.find({ userId }).sort({ receivedAt: -1 }).lean();
+    const query = (req.user?.role === 'admin')
+      ? { $or: [{ userId }, { userId: 'admin' }, { userId: 'user_admin_super' }] }
+      : { userId };
+
+    const items = await UserInventory.find(query).sort({ receivedAt: -1 }).lean();
     return res.json({
       success: true,
       data: items,
@@ -581,6 +596,7 @@ const handleOpenMysteryBox = async (req: AuthenticatedRequest, res: Response) =>
         rarity: 'epic',
         accountData: {
           rank: 'Tinh Anh',
+          server: 'Việt Nam',
           heroesCount: 45,
           skinsCount: 30,
           credentials: {
@@ -757,9 +773,13 @@ const handleOpenMysteryBox = async (req: AuthenticatedRequest, res: Response) =>
       title: chosenReward.title,
       value: chosenReward.value,
       rarity: chosenReward.rarity,
-      accountData: chosenReward.accountData,
+      accountData: chosenReward.accountData ? {
+        ...chosenReward.accountData,
+        server: chosenReward.accountData.server || 'Việt Nam'
+      } : undefined,
       voucherCode: chosenReward.voucherCode,
       voucherDiscount: chosenReward.voucherDiscount,
+      customData: (chosenReward as any).customData,
       isUsed: false,
       receivedAt: new Date().toISOString()
     });

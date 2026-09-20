@@ -173,7 +173,7 @@ export const AdminMysteryBoxManagement: React.FC = () => {
 
   // New Reward modal
   const [newRewardModalOpen, setNewRewardModalOpen] = useState(false);
-  const [newRewardType, setNewRewardType] = useState<'account' | 'cash' | 'voucher' | 'free_turn'>('account');
+  const [newRewardType, setNewRewardType] = useState<'account' | 'cash' | 'voucher' | 'free_turn' | 'custom'>('account');
   const [newRewardTier, setNewRewardTier] = useState<string>('box_bronze');
   const [newRewardTitle, setNewRewardTitle] = useState('');
   const [newRewardSubtitle, setNewRewardSubtitle] = useState('');
@@ -191,6 +191,11 @@ export const AdminMysteryBoxManagement: React.FC = () => {
   const [newAccSkins, setNewAccSkins] = useState<number>(30);
   const [newAccRareSkin, setNewAccRareSkin] = useState('');
   const [newAccSecretNotes, setNewAccSecretNotes] = useState('');
+
+  // Custom Reward specific inputs
+  const [newCustomDescription, setNewCustomDescription] = useState('');
+  const [newCustomNotes, setNewCustomNotes] = useState('');
+  const [newCustomContactInfo, setNewCustomContactInfo] = useState('');
 
   // Edit Reward Modal State
   const [editingReward, setEditingReward] = useState<MysteryBoxRewardItem | null>(null);
@@ -210,6 +215,10 @@ export const AdminMysteryBoxManagement: React.FC = () => {
   const [editAccSkins, setEditAccSkins] = useState<number>(30);
   const [editAccRareSkin, setEditAccRareSkin] = useState('');
   const [editAccSecretNotes, setEditAccSecretNotes] = useState('');
+  // Edit Custom Reward
+  const [editCustomDescription, setEditCustomDescription] = useState('');
+  const [editCustomNotes, setEditCustomNotes] = useState('');
+  const [editCustomContactInfo, setEditCustomContactInfo] = useState('');
   const [isSavingRewardEdit, setIsSavingRewardEdit] = useState(false);
 
   // Editing Tier Price/Stock
@@ -431,6 +440,16 @@ export const AdminMysteryBoxManagement: React.FC = () => {
       setEditAccRareSkin('');
       setEditAccSecretNotes('');
     }
+
+    if (rew.customData) {
+      setEditCustomDescription(rew.customData.description || '');
+      setEditCustomNotes(rew.customData.notes || '');
+      setEditCustomContactInfo(rew.customData.contactInfo || '');
+    } else {
+      setEditCustomDescription('');
+      setEditCustomNotes('');
+      setEditCustomContactInfo('');
+    }
   };
 
   const handleSaveRewardEdit = async (e: React.FormEvent) => {
@@ -447,6 +466,14 @@ export const AdminMysteryBoxManagement: React.FC = () => {
       dropWeight: Number(editWeight),
       voucherCode: editingReward.type === 'voucher' ? editVoucherCode.trim() : undefined
     };
+
+    if (editingReward.type === 'custom') {
+      updates.customData = {
+        description: editCustomDescription.trim() || editTitle.trim(),
+        notes: editCustomNotes.trim() || undefined,
+        contactInfo: editCustomContactInfo.trim() || undefined
+      };
+    }
 
     if (editingReward.type === 'account') {
       updates.accountData = {
@@ -490,6 +517,14 @@ export const AdminMysteryBoxManagement: React.FC = () => {
       voucherCode: newRewardType === 'voucher' ? newRewardVoucherCode.trim() || `VOUCHER_${Date.now().toString().slice(-4)}` : undefined
     };
 
+    if (newRewardType === 'custom') {
+      payload.customData = {
+        description: newCustomDescription.trim() || newRewardTitle.trim(),
+        notes: newCustomNotes.trim() || undefined,
+        contactInfo: newCustomContactInfo.trim() || undefined
+      };
+    }
+
     if (newRewardType === 'account') {
       if (!newAccUsername.trim() || !newAccPassword.trim()) {
         alert('Vui lòng nhập đầy đủ Tài khoản và Mật khẩu thật để trao cho người trúng!');
@@ -519,6 +554,9 @@ export const AdminMysteryBoxManagement: React.FC = () => {
       setNewRewardValue(50000);
       setNewAccUsername('');
       setNewAccPassword('');
+      setNewCustomDescription('');
+      setNewCustomNotes('');
+      setNewCustomContactInfo('');
     }
   };
 
@@ -613,16 +651,6 @@ export const AdminMysteryBoxManagement: React.FC = () => {
           >
             <Plus size={15} />
             <span>Tạo Túi Mù Mới</span>
-          </button>
-
-          <button
-            onClick={handleResetTiers}
-            disabled={isResettingTiers}
-            className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-xl border border-slate-700 shadow cursor-pointer flex items-center gap-1.5 transition-all"
-            title="Đồng bộ / Nạp lại danh mục mẫu vào Database"
-          >
-            <RefreshCw size={14} className={isResettingTiers ? 'animate-spin text-amber-400' : 'text-amber-400'} />
-            <span>{isResettingTiers ? 'Đang nạp...' : 'Nạp Mẫu DB'}</span>
           </button>
 
           <button
@@ -942,12 +970,11 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                     <td colSpan={6} className="py-8 text-center text-slate-400">
                       <p className="font-bold text-sm">Chưa có phần thưởng nào trong danh mục này.</p>
                       <button
-                        onClick={handleResetTiers}
-                        disabled={isResettingTiers}
-                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow cursor-pointer"
+                        onClick={() => setNewRewardModalOpen(true)}
+                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow cursor-pointer"
                       >
-                        <RefreshCw size={14} className={isResettingTiers ? 'animate-spin' : ''} />
-                        <span>Nạp Data Seed Kho Quà Mặc Định Vào DB Ngay</span>
+                        <Plus size={14} />
+                        <span>Thêm Phần Thưởng Mới Vào Túi Mù</span>
                       </button>
                     </td>
                   </tr>
@@ -1098,6 +1125,8 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                     onChange={e => setNewRewardType(e.target.value as any)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium"
                   >
+                    <option value="account">Tài khoản Game Liên Quân</option>
+                    <option value="custom">Quà Tặng Tuỳ Chọn (Custom)</option>
                     <option value="cash">Tiền mặt hoàn ví</option>
                     <option value="voucher">Voucher giảm giá</option>
                     <option value="free_turn">Lượt quay miễn phí</option>
@@ -1168,6 +1197,159 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                     placeholder="VD: TUIMU50K"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono uppercase"
                   />
+                </div>
+              )}
+
+              {/* Account fields if type === account */}
+              {newRewardType === 'account' && (
+                <div className="space-y-3 p-3 bg-slate-950 rounded-2xl border border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                      <Gamepad2 size={14} />
+                      Thông tin tài khoản Liên Quân
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
+                      Server: Việt Nam
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[11px]">Tài khoản / Garena ID:</label>
+                      <input
+                        type="text"
+                        value={newAccUsername}
+                        onChange={e => setNewAccUsername(e.target.value)}
+                        placeholder="VD: lq_master_pro"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-mono text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[11px]">Mật khẩu:</label>
+                      <input
+                        type="text"
+                        value={newAccPassword}
+                        onChange={e => setNewAccPassword(e.target.value)}
+                        placeholder="VD: Pass123@#"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-mono text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[10px]">Rank tài khoản:</label>
+                      <select
+                        value={newAccRank}
+                        onChange={e => setNewAccRank(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
+                      >
+                        <option value="Đồng">Đồng</option>
+                        <option value="Bạc">Bạc</option>
+                        <option value="Vàng">Vàng</option>
+                        <option value="Bạch Kim">Bạch Kim</option>
+                        <option value="Kim Cương">Kim Cương</option>
+                        <option value="Tinh Anh">Tinh Anh</option>
+                        <option value="Cao Thủ">Cao Thủ</option>
+                        <option value="Chiến Tướng">Chiến Tướng</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[10px]">Số tướng:</label>
+                      <input
+                        type="number"
+                        value={newAccHeroes}
+                        onChange={e => setNewAccHeroes(Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[10px]">Số trang phục:</label>
+                      <input
+                        type="number"
+                        value={newAccSkins}
+                        onChange={e => setNewAccSkins(Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[10px]">Bảo mật:</label>
+                      <select
+                        value={newAccSecurityType}
+                        onChange={e => setNewAccSecurityType(e.target.value as any)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
+                      >
+                        <option value="Trắng Thông Tin">Trắng Thông Tin 100%</option>
+                        <option value="SĐT Có Thể Đổi">SĐT Có Thể Đổi</option>
+                        <option value="Email Đã Đổi">Email Đã Đổi</option>
+                        <option value="Facebook Đã Huỷ">Facebook Đã Huỷ</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[10px]">Skin nổi bật / SSS:</label>
+                      <input
+                        type="text"
+                        value={newAccRareSkin}
+                        onChange={e => setNewAccRareSkin(e.target.value)}
+                        placeholder="VD: Nakroth Thứ Nguyên Vệ Thần"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Reward fields if type === custom */}
+              {newRewardType === 'custom' && (
+                <div className="space-y-3 p-3 bg-purple-950/30 rounded-2xl border border-purple-800/40">
+                  <div className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-purple-400" />
+                    Cấu hình Phần Thưởng Tuỳ Chọn (Custom)
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-bold text-[11px]">Mô tả chi tiết phần thưởng:</label>
+                    <textarea
+                      value={newCustomDescription}
+                      onChange={e => setNewCustomDescription(e.target.value)}
+                      placeholder="VD: Thẻ cào Garena 100.000đ / Áo thun độc quyền / Skin hữu hạn gửi qua thư ingame"
+                      rows={2}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[11px]">Kênh / Mã nhận thưởng:</label>
+                      <input
+                        type="text"
+                        value={newCustomContactInfo}
+                        onChange={e => setNewCustomContactInfo(e.target.value)}
+                        placeholder="VD: Zalo CSKH 0966923416 hoặc mã CARD-XXXX"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[11px]">Ghi chú cho người trúng:</label>
+                      <input
+                        type="text"
+                        value={newCustomNotes}
+                        onChange={e => setNewCustomNotes(e.target.value)}
+                        placeholder="VD: Giữ mã và nhắn admin trong 48h"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1743,7 +1925,12 @@ export const AdminMysteryBoxManagement: React.FC = () => {
 
               {editingReward.type === 'account' && (
                 <div className="space-y-3 p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                  <div className="text-[11px] font-bold text-amber-400">Thông tin đăng nhập tài khoản:</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-400">Thông tin đăng nhập tài khoản:</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
+                      Server: Việt Nam
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] text-slate-400 block">Tài khoản:</label>
@@ -1761,6 +1948,49 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                         value={editAccPassword}
                         onChange={e => setEditAccPassword(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {editingReward.type === 'custom' && (
+                <div className="space-y-3 p-3 bg-purple-950/30 rounded-2xl border border-purple-800/40">
+                  <div className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-purple-400" />
+                    Cấu hình Phần Thưởng Tuỳ Chọn (Custom)
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-bold text-[11px]">Mô tả chi tiết phần thưởng:</label>
+                    <textarea
+                      value={editCustomDescription}
+                      onChange={e => setEditCustomDescription(e.target.value)}
+                      placeholder="VD: Thẻ cào Garena 100.000đ / Áo thun độc quyền"
+                      rows={2}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[11px]">Kênh / Mã nhận thưởng:</label>
+                      <input
+                        type="text"
+                        value={editCustomContactInfo}
+                        onChange={e => setEditCustomContactInfo(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold text-[11px]">Ghi chú cho người trúng:</label>
+                      <input
+                        type="text"
+                        value={editCustomNotes}
+                        onChange={e => setEditCustomNotes(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
                       />
                     </div>
                   </div>

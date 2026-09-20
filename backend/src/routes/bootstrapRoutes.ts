@@ -302,6 +302,15 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         sellerVerifications = allSvr || [];
         disputes = allDsp || [];
         auditLogs = allLogs || [];
+
+        const adminInv = await UserInventory.find({
+          $or: [
+            { userId: currentUserId },
+            { userId: 'admin' },
+            { userId: 'user_admin_super' }
+          ]
+        }).sort({ receivedAt: -1 }).lean();
+        userInventory = adminInv || [];
       } else {
         const [orders, inv, mySvr, myDsp] = await Promise.all([
           Order.find({

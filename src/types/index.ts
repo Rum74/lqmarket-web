@@ -209,7 +209,7 @@ export interface FilterOptions {
 // ----------------------------------------------------
 export type MysteryBoxTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'special' | string;
 
-export type MysteryBoxRewardType = 'account' | 'cash' | 'voucher' | 'free_turn';
+export type MysteryBoxRewardType = 'account' | 'cash' | 'voucher' | 'free_turn' | 'custom';
 
 export type RewardRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
@@ -256,6 +256,7 @@ export interface MysteryBoxRewardItem {
   // Account details if type === 'account'
   accountData?: {
     rank: RankTier;
+    server?: string;
     heroesCount: number;
     skinsCount: number;
     rareSkinName?: string;
@@ -266,6 +267,12 @@ export interface MysteryBoxRewardItem {
   voucherCode?: string;
   voucherDiscount?: number;
   voucherMinOrder?: number;
+  // Custom details if type === 'custom'
+  customData?: {
+    description?: string;
+    notes?: string;
+    contactInfo?: string;
+  };
   // Stock limit
   stock?: number;
 }
@@ -297,6 +304,7 @@ export interface UserInventoryItem {
   rarity: RewardRarity;
   accountData?: {
     rank: RankTier;
+    server?: string;
     heroesCount: number;
     skinsCount: number;
     rareSkinName?: string;
@@ -304,6 +312,11 @@ export interface UserInventoryItem {
   };
   voucherCode?: string;
   voucherDiscount?: number;
+  customData?: {
+    description?: string;
+    notes?: string;
+    contactInfo?: string;
+  };
   isUsed?: boolean;
   receivedAt: string;
 }

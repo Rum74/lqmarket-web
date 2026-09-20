@@ -60,11 +60,29 @@ export const MysteryBoxView: React.FC = () => {
   const [previewTierRewards, setPreviewTierRewards] = useState<string | null>(null);
 
   // Inventory filter state
-  const [inventoryFilter, setInventoryFilter] = useState<'all' | 'account' | 'voucher'>('all');
+  const [inventoryFilter, setInventoryFilter] = useState<'all' | 'account' | 'voucher' | 'custom'>('all');
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Handle Box Opening
+  // Filtered inventory items for current user (supporting both user and admin role viewing)
+  const isItemBelongingToCurrent = (item: UserInventoryItem) => {
+    if (item.userId === currentUser.id) return true;
+    if (currentUser.role === 'admin') {
+      return item.userId === 'user_admin_super' || item.userId === 'admin' || !item.userId;
+    }
+    return false;
+  };
+
+  const myInventoryItems = userInventory.filter(item => {
+    if (!isItemBelongingToCurrent(item)) return false;
+    if (inventoryFilter === 'all') return true;
+    return item.rewardType === inventoryFilter;
+  });
+
+  const myTotalCount = userInventory.filter(isItemBelongingToCurrent).length;
+  const myAccountsCount = userInventory.filter(i => isItemBelongingToCurrent(i) && i.rewardType === 'account').length;
+  const myVouchersCount = userInventory.filter(i => isItemBelongingToCurrent(i) && i.rewardType === 'voucher').length;
+  const myCustomCount = userInventory.filter(i => isItemBelongingToCurrent(i) && i.rewardType === 'custom').length;
   const handleStartUnbox = async (box: MysteryBoxTierConfig) => {
     if (!isLoggedIn) {
       openLoginModal();
@@ -115,10 +133,8 @@ export const MysteryBoxView: React.FC = () => {
     setRevealedPasswords(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
-  // Filtered inventory items for current user
-  const myInventoryItems = userInventory.filter(
-    item => item.userId === currentUser.id && (inventoryFilter === 'all' || item.rewardType === inventoryFilter)
-  );
+  // Only show mystery boxes that are active (hide inactive boxes from user interface)
+  const visibleMysteryBoxes = mysteryBoxes.filter(box => box.isActive !== false);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-16">
@@ -256,7 +272,7 @@ export const MysteryBoxView: React.FC = () => {
             <span>Túi Đồ Của Tôi</span>
             {isLoggedIn && (
               <span className="px-1.5 py-0.2 bg-slate-950 text-amber-400 text-[10px] font-black rounded-full">
-                {userInventory.filter(i => i.userId === currentUser.id).length}
+                {myTotalCount}
               </span>
             )}
           </button>
@@ -307,21 +323,29 @@ export const MysteryBoxView: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-              {mysteryBoxes.map(box => {
-                const isBoxActive = isMysteryBoxEventActive && box.isActive !== false;
-                const freeTurns = userFreeTurns[box.id] || 0;
-                const availableRewards = mysteryRewards.filter(
-                  r => r.boxTierId === box.id || r.boxTierId === 'all'
-                );
+            {/* Empty boxes state if all inactive */}
+            {visibleMysteryBoxes.length === 0 ? (
+              <div className="text-center py-16 bg-slate-900/50 rounded-3xl border border-slate-800 space-y-3">
+                <PackageOpen className="w-12 h-12 text-slate-600 mx-auto" />
+                <h3 className="text-base font-bold text-white">Chưa có Túi Mù nào đang mở bán</h3>
+                <p className="text-xs text-slate-400">Các túi mù hiện đang được bảo trì hoặc tạm tắt. Vui lòng quay lại sau!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                {visibleMysteryBoxes.map(box => {
+                  const isBoxActive = isMysteryBoxEventActive && box.isActive !== false;
+                  const freeTurns = userFreeTurns[box.id] || 0;
+                  const availableRewards = mysteryRewards.filter(
+                    r => r.boxTierId === box.id || r.boxTierId === 'all'
+                  );
 
-                return (
-                  <div
-                    key={box.id}
-                    className={`relative rounded-3xl bg-slate-900/90 border ${box.borderColor} p-5 flex flex-col justify-between shadow-xl transition-all duration-300 ${
-                      isBoxActive ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70 grayscale-[25%] border-dashed'
-                    } overflow-hidden group`}
-                  >
+                  return (
+                    <div
+                      key={box.id}
+                      className={`relative rounded-3xl bg-slate-900/90 border ${box.borderColor} p-5 flex flex-col justify-between shadow-xl transition-all duration-300 ${
+                        isBoxActive ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70 grayscale-[25%] border-dashed'
+                      } overflow-hidden group`}
+                    >
                     {/* Top Tier Tag */}
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -437,6 +461,7 @@ export const MysteryBoxView: React.FC = () => {
                 );
               })}
             </div>
+          )}
 
             {/* Why Play Mystery Box on LQMarket */}
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6 sm:p-8">
@@ -494,14 +519,14 @@ export const MysteryBoxView: React.FC = () => {
               </div>
 
               {/* Filter pills */}
-              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <button
                   onClick={() => setInventoryFilter('all')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
                     inventoryFilter === 'all' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Tất cả ({userInventory.filter(i => i.userId === currentUser.id).length})
+                  Tất cả ({myTotalCount})
                 </button>
                 <button
                   onClick={() => setInventoryFilter('account')}
@@ -509,7 +534,7 @@ export const MysteryBoxView: React.FC = () => {
                     inventoryFilter === 'account' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Tài khoản ({userInventory.filter(i => i.userId === currentUser.id && i.rewardType === 'account').length})
+                  Tài khoản ({myAccountsCount})
                 </button>
                 <button
                   onClick={() => setInventoryFilter('voucher')}
@@ -517,8 +542,18 @@ export const MysteryBoxView: React.FC = () => {
                     inventoryFilter === 'voucher' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Voucher ({userInventory.filter(i => i.userId === currentUser.id && i.rewardType === 'voucher').length})
+                  Voucher ({myVouchersCount})
                 </button>
+                {myCustomCount > 0 && (
+                  <button
+                    onClick={() => setInventoryFilter('custom')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                      inventoryFilter === 'custom' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Quà Custom ({myCustomCount})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -615,9 +650,40 @@ export const MysteryBoxView: React.FC = () => {
                         </div>
 
                         <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-900">
-                          <span>Bảo mật: <strong className="text-emerald-400">{item.accountData.credentials.securityType}</strong></span>
-                          <span>Server: <strong className="text-slate-300">{item.accountData.rank || 'Liên Quân VN'}</strong></span>
+                          <span>Rank: <strong className="text-amber-400 font-bold">{item.accountData.rank || 'Kim Cương'}</strong></span>
+                          <span>Bảo mật: <strong className="text-emerald-400">{item.accountData.credentials.securityType || 'Trắng Thông Tin'}</strong></span>
+                          <span>Server: <strong className="text-sky-400 font-bold">Việt Nam</strong></span>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Custom Reward Item Viewer */}
+                    {item.rewardType === 'custom' && (
+                      <div className="p-3 bg-purple-950/30 rounded-xl border border-purple-800/50 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-purple-300 font-bold flex items-center gap-1.5">
+                            <Sparkles size={14} className="text-purple-400" />
+                            Phần Thưởng Tuỳ Chọn (Custom)
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
+                            Độc Quyền
+                          </span>
+                        </div>
+                        {item.customData?.description && (
+                          <div className="text-slate-300 text-xs bg-slate-950/60 p-2.5 rounded-lg border border-purple-900/30 font-medium">
+                            {item.customData.description}
+                          </div>
+                        )}
+                        {item.customData?.notes && (
+                          <div className="text-[11px] text-slate-400">
+                            <strong>Ghi chú:</strong> {item.customData.notes}
+                          </div>
+                        )}
+                        {item.customData?.contactInfo && (
+                          <div className="text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 font-mono">
+                            <strong>Liên hệ nhận quà:</strong> {item.customData.contactInfo}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -748,7 +814,7 @@ export const MysteryBoxView: React.FC = () => {
         isOpening={isOpeningBox}
         rewardResult={openedRewardResult}
         onGoToInventory={() => setActiveTab('inventory')}
-        onGoToOrders={() => setCurrentView('orders')}
+        onGoToOrders={() => setActiveTab('inventory')}
         userBalance={currentUser.balance}
         freeTurnsCount={selectedBoxForModal ? userFreeTurns[selectedBoxForModal.id] || 0 : 0}
       />

@@ -366,7 +366,7 @@ export const HomeView: React.FC = () => {
 
           {/* Quick Mini Tier Preview Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3 w-full lg:w-auto">
-            {mysteryBoxes.slice(0, 4).map(box => (
+            {mysteryBoxes.filter(box => box.isActive !== false).slice(0, 4).map(box => (
               <button
                 key={box.id}
                 onClick={() => {

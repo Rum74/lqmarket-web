@@ -5,12 +5,13 @@ export interface IUserInventory {
   id: string;
   userId: string;
   source: 'mystery_box' | 'event' | 'reward';
-  rewardType: 'account' | 'voucher' | 'cash' | 'free_turn';
+  rewardType: 'account' | 'voucher' | 'cash' | 'free_turn' | 'custom' | string;
   title: string;
   value: number;
   rarity?: string;
   accountData?: {
     rank: string;
+    server?: string;
     heroesCount: number;
     skinsCount: number;
     rareSkinName: string;
@@ -23,6 +24,11 @@ export interface IUserInventory {
   };
   voucherCode?: string;
   voucherDiscount?: number;
+  customData?: {
+    description?: string;
+    notes?: string;
+    contactInfo?: string;
+  };
   isUsed: boolean;
   usedAt?: string;
   receivedAt: string;
@@ -39,6 +45,7 @@ const UserInventorySchema = new Schema<IUserInventory>(
     rarity: { type: String, default: 'common' },
     accountData: {
       rank: { type: String },
+      server: { type: String, default: 'Việt Nam' },
       heroesCount: { type: Number },
       skinsCount: { type: Number },
       rareSkinName: { type: String },
@@ -51,6 +58,11 @@ const UserInventorySchema = new Schema<IUserInventory>(
     },
     voucherCode: { type: String },
     voucherDiscount: { type: Number },
+    customData: {
+      description: { type: String },
+      notes: { type: String },
+      contactInfo: { type: String }
+    },
     isUsed: { type: Boolean, default: false, index: true },
     usedAt: { type: String },
     receivedAt: { type: String, default: () => new Date().toISOString(), index: true }
