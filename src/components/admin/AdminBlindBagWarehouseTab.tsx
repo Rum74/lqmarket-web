@@ -26,15 +26,11 @@ import {
   X
 } from 'lucide-react';
 
-const TIER_OPTIONS = [
-  { id: 'blindbag_1000', label: 'Túi Mù 1k (1.000đ)', price: 1000, color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
-  { id: 'blindbag_5000', label: 'Túi Mù 5k (5.000đ)', price: 5000, color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
-  { id: 'blindbag_10000', label: 'Túi Mù 10k (10.000đ)', price: 10000, color: 'text-purple-400 border-purple-500/30 bg-purple-500/10' },
-  { id: 'blindbag_20000', label: 'Túi Mù 20k (20.000đ)', price: 20000, color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
-  { id: 'box_bronze', label: 'Túi May Mắn Đồng (19.000đ)', price: 19000, color: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
-  { id: 'box_silver', label: 'Túi May Mắn Bạc (49.000đ)', price: 49000, color: 'text-slate-300 border-slate-400/30 bg-slate-400/10' },
-  { id: 'box_gold', label: 'Túi May Mắn Vàng (99.000đ)', price: 99000, color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
-  { id: 'box_diamond', label: 'Túi May Mắn Kim Cương (199.000đ)', price: 199000, color: 'text-rose-400 border-rose-500/30 bg-rose-500/10' }
+const DEFAULT_TIER_OPTIONS = [
+  { id: 'box_bronze', label: 'Túi Đồng (20.000đ)', price: 20000, color: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
+  { id: 'box_gold', label: 'Túi Vàng (50.000đ)', price: 50000, color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
+  { id: 'box_diamond', label: 'Túi Kim Cương (100.000đ)', price: 100000, color: 'text-rose-400 border-rose-500/30 bg-rose-500/10' },
+  { id: 'box_special', label: 'Túi Thần Tài (200.000đ)', price: 200000, color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' }
 ];
 
 export const AdminBlindBagWarehouseTab: React.FC = () => {
@@ -42,6 +38,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
     blindBagAccounts,
     blindBagClaims,
     blindBagStats,
+    mysteryBoxes,
     fetchBlindBagAccounts,
     fetchBlindBagStats,
     fetchBlindBagClaims,
@@ -51,6 +48,40 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
     adminDeleteBlindBagAccount,
     adminRevealBlindBagPassword
   } = useApp();
+
+  // Dynamic Tier Options derived from AppContext mysteryBoxes
+  const tierOptions = React.useMemo(() => {
+    if (!mysteryBoxes || mysteryBoxes.length === 0) {
+      return DEFAULT_TIER_OPTIONS;
+    }
+    const colorMap: Record<string, string> = {
+      box_bronze: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+      box_silver: 'text-slate-300 border-slate-400/30 bg-slate-400/10',
+      box_gold: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+      box_diamond: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
+      box_special: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+      blindbag_1000: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+      blindbag_5000: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+      blindbag_10000: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+      blindbag_20000: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+    };
+
+    const fallbackColors = [
+      'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+      'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+      'text-purple-400 border-purple-500/30 bg-purple-500/10',
+      'text-amber-400 border-amber-500/30 bg-amber-500/10',
+      'text-rose-400 border-rose-500/30 bg-rose-500/10',
+      'text-indigo-400 border-indigo-500/30 bg-indigo-500/10',
+    ];
+
+    return mysteryBoxes.map((b, idx) => ({
+      id: b.id,
+      label: `${b.name} (${b.price.toLocaleString('vi-VN')}đ)`,
+      price: b.price,
+      color: colorMap[b.id] || fallbackColors[idx % fallbackColors.length]
+    }));
+  }, [mysteryBoxes]);
 
   // Navigation & Sub-views
   const [subTab, setSubTab] = useState<'inventory' | 'claims'>('inventory');
@@ -71,14 +102,14 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
   const [addForm, setAddForm] = useState({
     username: '',
     password: '',
-    blindBagId: 'blindbag_1000',
+    blindBagId: mysteryBoxes[0]?.id || 'box_bronze',
     status: 'available',
     notes: ''
   });
 
   // Bulk Import Form
   const [importForm, setImportForm] = useState({
-    blindBagId: 'blindbag_1000',
+    blindBagId: mysteryBoxes[0]?.id || 'box_bronze',
     defaultStatus: 'available',
     rawText: ''
   });
@@ -210,7 +241,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
   };
 
   const getTierBadge = (bagId: string) => {
-    const t = TIER_OPTIONS.find(opt => opt.id === bagId);
+    const t = tierOptions.find(opt => opt.id === bagId);
     if (!t) return <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">{bagId}</span>;
     return (
       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${t.color}`}>
@@ -408,7 +439,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
               className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer"
             >
               <option value="all">Tất cả Hạng Túi Mù</option>
-              {TIER_OPTIONS.map(opt => (
+              {tierOptions.map(opt => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
             </select>
@@ -666,7 +697,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
                   onChange={e => setAddForm({ ...addForm, blindBagId: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 cursor-pointer"
                 >
-                  {TIER_OPTIONS.map(opt => (
+                  {tierOptions.map(opt => (
                     <option key={opt.id} value={opt.id}>{opt.label}</option>
                   ))}
                 </select>
@@ -746,7 +777,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
                     onChange={e => setImportForm({ ...importForm, blindBagId: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 cursor-pointer"
                   >
-                    {TIER_OPTIONS.map(opt => (
+                    {tierOptions.map(opt => (
                       <option key={opt.id} value={opt.id}>{opt.label}</option>
                     ))}
                   </select>
@@ -857,7 +888,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
                   onChange={e => setEditingAcc({ ...editingAcc, blindBagId: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 cursor-pointer"
                 >
-                  {TIER_OPTIONS.map(opt => (
+                  {tierOptions.map(opt => (
                     <option key={opt.id} value={opt.id}>{opt.label}</option>
                   ))}
                 </select>

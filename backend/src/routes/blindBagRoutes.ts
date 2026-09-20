@@ -129,6 +129,7 @@ router.get('/admin/accounts/:id/reveal-password', authenticateToken, requireAdmi
 const handleBulkImport = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { rawText, blindBagId, defaultStatus = 'available', overwrite = false } = req.body;
+    const isOverwrite = overwrite === true || overwrite === 'true' || overwrite === 1 || overwrite === '1';
 
     if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập danh sách tài khoản cần import.' });
@@ -166,12 +167,28 @@ const handleBulkImport = async (req: AuthenticatedRequest, res: Response) => {
         const idx = line.indexOf('\t');
         u = line.substring(0, idx).trim();
         p = line.substring(idx + 1).trim();
+      } else if (line.includes('---')) {
+        const idx = line.indexOf('---');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 3).trim();
       } else if (line.includes(' - ')) {
         const idx = line.indexOf(' - ');
         u = line.substring(0, idx).trim();
         p = line.substring(idx + 3).trim();
       } else if (line.includes(':') && !line.startsWith('http')) {
         const idx = line.indexOf(':');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 1).trim();
+      } else if (line.includes('/') && !line.startsWith('http')) {
+        const idx = line.indexOf('/');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 1).trim();
+      } else if (line.includes(';')) {
+        const idx = line.indexOf(';');
+        u = line.substring(0, idx).trim();
+        p = line.substring(idx + 1).trim();
+      } else if (line.includes(',')) {
+        const idx = line.indexOf(',');
         u = line.substring(0, idx).trim();
         p = line.substring(idx + 1).trim();
       } else {
@@ -189,7 +206,7 @@ const handleBulkImport = async (req: AuthenticatedRequest, res: Response) => {
       // Check trùng
       const existing = await BlindBagAccount.findOne({ username: u });
       if (existing) {
-        if (overwrite) {
+        if (isOverwrite) {
           existing.password = p;
           existing.blindBagId = blindBagId;
           existing.status = defaultStatus || 'available';

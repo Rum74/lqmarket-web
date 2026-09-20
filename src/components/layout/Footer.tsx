@@ -324,10 +324,10 @@ export const Footer: React.FC = () => {
         {/* Legal Disclaimer Box */}
         <div className="mt-8 pt-6 border-t border-slate-800/80 text-[11px] text-slate-400 text-center leading-relaxed">
           <p>
-            Tuyên bố miễn trừ trách nhiệm: LQMarket là nền tảng sàn thương mại điện tử độc lập phục vụ việc kết nối giao dịch giữa các cá nhân game thủ. LQMarket không liên kết chính thức hoặc được tài trợ bởi Garena / Tencent Games. Tên thương hiệu và hình ảnh Liên Quân Mobile thuộc quyền sở hữu của các bên liên quan.
+            Tuyên bố miễn trừ trách nhiệm: LQMarket là nền tảng thương mại điện tử độc lập hỗ trợ kết nối giao dịch giữa người mua và người bán tài khoản game. LQMarket không liên kết chính thức, không được bảo trợ hoặc tài trợ bởi Garena / Tencent Games. Liên Quân Mobile và các tên thương hiệu, hình ảnh liên quan thuộc quyền sở hữu của các chủ thể tương ứng.
           </p>
           <p className="mt-2 text-slate-400">
-            © {new Date().getFullYear()} LQMarket.vn - Sàn Giao Dịch Acc Liên Quân Uy Tín Hàng Đầu. (Hệ thống v2.5 - Cập nhật 5% Phí Sàn)
+            © 2026 LQMarket.vn – Nền tảng giao dịch tài khoản Liên Quân Mobile.
           </p>
         </div>
       </div>

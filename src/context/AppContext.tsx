@@ -2350,6 +2350,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const adminCreateBoxTier = async (
+    boxData: Partial<MysteryBoxTierConfig>
+  ): Promise<{ success: boolean; message: string; box?: MysteryBoxTierConfig }> => {
+    try {
+      const res = await api.post('/api/mystery-boxes', boxData);
+      await fetchAllMongoData();
+      if (res && res.success) {
+        return { success: true, message: res.message || 'Tạo mới Túi Mù thành công!', box: res.box };
+      }
+      return { success: false, message: res?.message || 'Không thể tạo mới Túi Mù!' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi khi tạo Túi Mù mới!' };
+    }
+  };
+
   const adminUpdateBoxTier = async (
     tierId: string,
     updates: Partial<MysteryBoxTierConfig>
@@ -2360,6 +2375,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true, message: res.message || 'Đã cập nhật cấu hình Túi Mù thành công!' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Lỗi khi cập nhật cấu hình Túi Mù!' };
+    }
+  };
+
+  const adminDeleteBoxTier = async (tierId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await api.delete(`/api/mystery-boxes/${tierId}`);
+      await fetchAllMongoData();
+      if (res && res.success) {
+        return { success: true, message: res.message || 'Đã xóa Túi Mù thành công!' };
+      }
+      return { success: false, message: res?.message || 'Không thể xóa Túi Mù!' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi khi xóa Túi Mù!' };
     }
   };
 
@@ -2468,6 +2496,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     rawText: string;
     blindBagId: string;
     defaultStatus?: string;
+    overwrite?: boolean;
   }): Promise<{ success: boolean; message: string; stats?: any }> => {
     try {
       const res = await api.post('/api/blind-bags/admin/import', data);
@@ -2480,7 +2509,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           stats: res.stats
         };
       }
-      return { success: false, message: res.message || 'Nhập danh sách thất bại.' };
+      return { success: false, message: res?.message || 'Nhập danh sách thất bại.' };
     } catch (err: any) {
       return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi khi nhập hàng loạt.' };
     }
@@ -2752,7 +2781,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminAddMysteryReward,
         adminUpdateMysteryReward,
         adminDeleteMysteryReward,
+        adminCreateBoxTier,
         adminUpdateBoxTier,
+        adminDeleteBoxTier,
         adminImportAccountToMysteryBox,
         adminResetMysteryBoxes,
 

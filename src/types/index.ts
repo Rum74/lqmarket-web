@@ -222,6 +222,11 @@ export interface MysteryBoxTierConfig {
   description: string;
   badge?: string; // 'HOT' | 'TIẾT KIỆM' | 'TỶ LỆ CAO' | 'VIP SSS'
   tagText?: string;
+  tagline?: string;
+  jackpotPreview?: string;
+  themePreset?: string;
+  color?: string;
+  accentColor?: string;
   colorGradient: string;
   borderColor: string;
   iconBg: string;
