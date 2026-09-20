@@ -875,7 +875,7 @@ export const AdminDashboardView: React.FC = () => {
                             {acc.status === 'approved' ? 'Đang Bán' : acc.status === 'pending' ? 'Chờ Duyệt' : acc.status === 'sold' ? 'Đã Bán' : 'Từ Chối'}
                           </span>
                           <span className="text-[11px] font-mono text-slate-400">
-                            {acc.championsCount || 0} Tướng • {acc.skinsCount || 0} Trang Phục
+                            {acc.heroesCount ?? acc.championsCount ?? 0} Tướng • {acc.skinsCount || 0} Trang Phục
                           </span>
                         </div>
                         <h4 className="text-xs sm:text-sm font-bold text-white mt-1 truncate">{acc.title}</h4>

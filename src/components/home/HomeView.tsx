@@ -94,6 +94,10 @@ export const HomeView: React.FC = () => {
     a => a.skinsCount >= 180 || a.rareSkins.some(s => s.tier === 'SSS')
   );
 
+  // Featured Mystery Box for Home Banner Showcase
+  const activeMysteryBoxes = mysteryBoxes.filter(box => box.isActive !== false);
+  const featuredBox = activeMysteryBoxes[0] || mysteryBoxes[0];
+
   const activeCoupons = (coupons || []).filter(
     c => c && c.isActive && (!c.validTo || new Date(c.validTo) > new Date())
   );
@@ -330,61 +334,81 @@ export const HomeView: React.FC = () => {
       )}
 
       {/* MYSTERY BOX PROMOTIONAL HIGHLIGHT SECTION */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-950/40 via-purple-950/40 to-slate-900 border-2 border-amber-500/40 p-5 sm:p-8 shadow-2xl">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
-          <div className="space-y-3 text-center lg:text-left max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider">
-              <Sparkles size={14} className="animate-spin" />
-              <span>TÍNH NĂNG MỚI: XÉ TÚI MÙ MAY MẮN</span>
-              <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full animate-pulse">HOT</span>
+      {featuredBox && (
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-950/40 via-purple-950/40 to-slate-900 border-2 border-amber-500/40 p-5 sm:p-8 shadow-2xl">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
+            <div className="space-y-3 text-center lg:text-left max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider">
+                <Sparkles size={14} className="animate-spin" />
+                <span>TÍNH NĂNG MỚI: XÉ TÚI MÙ MAY MẮN</span>
+                <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full animate-pulse">HOT</span>
+              </div>
+
+              <h2 className="text-xl sm:text-3xl font-black text-white leading-tight">
+                Cơ Hội Nhận Ngay <span className="text-amber-400">Acc VIP SSS, Chiến Tướng</span> Chỉ Từ {featuredBox.price.toLocaleString('vi-VN')}đ!
+              </h2>
+
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Mỗi túi mù cam kết 100% mở ra phần thưởng giá trị: Tài khoản Liên Quân trắng thông tin, tiền hoàn ví tức thì, hoặc voucher ưu đãi mua nick!
+              </p>
+
+              <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+                <button
+                  id="home-open-mystery-box-btn"
+                  onClick={() => {
+                    setCurrentView('mystery_box');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-6 py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 hover:from-amber-400 hover:to-orange-300 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <PackageOpen size={18} />
+                  <span>VÀO XÉ TÚI MÙ NGAY</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
             </div>
 
-            <h2 className="text-xl sm:text-3xl font-black text-white leading-tight">
-              Cơ Hội Nhận Ngay <span className="text-amber-400">Acc VIP SSS, Chiến Tướng</span> Chỉ Từ 20K!
-            </h2>
+            {/* Featured Single Mystery Box Showcase Card */}
+            <div
+              onClick={() => {
+                setCurrentView('mystery_box');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="group relative cursor-pointer w-full sm:w-72 lg:w-64 shrink-0 bg-gradient-to-b from-slate-900/95 via-slate-950/95 to-slate-900/95 border-2 border-amber-500/40 hover:border-amber-400 rounded-3xl p-5 text-center space-y-3 shadow-2xl shadow-black/60 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1"
+            >
+              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-wider">
+                <Sparkles size={11} className="text-amber-400" />
+                <span>Túi Mù Nổi Bật</span>
+              </div>
 
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Mỗi túi mù cam kết 100% mở ra phần thưởng giá trị: Tài khoản Liên Quân trắng thông tin, tiền hoàn ví tức thì, hoặc voucher ưu đãi mua nick!
-            </p>
-
-            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
-              <button
-                id="home-open-mystery-box-btn"
-                onClick={() => {
-                  setCurrentView('mystery_box');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="px-6 py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 hover:from-amber-400 hover:to-orange-300 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
-              >
-                <PackageOpen size={18} />
-                <span>VÀO XÉ TÚI MÙ NGAY</span>
-                <ArrowRight size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Mini Tier Preview Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3 w-full lg:w-auto">
-            {mysteryBoxes.filter(box => box.isActive !== false).slice(0, 4).map(box => (
-              <button
-                key={box.id}
-                onClick={() => {
-                  setCurrentView('mystery_box');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="p-3 bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-2xl text-center space-y-2 cursor-pointer transition-all hover:scale-105"
-              >
-                <div className={`w-12 h-12 mx-auto rounded-xl bg-gradient-to-br ${box.colorGradient} flex items-center justify-center shadow-md`}>
-                  <PackageOpen className="w-6 h-6 text-white" />
+              <div className="relative mx-auto w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+                <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${featuredBox.colorGradient || 'from-amber-500 to-orange-600'} opacity-30 blur-lg group-hover:opacity-50 transition-opacity`} />
+                <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br ${featuredBox.colorGradient || 'from-amber-500 to-orange-600'} border-2 border-amber-300/40 flex items-center justify-center shadow-xl group-hover:rotate-3 transition-transform`}>
+                  <PackageOpen className="w-8 h-8 sm:w-10 sm:h-10 text-white drop-shadow-md" />
                 </div>
-                <div className="text-xs font-black text-white truncate">{box.name}</div>
-                <div className="text-xs font-mono font-bold text-amber-400">{box.price.toLocaleString('vi-VN')}đ</div>
-              </button>
-            ))}
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-sm sm:text-base font-black text-white group-hover:text-amber-400 transition-colors truncate">
+                  {featuredBox.name}
+                </h3>
+                <div className="text-base sm:text-lg font-mono font-black text-amber-400">
+                  {featuredBox.price.toLocaleString('vi-VN')}đ
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium line-clamp-1">
+                  {featuredBox.tagline || '100% Mở Là Có Quà Giá Trị'}
+                </p>
+              </div>
+
+              <div className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 group-hover:from-amber-400 group-hover:to-orange-400 text-slate-950 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20">
+                <span>Xé Túi Này</span>
+                <ArrowRight size={13} />
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 3. FEATURED ACCOUNTS (ACC NỔI BẬT) */}
       <section className="space-y-4">

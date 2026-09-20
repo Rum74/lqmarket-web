@@ -188,7 +188,7 @@ export const AccountsListView: React.FC = () => {
         <div
           className={`${
             isMobileFilterOpen ? 'block fixed inset-0 z-50 bg-slate-950/95 p-6 overflow-y-auto' : 'hidden lg:block'
-          } lg:relative lg:bg-transparent lg:p-0 lg:z-auto space-y-5`}
+          } lg:sticky lg:top-20 lg:self-start lg:bg-transparent lg:p-0 lg:z-30 space-y-5 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto pr-1`}
         >
           {/* Mobile Drawer Close Button */}
           {isMobileFilterOpen && (

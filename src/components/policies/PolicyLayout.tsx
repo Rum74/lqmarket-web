@@ -105,10 +105,10 @@ export const PolicyLayout: React.FC<PolicyLayoutProps> = ({
       </div>
 
       {/* Main Grid Layout: Policy Navigation Sidebar + Content Body */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         {/* Navigation Index Panel */}
-        <aside className="lg:col-span-1 space-y-4">
-          <div className="sticky top-20 rounded-2xl bg-slate-900/90 border border-slate-800 p-4 space-y-2.5">
+        <aside className="lg:col-span-1 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto pr-1 space-y-4">
+          <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 space-y-2.5">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-2">
               Hệ Thống Chính Sách
             </h3>
