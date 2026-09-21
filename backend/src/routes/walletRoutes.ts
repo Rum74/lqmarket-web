@@ -101,6 +101,31 @@ router.post('/deposit', optionalAuth, async (req: AuthenticatedRequest, res: Res
   }
 });
 
+// GET /api/wallet/deposit/:id (Lookup deposit transaction by id or orderCode)
+router.get('/deposit/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const numOrderCode = Number(id);
+
+    const query: any = {
+      type: 'deposit',
+      $or: [
+        { id },
+        ...(isNaN(numOrderCode) ? [] : [{ orderCode: numOrderCode }])
+      ]
+    };
+
+    const tx = await WalletTransaction.findOne(query).lean();
+    if (!tx) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch nạp tiền' });
+    }
+
+    return res.json({ success: true, transaction: tx });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tra cứu giao dịch' });
+  }
+});
+
 // GET /api/wallet/transactions
 router.get('/transactions', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

@@ -181,6 +181,10 @@ export interface WalletTransaction {
   amount: number;
   status: 'success' | 'pending' | 'failed' | 'approved' | 'completed' | 'rejected' | 'cancelled';
   note: string;
+  description?: string;
+  orderCode?: number;
+  qrCode?: string;
+  checkoutUrl?: string;
   bankName?: string;
   bankCode?: string;
   bankAccount?: string;

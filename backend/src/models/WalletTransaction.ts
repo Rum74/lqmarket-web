@@ -18,6 +18,8 @@ export interface IWalletTransaction {
   bankAccountName?: string;
   orderCode?: number;
   paymentLinkId?: string;
+  qrCode?: string;
+  checkoutUrl?: string;
   rejectReason?: string;
   processedAt?: string;
   createdAt: string;
@@ -51,6 +53,8 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
     bankAccountName: { type: String },
     orderCode: { type: Number, index: true },
     paymentLinkId: { type: String },
+    qrCode: { type: String },
+    checkoutUrl: { type: String },
     rejectReason: { type: String },
     processedAt: { type: String },
     createdAt: { type: String, default: () => new Date().toISOString(), index: true }

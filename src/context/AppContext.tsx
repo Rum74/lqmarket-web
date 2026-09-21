@@ -341,6 +341,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
   // Core App Collections
+  const normalizeAccount = (acc: any): AccountItem => {
+    const heroesCount = Number(acc?.heroesCount ?? acc?.championsCount ?? acc?.champions ?? acc?.heroes ?? 0) || 0;
+    return {
+      ...acc,
+      heroesCount,
+      championsCount: heroesCount
+    };
+  };
+
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
@@ -685,7 +694,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? bootRes.accounts
           : null;
         if (fetchedAccounts) {
-          setAccounts(fetchedAccounts);
+          setAccounts(fetchedAccounts.map(normalizeAccount));
         }
 
         const stats = payload.stats || bootRes.stats;
@@ -811,7 +820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
-        setAccounts(accRes.data || accRes.accounts);
+        setAccounts((accRes.data || accRes.accounts).map(normalizeAccount));
       }
       if (statsRes && statsRes.success) {
         if (typeof statsRes.totalCompletedTransactions === 'number') {
@@ -863,7 +872,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setAllUsers(adminUsersRes.data || adminUsersRes.users);
             }
             if (adminProductsRes?.success && Array.isArray(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts)) {
-              setAccounts(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts);
+              setAccounts((adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts).map(normalizeAccount));
             }
             if (adminOrdersRes?.success && Array.isArray(adminOrdersRes.data || adminOrdersRes.orders)) {
               setOrders(adminOrdersRes.data || adminOrdersRes.orders);
@@ -1260,7 +1269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const response = await api.post('/api/accounts', newAccountData);
       if (response && response.success && (response.account || response.data)) {
-        const createdAcc = response.account || response.data;
+        const createdAcc = normalizeAccount(response.account || response.data);
         setAccounts(prev => [createdAcc, ...prev.filter(a => a.id !== createdAcc.id)]);
         fetchAllMongoData();
         return {

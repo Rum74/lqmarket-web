@@ -113,7 +113,9 @@ export const AccountCard: React.FC<AccountCardProps> = ({ account, onOpenDetail 
               <span className="text-[10px] text-slate-400 block flex items-center justify-center gap-1">
                 <Swords size={11} className="text-amber-400" /> Tướng
               </span>
-              <span className="text-xs font-bold text-slate-200">{account.heroesCount}</span>
+              <span className="text-xs font-bold text-slate-200">
+                {account.heroesCount || (account as any).championsCount || (account as any).heroes || (account as any).champions || 0}
+              </span>
             </div>
 
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-1.5">

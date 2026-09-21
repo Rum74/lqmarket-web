@@ -253,7 +253,9 @@ export const AccountDetailModal: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-400">Tướng sở hữu</div>
-                      <div className="text-sm font-bold text-slate-100">{account.heroesCount} / 118</div>
+                      <div className="text-sm font-bold text-slate-100">
+                        {account.heroesCount || (account as any).championsCount || (account as any).heroes || (account as any).champions || 0} / 118
+                      </div>
                     </div>
                   </div>
 

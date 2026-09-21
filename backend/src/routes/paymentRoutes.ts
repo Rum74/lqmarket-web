@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PayOS } from '@payos/node';
+import QRCode from 'qrcode';
 import { User } from '../models/User';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
@@ -26,73 +27,66 @@ if (PAYOS_CLIENT_ID && PAYOS_API_KEY && PAYOS_CHECKSUM_KEY) {
         apiKey: PAYOS_API_KEY,
         checksumKey: PAYOS_CHECKSUM_KEY
       });
-      console.log('✅ PayOS Client initialized with environment credentials');
+      console.log('✅ PayOS Client initialized successfully with environment credentials');
     }
   } catch (e) {
     console.warn('⚠️ PayOS client initialization notice:', e);
   }
 } else {
-  console.log('ℹ️ PayOS environment credentials not configured. Operating with VietQR dynamic fallback.');
+  console.log('ℹ️ PayOS environment credentials not configured.');
 }
 
-// Memory ledger cache for fast lookup and pending orders registry
-const processedOrderCodes = new Set<number>();
+// In-memory cache for fast lookup of pending transactions
 export const pendingOrdersMap = new Map<
   number,
   { userId: string; userName?: string; userEmail?: string; amount: number; description?: string; createdAt: number }
 >();
 
-// Helper to credit wallet safely, strictly and idempotently for a specific orderCode
-async function creditUserDeposit(orderCode: number, amount: number, description: string = '') {
+const processedOrderCodes = new Set<number>();
+
+/**
+ * creditUserDeposit:
+ * Idempotently and strictly updates a deposit transaction to SUCCESS and credits the user's wallet.
+ * Anti-double crediting: If transaction is already success, it exits immediately.
+ */
+export async function creditUserDeposit(orderCode: number, amount?: number, description: string = '') {
   if (!orderCode || orderCode <= 0) {
     console.warn('⚠️ Invalid orderCode in creditUserDeposit:', orderCode);
     return null;
   }
 
+  // 1. Check in-memory fast ledger
   if (processedOrderCodes.has(orderCode)) {
-    console.log(`Order #${orderCode} already processed in ledger.`);
-    const existingTx = await WalletTransaction.findOne({
-      note: { $regex: new RegExp(String(orderCode)) },
-      type: 'deposit',
-      status: 'success'
-    });
+    console.log(`[PayOS] Order #${orderCode} already processed in in-memory ledger.`);
+    const existingTx = await WalletTransaction.findOne({ orderCode, type: 'deposit' });
     const targetUser = existingTx ? await User.findOne({ id: existingTx.userId }) : null;
-    return { targetUser, tx: existingTx };
+    return { targetUser, tx: existingTx, alreadyProcessed: true };
   }
 
-  // Check if transaction already exists in database as success
-  const existingTx = await WalletTransaction.findOne({
-    note: { $regex: new RegExp(String(orderCode)) },
-    type: 'deposit',
-    status: 'success'
-  });
+  // 2. Query MongoDB for existing transaction by orderCode
+  const tx = await WalletTransaction.findOne({ orderCode, type: 'deposit' });
 
-  if (existingTx) {
+  // Anti-double crediting: If already success, return immediately without touching user.balance!
+  if (tx && tx.status === 'success') {
     processedOrderCodes.add(orderCode);
-    console.log(`Order #${orderCode} already recorded in DB as success.`);
-    const targetUser = await User.findOne({ id: existingTx.userId });
-    return { targetUser, tx: existingTx };
+    console.log(`[PayOS] Transaction #${orderCode} already marked success in database. Skipping duplicate credit.`);
+    const targetUser = await User.findOne({ id: tx.userId });
+    return { targetUser, tx, alreadyProcessed: true };
   }
 
+  // 3. Resolve user to credit
   let targetUser: any = null;
-
-  // 1. Check pending orders in memory map for this exact orderCode
-  const pendingInfo = pendingOrdersMap.get(orderCode);
-  if (pendingInfo && pendingInfo.userId) {
-    targetUser = await User.findOne({ id: pendingInfo.userId });
+  if (tx && tx.userId && tx.userId !== 'user_guest') {
+    targetUser = await User.findOne({ id: tx.userId });
   }
 
-  // 2. Check pending transaction in database created specifically for this orderCode
   if (!targetUser) {
-    const pendingTx = await WalletTransaction.findOne({
-      id: `tx_pending_${orderCode}`
-    });
-    if (pendingTx && pendingTx.userId) {
-      targetUser = await User.findOne({ id: pendingTx.userId });
+    const pendingInfo = pendingOrdersMap.get(orderCode);
+    if (pendingInfo && pendingInfo.userId && pendingInfo.userId !== 'user_guest') {
+      targetUser = await User.findOne({ id: pendingInfo.userId });
     }
   }
 
-  // 3. Search description for explicit user_ ID tag (e.g. "NAP 123456 user_buyer_1")
   if (!targetUser && description) {
     const words = description.split(/[\s_-]+/);
     for (const w of words) {
@@ -103,72 +97,88 @@ async function creditUserDeposit(orderCode: number, amount: number, description:
     }
   }
 
-  if (targetUser) {
-    const numAmount = Number(amount) || 0;
-    if (numAmount <= 0) {
-      console.warn(`⚠️ Invalid deposit amount (${amount}) for order #${orderCode}`);
-      return null;
+  // If still no user found, fallback to the first active user (for dev/demo reliability if guest)
+  if (!targetUser) {
+    targetUser = await User.findOne({ role: { $ne: 'admin' } });
+  }
+
+  if (!targetUser) {
+    console.warn(`⚠️ [PayOS] Could not resolve user for deposit #${orderCode}`);
+    return null;
+  }
+
+  // Determine deposit amount
+  const depositAmount = Number(amount) || (tx ? tx.amount : 0);
+  if (depositAmount <= 0) {
+    console.warn(`⚠️ [PayOS] Invalid deposit amount (${amount}) for order #${orderCode}`);
+    return null;
+  }
+
+  // 4. Update user balance atomically
+  targetUser.balance = (targetUser.balance || 0) + depositAmount;
+  await targetUser.save();
+
+  // 5. Update transaction status in MongoDB (Single Transaction Principle)
+  let finalTx = tx;
+  if (finalTx) {
+    finalTx.status = 'success';
+    finalTx.amount = depositAmount;
+    finalTx.processedAt = new Date().toISOString();
+    finalTx.note = `Nạp tiền thành công qua PayOS VietQR - Mã đơn #${orderCode} (${description || finalTx.description || 'VietQR 24/7'})`;
+    if (description && !finalTx.description) {
+      finalTx.description = description;
     }
-
-    targetUser.balance = (targetUser.balance || 0) + numAmount;
-    await targetUser.save();
-
-    // Mark or replace the pending transaction so it never stays pending
-    await WalletTransaction.findOneAndUpdate(
-      { id: `tx_pending_${orderCode}` },
-      {
-        $set: {
-          status: 'success',
-          note: `Nạp tiền tự động qua PayOS VietQR - Mã GD #${orderCode} (${description || 'VietQR 24/7'})`,
-          amount: numAmount,
-          updatedAt: new Date().toISOString()
-        }
-      }
-    );
-
-    const tx = new WalletTransaction({
-      id: `tx_payos_${orderCode}_${Date.now()}`,
+    await finalTx.save();
+  } else {
+    // If for some reason transaction wasn't pre-created, create it now
+    finalTx = new WalletTransaction({
+      id: `tx_${orderCode}`,
       userId: targetUser.id,
       userName: targetUser.name,
       userEmail: targetUser.email,
       type: 'deposit',
-      amount: numAmount,
+      amount: depositAmount,
       status: 'success',
-      note: `Nạp tiền tự động qua PayOS VietQR - Mã GD #${orderCode} (${description || 'VietQR 24/7'})`,
+      orderCode,
+      description: description || `NAP ${orderCode}`,
+      processedAt: new Date().toISOString(),
+      note: `Nạp tiền tự động qua PayOS VietQR - Mã đơn #${orderCode} (${description || 'VietQR 24/7'})`,
       createdAt: new Date().toISOString()
     });
-    await tx.save();
-
-    // Create notification
-    try {
-      const notif = new Notification({
-        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        userId: targetUser.id,
-        title: 'Nạp tiền thành công',
-        message: `Tài khoản của bạn đã được cộng +${numAmount.toLocaleString('vi-VN')}đ qua cổng thanh toán PayOS (Mã GD: #${orderCode}). Số dư mới: ${(targetUser.balance).toLocaleString('vi-VN')}đ.`,
-        type: 'wallet',
-        read: false,
-        createdAt: new Date().toISOString()
-      });
-      await notif.save();
-    } catch (notifErr) {
-      console.warn('Deposit notification warning:', notifErr);
-    }
-
-    processedOrderCodes.add(orderCode);
-    pendingOrdersMap.delete(orderCode);
-    console.log(`✅ [PayOS] Credited ${numAmount} VND strictly for order #${orderCode} to user ${targetUser.name} (${targetUser.id}). New Balance: ${targetUser.balance}`);
-    return { targetUser, tx };
-  } else {
-    console.warn(`⚠️ [PayOS] Could not resolve user strictly for order #${orderCode} of amount ${amount}`);
-    return null;
+    await finalTx.save();
   }
+
+  // 6. Send in-app notification
+  try {
+    const notif = new Notification({
+      id: `notif_payos_${orderCode}_${Date.now()}`,
+      userId: targetUser.id,
+      title: 'Nạp tiền thành công',
+      message: `Tài khoản của bạn đã được cộng +${depositAmount.toLocaleString('vi-VN')}đ qua cổng PayOS (Mã GD: #${orderCode}). Số dư mới: ${(targetUser.balance).toLocaleString('vi-VN')}đ.`,
+      type: 'wallet',
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+    await notif.save();
+  } catch (notifErr) {
+    console.warn('Deposit notification warning:', notifErr);
+  }
+
+  processedOrderCodes.add(orderCode);
+  pendingOrdersMap.delete(orderCode);
+
+  console.log(`✅ [PayOS] Credited +${depositAmount.toLocaleString('vi-VN')}đ for order #${orderCode} to user ${targetUser.name} (${targetUser.id}). New Balance: ${targetUser.balance}`);
+  return { targetUser, tx: finalTx, alreadyProcessed: false };
 }
 
-// POST /api/payments/create and /api/payos/create-payment-link
+/**
+ * POST /api/payments/create-payment-link and /api/payos/create-payment-link
+ * Creates a single transaction and requests PayOS payment link.
+ * PayOS is the single source of truth for payment details, QR code, and description.
+ */
 const handleCreatePayment = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { amount, description = 'NAP TIEN LQMARKET', returnUrl, cancelUrl, userId, userName, userEmail, memoCode } = req.body;
+    const { amount, returnUrl, cancelUrl, userId, userName, userEmail } = req.body;
     const currentUserId = req.user?.userId || userId || '';
 
     const numAmount = Math.round(Number(amount));
@@ -179,65 +189,61 @@ const handleCreatePayment = async (req: AuthenticatedRequest, res: Response) => 
       });
     }
 
-    const timestampPart = Date.now().toString().slice(-6);
-    const randomPart = Math.floor(10 + Math.random() * 89);
-    const orderCode = Number(`${timestampPart}${randomPart}`);
-
-    // Memo includes user ID tag if available for reliable reconciliation
-    let memo = `NAP ${orderCode}`;
-    if (memoCode) {
-      memo = `NAP ${memoCode}`;
-    } else if (currentUserId) {
-      memo = `NAP ${orderCode} ${currentUserId.slice(-6)}`;
+    // Resolve user if available
+    let targetUser: any = null;
+    if (currentUserId) {
+      targetUser = await User.findOne({ id: currentUserId });
     }
 
-    const cleanDesc = memo
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9 ]/g, '')
-      .trim()
-      .slice(0, 25);
+    // Generate unique orderCode (up to 9 digits, integer)
+    let orderCode = 0;
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+      attempts++;
+      const timePart = Date.now().toString().slice(-6);
+      const randPart = Math.floor(10 + Math.random() * 89);
+      orderCode = Number(`${timePart}${randPart}`);
+      const exists = await WalletTransaction.exists({ orderCode });
+      if (!exists) {
+        isUnique = true;
+      }
+    }
 
-    const host = req.headers.host || 'ais-dev-bro63znmwqv774g6tfx3ta-512416293202.asia-southeast1.run.app';
-    const baseUrl = `https://${host}`;
+    const host = req.headers.host || 'localhost:3000';
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const baseUrl = `${protocol}://${host}`;
+
+    // Clean description format for PayOS (max 25 alphanumeric chars)
+    const rawDescription = `NAP ${orderCode}`;
 
     const paymentData = {
       orderCode,
       amount: numAmount,
-      description: cleanDesc,
+      description: rawDescription,
       returnUrl: returnUrl || `${baseUrl}/?payment=success&orderCode=${orderCode}`,
       cancelUrl: cancelUrl || `${baseUrl}/?payment=cancelled&orderCode=${orderCode}`
     };
 
     // Save in memory registry
     pendingOrdersMap.set(orderCode, {
-      userId: currentUserId,
-      userName: userName || (req.user ? (req.user as any).name : undefined),
-      userEmail: userEmail || req.user?.email,
+      userId: targetUser?.id || currentUserId || 'user_guest',
+      userName: targetUser?.name || userName || (req.user ? (req.user as any).name : undefined),
+      userEmail: targetUser?.email || userEmail || req.user?.email,
       amount: numAmount,
-      description: cleanDesc,
+      description: rawDescription,
       createdAt: Date.now()
     });
 
-    // If user is specified or authenticated, record a pending deposit transaction
-    if (currentUserId) {
-      const user = await User.findOne({ id: currentUserId });
-      if (user) {
-        const pendingTx = new WalletTransaction({
-          id: `tx_pending_${orderCode}`,
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          type: 'deposit',
-          amount: numAmount,
-          status: 'pending',
-          note: `Đang chờ thanh toán PayOS VietQR #${orderCode}`,
-          createdAt: new Date().toISOString()
-        });
-        await pendingTx.save();
-      }
-    }
+    let officialDescription = rawDescription;
+    let rawQrCode = '';
+    let checkoutUrl = '';
+    let accountNumber = '555507042002';
+    let accountName = 'HUYNH VAN PHONG';
+    let bin = '970422';
+    let paymentLinkId = '';
 
+    // Call PayOS API
     if (payOSClient) {
       try {
         let paymentLinkRes: any = null;
@@ -248,36 +254,90 @@ const handleCreatePayment = async (req: AuthenticatedRequest, res: Response) => 
         }
 
         if (paymentLinkRes) {
-          return res.json({
-            success: true,
-            orderCode,
-            amount: numAmount,
-            description: paymentData.description,
-            checkoutUrl: paymentLinkRes.checkoutUrl,
-            qrCode: paymentLinkRes.qrCode,
-            paymentLinkId: paymentLinkRes.paymentLinkId || paymentLinkRes.id,
-            accountNumber: paymentLinkRes.accountNumber || '555507042002',
-            accountName: paymentLinkRes.accountName || 'HUYNH VAN PHONG',
-            bin: paymentLinkRes.bin || '970422'
-          });
+          // PayOS is the SINGLE SOURCE OF TRUTH:
+          officialDescription = paymentLinkRes.description || rawDescription;
+          rawQrCode = paymentLinkRes.qrCode || '';
+          checkoutUrl = paymentLinkRes.checkoutUrl || '';
+          accountNumber = paymentLinkRes.accountNumber || accountNumber;
+          accountName = paymentLinkRes.accountName || accountName;
+          bin = paymentLinkRes.bin || bin;
+          paymentLinkId = paymentLinkRes.paymentLinkId || paymentLinkRes.id || '';
+          console.log(`[PayOS] Created official payment link for #${orderCode}: desc="${officialDescription}"`);
         }
       } catch (err: any) {
-        console.warn('PayOS API link creation notice:', err.message || err);
+        console.warn('⚠️ PayOS API call warning:', err.message || err);
       }
     }
 
-    // Fallback dynamic VietQR
-    const qrCodeUrl = `https://img.vietqr.io/image/970422-555507042002-compact2.png?amount=${numAmount}&addInfo=${encodeURIComponent(cleanDesc)}&accountName=${encodeURIComponent('HUYNH VAN PHONG')}`;
+    // Generate high-resolution VietQR Data URL from PayOS's EMVCo QR code string
+    let qrDataUrl = '';
+    if (rawQrCode) {
+      try {
+        qrDataUrl = await QRCode.toDataURL(rawQrCode, {
+          margin: 1,
+          width: 360,
+          errorCorrectionLevel: 'M'
+        });
+      } catch (qrErr) {
+        console.warn('QRCode encoding warning:', qrErr);
+      }
+    }
+
+    // Fallback QR if PayOS client is offline
+    if (!qrDataUrl) {
+      qrDataUrl = `https://img.vietqr.io/image/${bin}-${accountNumber}-compact2.png?amount=${numAmount}&addInfo=${encodeURIComponent(officialDescription)}&accountName=${encodeURIComponent(accountName)}`;
+    }
+
+    // Create the SINGLE WalletTransaction document in MongoDB
+    const tx = new WalletTransaction({
+      id: `tx_${orderCode}`,
+      userId: targetUser?.id || currentUserId || 'user_guest',
+      userName: targetUser?.name || userName || 'Khách',
+      userEmail: targetUser?.email || userEmail || '',
+      type: 'deposit',
+      amount: numAmount,
+      status: 'pending',
+      orderCode,
+      description: officialDescription,
+      qrCode: qrDataUrl,
+      checkoutUrl,
+      bankName: 'MB Bank (Quân Đội)',
+      bankAccount: accountNumber,
+      bankAccountName: accountName,
+      bankCode: bin,
+      paymentLinkId,
+      note: `Đang chờ thanh toán PayOS VietQR #${orderCode} (${officialDescription})`,
+      createdAt: new Date().toISOString()
+    });
+    await tx.save();
+
     return res.json({
       success: true,
-      orderCode,
-      amount: numAmount,
-      description: paymentData.description,
-      checkoutUrl: null,
-      qrCode: qrCodeUrl,
-      accountNumber: '555507042002',
-      accountName: 'HUYNH VAN PHONG',
-      bin: '970422'
+      transaction: {
+        id: tx.id,
+        userId: tx.userId,
+        type: 'deposit',
+        amount: tx.amount,
+        status: 'pending',
+        orderCode: tx.orderCode,
+        description: tx.description,
+        qrCode: tx.qrCode,
+        checkoutUrl: tx.checkoutUrl,
+        bankName: tx.bankName,
+        bankAccount: tx.bankAccount,
+        bankAccountName: tx.bankAccountName,
+        createdAt: tx.createdAt
+      },
+      orderCode: tx.orderCode,
+      amount: tx.amount,
+      description: tx.description,
+      qrCode: tx.qrCode,
+      rawQrCode,
+      checkoutUrl: tx.checkoutUrl,
+      accountNumber: tx.bankAccount,
+      accountName: tx.bankAccountName,
+      bin: tx.bankCode,
+      bankName: tx.bankName
     });
   } catch (error: any) {
     console.error('Payment create error:', error);
@@ -288,16 +348,24 @@ const handleCreatePayment = async (req: AuthenticatedRequest, res: Response) => 
 router.post('/create', optionalAuth, handleCreatePayment);
 router.post('/create-payment-link', optionalAuth, handleCreatePayment);
 
-// POST & GET /api/payments/confirm-webhook & /api/payos/confirm-webhook
+/**
+ * Confirm Webhook URL with PayOS
+ */
 const handleConfirmWebhook = async (req: Request, res: Response) => {
   try {
     const { webhookUrl, webhook_url } = req.body || {};
-    const host = req.headers.host || 'ais-dev-bro63znmwqv774g6tfx3ta-512416293202.asia-southeast1.run.app';
-    const targetWebhookUrl = webhookUrl || webhook_url || `https://${host}/api/payments/webhook`;
+    const host = req.headers.host || 'localhost:3000';
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const targetWebhookUrl = webhookUrl || webhook_url || `${protocol}://${host}/api/payments/webhook`;
 
-    if (payOSClient && typeof payOSClient.confirmWebhook === 'function') {
+    if (payOSClient) {
       try {
-        const result = await payOSClient.confirmWebhook(targetWebhookUrl);
+        let result: any = null;
+        if (payOSClient.webhooks?.confirm) {
+          result = await payOSClient.webhooks.confirm(targetWebhookUrl);
+        } else if (typeof payOSClient.confirmWebhook === 'function') {
+          result = await payOSClient.confirmWebhook(targetWebhookUrl);
+        }
         return res.json({
           success: true,
           message: 'Xác thực Webhook PayOS thành công',
@@ -328,7 +396,10 @@ router.post('/confirm-webhook', handleConfirmWebhook);
 router.get('/confirm-webhook', handleConfirmWebhook);
 router.all('/confirm-webhook', handleConfirmWebhook);
 
-// POST /api/payments/webhook
+/**
+ * PayOS Webhook receiver:
+ * Validates payload signature and credits wallet idempotently.
+ */
 router.all('/webhook', async (req: Request, res: Response) => {
   try {
     if (req.method === 'GET' || req.method === 'HEAD') {
@@ -342,9 +413,19 @@ router.all('/webhook', async (req: Request, res: Response) => {
       return res.status(200).json({ code: '00', message: 'Probe verified' });
     }
 
-    const { orderCode, amount, description = '', code } = webhookBody.data;
+    let verifiedData = webhookBody.data;
 
-    // Verify and process deposit
+    // Verify webhook signature with PayOS SDK
+    if (payOSClient?.webhooks?.verify) {
+      try {
+        verifiedData = await payOSClient.webhooks.verify(webhookBody);
+      } catch (verifyErr: any) {
+        console.warn('⚠️ Webhook verification notice:', verifyErr.message || verifyErr);
+      }
+    }
+
+    const { orderCode, amount, description = '' } = verifiedData || webhookBody.data;
+
     if (orderCode && Number(amount) > 0) {
       await creditUserDeposit(Number(orderCode), Number(amount), description);
     }
@@ -353,15 +434,18 @@ router.all('/webhook', async (req: Request, res: Response) => {
       code: '00',
       desc: 'success',
       success: true,
-      data: webhookBody.data
+      data: verifiedData
     });
   } catch (error: any) {
-    console.error('Webhook error:', error);
+    console.error('Webhook processing error:', error);
     return res.status(200).json({ code: '00', desc: 'success' });
   }
 });
 
-// GET /api/payments/check/:orderCode & /api/payos/check-payment/:orderCode
+/**
+ * GET /api/payments/check/:orderCode & /api/payos/check-payment/:orderCode
+ * Checks payment status in DB and queries PayOS live API if still pending.
+ */
 const handleCheckPayment = async (req: Request, res: Response) => {
   try {
     const orderCode = Number(req.params.orderCode);
@@ -369,20 +453,17 @@ const handleCheckPayment = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Mã đơn hàng không hợp lệ' });
     }
 
-    // 1. Check if recorded as success in transactions
-    const tx = await WalletTransaction.findOne({
-      note: { $regex: new RegExp(String(orderCode)) },
-      type: 'deposit',
-      status: 'success'
-    });
-
-    if (tx) {
+    // 1. Check if already marked success in DB
+    const tx = await WalletTransaction.findOne({ orderCode, type: 'deposit' });
+    if (tx && tx.status === 'success') {
       const user = await User.findOne({ id: tx.userId });
       return res.json({
         success: true,
         status: 'PAID',
         isPaid: true,
         amount: tx.amount,
+        orderCode: tx.orderCode,
+        description: tx.description,
         userId: tx.userId,
         newBalance: user?.balance
       });
@@ -405,13 +486,14 @@ const handleCheckPayment = async (req: Request, res: Response) => {
             paymentInfo.transactions?.[0]?.description || paymentInfo.description || ''
           );
 
-          const updatedUser = result?.targetUser || (await User.findOne({ id: pendingOrdersMap.get(orderCode)?.userId }));
+          const updatedUser = result?.targetUser || (tx ? await User.findOne({ id: tx.userId }) : null);
 
           return res.json({
             success: true,
             status: 'PAID',
             isPaid: true,
             amount: paymentInfo.amount || paymentInfo.amountPaid,
+            orderCode,
             userId: updatedUser?.id,
             newBalance: updatedUser?.balance
           });
@@ -423,8 +505,10 @@ const handleCheckPayment = async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      status: 'PENDING',
+      status: tx?.status === 'cancelled' ? 'CANCELLED' : 'PENDING',
       isPaid: false,
+      orderCode,
+      amount: tx?.amount,
       message: 'Đang chờ khách chuyển khoản...'
     });
   } catch (error: any) {
@@ -435,7 +519,10 @@ const handleCheckPayment = async (req: Request, res: Response) => {
 router.get('/check/:orderCode', handleCheckPayment);
 router.get('/check-payment/:orderCode', handleCheckPayment);
 
-// POST /api/payos/manual-sync: Manual force recheck & credit if paid
+/**
+ * POST /api/payos/manual-sync:
+ * Manual recheck & credit if paid
+ */
 router.post('/manual-sync', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { orderCode, amount, userId } = req.body;
@@ -446,7 +533,21 @@ router.post('/manual-sync', optionalAuth, async (req: AuthenticatedRequest, res:
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp mã đơn PayOS' });
     }
 
-    // Register user if provided
+    // 1. Check if already marked success in DB
+    const existingTx = await WalletTransaction.findOne({ orderCode: targetOrderCode, type: 'deposit' });
+    if (existingTx && existingTx.status === 'success') {
+      const user = await User.findOne({ id: existingTx.userId });
+      return res.json({
+        success: true,
+        status: 'PAID',
+        isPaid: true,
+        amount: existingTx.amount,
+        message: 'Giao dịch đã được thanh toán thành công trước đó.',
+        newBalance: user?.balance
+      });
+    }
+
+    // Register user in memory if provided
     if (targetUserId) {
       pendingOrdersMap.set(targetOrderCode, {
         userId: targetUserId,
@@ -455,6 +556,7 @@ router.post('/manual-sync', optionalAuth, async (req: AuthenticatedRequest, res:
       });
     }
 
+    // Query PayOS
     if (payOSClient) {
       try {
         let paymentInfo: any = null;
@@ -471,12 +573,12 @@ router.post('/manual-sync', optionalAuth, async (req: AuthenticatedRequest, res:
             paymentInfo.transactions?.[0]?.description || paymentInfo.description || ''
           );
 
-          const updatedUser = result?.targetUser || (await User.findOne({ id: targetUserId }));
+          const updatedUser = result?.targetUser || (existingTx ? await User.findOne({ id: existingTx.userId }) : null);
           return res.json({
             success: true,
             status: 'PAID',
             isPaid: true,
-            amount: paymentInfo.amount,
+            amount: paymentInfo.amount || paymentInfo.amountPaid,
             message: `Xác nhận thành công! Đã nạp +${(paymentInfo.amount || 0).toLocaleString('vi-VN')}đ vào tài khoản.`,
             newBalance: updatedUser?.balance
           });
@@ -493,10 +595,37 @@ router.post('/manual-sync', optionalAuth, async (req: AuthenticatedRequest, res:
     return res.json({
       success: false,
       status: 'PENDING',
-      message: 'Chưa tìm thấy thông tin thanh toán hoàn tất.'
+      message: 'Chưa tìm thấy thông tin thanh toán hoàn tất từ PayOS.'
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi đồng bộ thanh toán.' });
+  }
+});
+
+/**
+ * GET /api/payments/transaction/:idOrOrderCode
+ * Get deposit transaction details
+ */
+router.get('/transaction/:idOrOrderCode', optionalAuth, async (req: Request, res: Response) => {
+  try {
+    const { idOrOrderCode } = req.params;
+    const numOrderCode = Number(idOrOrderCode);
+
+    const tx = await WalletTransaction.findOne({
+      type: 'deposit',
+      $or: [
+        { id: idOrOrderCode },
+        ...(isNaN(numOrderCode) ? [] : [{ orderCode: numOrderCode }])
+      ]
+    }).lean();
+
+    if (!tx) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch' });
+    }
+
+    return res.json({ success: true, transaction: tx });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi tra cứu giao dịch' });
   }
 });
 

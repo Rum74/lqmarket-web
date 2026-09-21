@@ -73,7 +73,8 @@ export const AccountsListView: React.FC = () => {
     }
 
     // Min Heroes
-    if (acc.heroesCount < filterOptions.minHeroes) {
+    const accHeroes = acc.heroesCount || (acc as any).championsCount || 0;
+    if (accHeroes < filterOptions.minHeroes) {
       return false;
     }
 
@@ -111,7 +112,7 @@ export const AccountsListView: React.FC = () => {
       case 'most_skins':
         return b.skinsCount - a.skinsCount;
       case 'most_heroes':
-        return b.heroesCount - a.heroesCount;
+        return (b.heroesCount || (b as any).championsCount || 0) - (a.heroesCount || (a as any).championsCount || 0);
       case 'views':
         return b.views - a.views;
       case 'newest':
@@ -189,6 +190,7 @@ export const AccountsListView: React.FC = () => {
           className={`${
             isMobileFilterOpen ? 'block fixed inset-0 z-50 bg-slate-950/95 p-6 overflow-y-auto' : 'hidden lg:block'
           } lg:sticky lg:top-[20px] lg:self-start lg:bg-transparent lg:p-0 lg:z-30 space-y-5`}
+          style={!isMobileFilterOpen ? { position: 'sticky', top: '20px', alignSelf: 'flex-start' } : undefined}
         >
           {/* Mobile Drawer Close Button */}
           {isMobileFilterOpen && (

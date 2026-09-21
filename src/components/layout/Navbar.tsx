@@ -88,21 +88,21 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full overflow-x-clip transition-all">
       {/* Main Header Container (Synchronized with 1536px canvas) */}
-      <div className="w-full max-w-[1536px] mx-auto px-2.5 sm:px-5 lg:px-6 xl:px-8">
-        <div className="flex items-center justify-between h-[60px] sm:h-[68px] w-full gap-1.5 sm:gap-2 xl:gap-4">
+      <div className="w-full max-w-[1536px] mx-auto px-2 sm:px-5 lg:px-6 xl:px-8">
+        <div className="flex items-center justify-between h-[56px] sm:h-[68px] w-full gap-1 sm:gap-2 xl:gap-4">
 
           {/* ====================================================
               1. LEFT GROUP: LOGO & DESKTOP SEARCH
              ==================================================== */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 xl:gap-3 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2.5 xl:gap-3 shrink-0">
             {/* Mobile / Tablet Hamburger Toggle Button */}
             <button
               id="mobile-menu-btn"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-slate-300 hover:text-amber-400 rounded-lg sm:rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer shrink-0"
+              className="lg:hidden w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center text-slate-300 hover:text-amber-400 rounded-lg sm:rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer shrink-0"
               aria-label="Menu"
             >
-              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              {isMobileMenuOpen ? <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Menu className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
 
             <button
@@ -111,7 +111,7 @@ export const Navbar: React.FC = () => {
                 setCurrentView('home');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 sm:gap-2 group text-left cursor-pointer shrink-0 focus:outline-none"
+              className="flex items-center gap-1 sm:gap-2 group text-left cursor-pointer shrink-0 focus:outline-none"
             >
               <div className="relative w-7 h-7 sm:w-9 sm:h-9 min-w-[28px] min-h-[28px] sm:min-w-[36px] sm:min-h-[36px] rounded-lg sm:rounded-xl overflow-hidden aspect-square shrink-0 border border-amber-500/40 shadow-sm shadow-amber-500/20 group-hover:scale-105 group-hover:border-amber-400 transition-all">
                 <img
@@ -123,7 +123,7 @@ export const Navbar: React.FC = () => {
               </div>
 
               <div className="shrink-0 flex flex-col justify-center">
-                <span className="text-sm sm:text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors leading-none">
+                <span className="text-xs min-[360px]:text-sm sm:text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors leading-none">
                   LQ<span className="text-amber-400">MARKET</span>
                 </span>
               </div>
@@ -289,13 +289,13 @@ export const Navbar: React.FC = () => {
           {/* ====================================================
               3. RIGHT GROUP: ACCOUNT & ACTIONS AREA
              ==================================================== */}
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0">
             {/* Compare Tool Pill (if accounts selected) */}
             {compareAccountIds.length > 0 && (
               <button
                 id="navbar-compare-btn"
                 onClick={() => setIsCompareModalOpen(true)}
-                className="h-[35px] sm:h-[36px] flex items-center gap-1.5 bg-gradient-to-r from-cyan-950 to-blue-950 hover:from-cyan-900 hover:to-blue-900 border border-cyan-500/40 px-2.5 rounded-xl transition-all cursor-pointer group shadow-sm text-cyan-300 font-bold text-xs"
+                className="h-[30px] sm:h-[36px] flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-cyan-950 to-blue-950 hover:from-cyan-900 hover:to-blue-900 border border-cyan-500/40 px-2 sm:px-2.5 rounded-xl transition-all cursor-pointer group shadow-sm text-cyan-300 font-bold text-[11px] sm:text-xs"
                 title="Mở bảng so sánh tài khoản"
               >
                 <Scale className="w-3.5 h-3.5 text-cyan-400" />
@@ -311,12 +311,12 @@ export const Navbar: React.FC = () => {
                 <button
                   id="navbar-wallet-btn"
                   onClick={() => setIsWalletOpen(true)}
-                  className="h-[32px] sm:h-[36px] flex items-center gap-1 sm:gap-2 bg-[#070b14] hover:bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 px-1.5 sm:px-2.5 rounded-xl transition-all cursor-pointer group shadow-xs shrink-0 whitespace-nowrap"
+                  className="h-[30px] sm:h-[36px] flex items-center gap-1 sm:gap-2 bg-[#070b14] hover:bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 px-1.5 sm:px-2.5 rounded-xl transition-all cursor-pointer group shadow-xs shrink-0 whitespace-nowrap"
                   title="Ví LQMarket Pay - Bấm để Nạp / Rút"
                 >
                   <Wallet className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
                   <div className="flex items-baseline gap-0.5">
-                    <span className="text-[11px] sm:text-xs font-black tracking-tight text-slate-100 group-hover:text-amber-300 transition-colors">
+                    <span className="text-[10px] min-[360px]:text-[11px] sm:text-xs font-black tracking-tight text-slate-100 group-hover:text-amber-300 transition-colors">
                       {currentUser.balance >= 1000000
                         ? `${(currentUser.balance / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}M`
                         : `${currentUser.balance.toLocaleString('vi-VN')}đ`}
@@ -351,7 +351,7 @@ export const Navbar: React.FC = () => {
                   <button
                     id="navbar-notif-btn"
                     onClick={() => setIsNotifOpen(!isNotifOpen)}
-                    className="w-[32px] h-[32px] sm:w-[36px] sm:h-[36px] flex items-center justify-center rounded-xl bg-[#070b14] border border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700 relative transition-colors cursor-pointer"
+                    className="w-[30px] h-[30px] sm:w-[36px] sm:h-[36px] flex items-center justify-center rounded-xl bg-[#070b14] border border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700 relative transition-colors cursor-pointer"
                     title="Thông báo hệ thống"
                   >
                     <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -420,7 +420,7 @@ export const Navbar: React.FC = () => {
                   <button
                     id="navbar-profile-btn"
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="h-[32px] sm:h-[36px] flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 rounded-xl bg-[#070b14] hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
+                    className="h-[30px] sm:h-[36px] flex items-center gap-1 sm:gap-2 px-1 sm:px-2 rounded-xl bg-[#070b14] hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
                   >
                     <img
                       src={currentUser.avatar}
@@ -593,14 +593,14 @@ export const Navbar: React.FC = () => {
                  - Đăng Ký: primary yellow/orange button
                  - Height: ~36-38px, clean and prominent
                  ==================================================== */
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 <button
                   type="button"
                   id="navbar-login-btn"
                   onClick={openLoginModal}
-                  className="h-[32px] sm:h-[36px] px-2.5 sm:px-4 rounded-full text-[11px] sm:text-xs font-semibold text-slate-200 hover:text-white bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
+                  className="h-[30px] sm:h-[36px] px-2 sm:px-4 rounded-full text-[10.5px] sm:text-xs font-semibold text-slate-200 hover:text-white bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
                 >
-                  <User size={12} className="text-slate-400 hidden min-[360px]:inline-block sm:w-3.5 sm:h-3.5" />
+                  <User size={12} className="text-slate-400 hidden min-[380px]:inline-block sm:w-3.5 sm:h-3.5" />
                   <span>Đăng Nhập</span>
                 </button>
 
@@ -608,9 +608,9 @@ export const Navbar: React.FC = () => {
                   type="button"
                   id="navbar-register-btn"
                   onClick={() => openRegisterModal('buyer')}
-                  className="h-[32px] sm:h-[36px] px-2.5 sm:px-4.5 rounded-full text-[11px] sm:text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="h-[30px] sm:h-[36px] px-2 sm:px-4.5 rounded-full text-[10.5px] sm:text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap"
                 >
-                  <UserPlus size={12} className="hidden min-[360px]:inline-block sm:w-3.5 sm:h-3.5" />
+                  <UserPlus size={12} className="hidden min-[380px]:inline-block sm:w-3.5 sm:h-3.5" />
                   <span>Đăng Ký</span>
                 </button>
               </div>

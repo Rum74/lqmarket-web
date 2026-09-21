@@ -68,7 +68,20 @@ export const WalletModal: React.FC = () => {
   const [customAmount, setCustomAmount] = useState<string>('');
   const [lockedMethodNotice, setLockedMethodNotice] = useState<string | null>(null);
   
-  const [transferCode, setTransferCode] = useState<string>('');
+  // PayOS Unified Payment State (Single Source of Truth)
+  interface CurrentDepositSession {
+    id?: string;
+    orderCode: number;
+    amount: number;
+    description: string;
+    qrCode: string;
+    checkoutUrl?: string;
+    accountNumber: string;
+    accountName: string;
+    bankName: string;
+  }
+
+  const [currentDeposit, setCurrentDeposit] = useState<CurrentDepositSession | null>(null);
   const [depositSuccess, setDepositSuccess] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -152,7 +165,7 @@ export const WalletModal: React.FC = () => {
     const orderCodeParam = searchParams.get('orderCode') || searchParams.get('order_code');
     const payOsStatus = searchParams.get('status');
     const isCode00 = searchParams.get('code') === '00';
-    const storedCode = localStorage.getItem('last_payos_order_code') || localStorage.getItem('last_payos_memo');
+    const storedCode = localStorage.getItem('last_payos_order_code');
     const storedAmount = Number(localStorage.getItem('last_payos_amount'));
 
     const isReturning = paymentStatus === 'success' || payOsStatus === 'PAID' || isCode00 || (orderCodeParam && paymentStatus !== 'cancelled');
@@ -164,14 +177,13 @@ export const WalletModal: React.FC = () => {
         if (!isNaN(num) && num > 0) {
           setPayOsOrderCode(num);
         }
-        setTransferCode(targetCode);
       }
       if (storedAmount && !isNaN(storedAmount) && storedAmount > 0) {
         setDepositAmount(storedAmount);
       }
       setIsWalletModalOpen(true);
       setActiveTab('deposit');
-      setDepositStep('qr'); // Keep strictly on the QR tab (Hình 2) as requested
+      setDepositStep('qr');
 
       // Background verify and credit on backend
       const codeNum = Number(targetCode) || (storedCode ? Number(storedCode) : undefined);
@@ -203,33 +215,48 @@ export const WalletModal: React.FC = () => {
     }
   }, [currentUser?.id, currentUser?.email, currentUser?.name, refreshAllData, setIsWalletModalOpen]);
 
-  // Create PayOS payment link
-  const createPayOsLink = async (amountToDeposit: number, memoCode: string) => {
+  // Create PayOS payment link - Single source of truth from PayOS
+  const createPayOsLink = async (amountToDeposit: number) => {
     setIsCreatingPayOsLink(true);
+    // Clear previous transaction state completely to avoid stale display
+    setCurrentDeposit(null);
+    setPayOsOrderCode(null);
+    setPayOsCheckoutUrl(null);
+
     try {
-      localStorage.setItem('last_payos_memo', memoCode);
       localStorage.setItem('last_payos_amount', String(amountToDeposit));
 
       const data = await api.post('/api/payos/create-payment-link', {
         amount: amountToDeposit,
-        description: `NAP ${memoCode}`,
         userId: currentUser?.id,
         userName: currentUser?.name,
         userEmail: currentUser?.email,
-        memoCode: memoCode,
-        returnUrl: `${window.location.origin}/?payment=success&orderCode=${memoCode}`,
-        cancelUrl: `${window.location.origin}/?payment=cancelled&orderCode=${memoCode}`
+        returnUrl: `${window.location.origin}/?payment=success`,
+        cancelUrl: `${window.location.origin}/?payment=cancelled`
       });
 
       if (data && data.success) {
+        const session: CurrentDepositSession = {
+          id: data.transaction?.id || `tx_${data.orderCode}`,
+          orderCode: data.orderCode,
+          amount: data.amount,
+          description: data.description, // PayOS's official description
+          qrCode: data.qrCode,           // PayOS's official VietQR Data URL
+          checkoutUrl: data.checkoutUrl,
+          accountNumber: data.accountNumber || '555507042002',
+          accountName: data.accountName || 'HUYNH VAN PHONG',
+          bankName: data.bankName || 'MB Bank (Quân Đội)'
+        };
+
+        setCurrentDeposit(session);
         setPayOsOrderCode(data.orderCode);
         localStorage.setItem('last_payos_order_code', String(data.orderCode));
-        setPayOsCheckoutUrl(data.checkoutUrl);
-        if (data.accountNumber) setPayOsAccountNo(data.accountNumber);
-        if (data.accountName) setPayOsAccountName(data.accountName);
+        setPayOsCheckoutUrl(data.checkoutUrl || null);
+        if (session.accountNumber) setPayOsAccountNo(session.accountNumber);
+        if (session.accountName) setPayOsAccountName(session.accountName);
       }
     } catch (err) {
-      console.warn('Could not generate PayOS link, using standard VietQR fallback:', err);
+      console.warn('Could not generate PayOS payment link:', err);
     } finally {
       setIsCreatingPayOsLink(false);
     }
@@ -256,15 +283,11 @@ export const WalletModal: React.FC = () => {
       });
 
       if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+        await refreshAllData();
         const creditedAmount = syncData.amount || depositAmount || 50000;
-        depositBalance(
-          creditedAmount,
-          'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
-          `Đồng bộ PayOS đơn #${targetCode}`
-        );
         setManualSyncFeedback({
           type: 'success',
-          msg: `Thành công! Đã cộng +${creditedAmount.toLocaleString('vi-VN')}đ vào ví!`
+          msg: `Thành công! Đã xác nhận thanh toán PayOS và cộng +${creditedAmount.toLocaleString('vi-VN')}đ vào ví!`
         });
         try {
           confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
@@ -276,15 +299,11 @@ export const WalletModal: React.FC = () => {
       const checkData = await api.get(`/api/payos/check-payment/${targetCode}`);
 
       if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
+        await refreshAllData();
         const creditedAmount = checkData.amount || depositAmount || 50000;
-        depositBalance(
-          creditedAmount,
-          'Cổng PayOS Tự Động (VietQR/Napas 24/7)',
-          `Đồng bộ PayOS đơn #${targetCode}`
-        );
         setManualSyncFeedback({
           type: 'success',
-          msg: `Thành công! Đã cộng +${creditedAmount.toLocaleString('vi-VN')}đ vào ví!`
+          msg: `Thành công! Đã xác nhận thanh toán PayOS và cộng +${creditedAmount.toLocaleString('vi-VN')}đ vào ví!`
         });
         try {
           confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
@@ -307,11 +326,14 @@ export const WalletModal: React.FC = () => {
 
   // Generate QR code and reset 5-minute timer
   const initPaymentSession = () => {
-    const code = `${Math.floor(10000000 + Math.random() * 90000000)}`;
-    setTransferCode(code);
-    setTimeLeft(300); // 5 minutes exactly
+    setDepositSuccess(false);
+    setIsCheckingResult(false);
+    setCurrentDeposit(null);
+    setPayOsOrderCode(null);
+    setPayOsCheckoutUrl(null);
+    setTimeLeft(300); // 5 minutes
     setDepositStep('qr');
-    createPayOsLink(depositAmount, code);
+    createPayOsLink(depositAmount);
   };
 
   // 5-minute countdown interval when on QR step
@@ -374,7 +396,12 @@ export const WalletModal: React.FC = () => {
 
   // Action: "Thanh toán đã hoàn tất" -> chuyển sang màn hình Chờ xử lý (Processing) và truy vấn thật từ PayOS
   const handlePaymentCompleted = async () => {
-    const codeToVerify = payOsOrderCode || Number(transferCode) || Number(localStorage.getItem('last_payos_order_code')) || Number(localStorage.getItem('last_payos_memo'));
+    const codeToVerify = payOsOrderCode || currentDeposit?.orderCode;
+    if (!codeToVerify) {
+      setCheckPaymentMessage('Chưa có mã giao dịch hợp lệ để kiểm tra.');
+      return;
+    }
+
     setDepositStep('processing');
     setIsCheckingResult(true);
     setCheckPaymentMessage('Đang kết nối ngân hàng & cổng PayOS để xác nhận giao dịch...');
@@ -408,26 +435,24 @@ export const WalletModal: React.FC = () => {
       }
 
       // 2. Fallback check-payment endpoint
-      if (codeToVerify) {
-        const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}`);
-        if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
-          await refreshAllData();
-          setDepositSuccess(true);
-          setIsCheckingResult(false);
-          try {
-            confetti({
-              particleCount: 150,
-              spread: 95,
-              origin: { y: 0.6 }
-            });
-          } catch {}
+      const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
+        await refreshAllData();
+        setDepositSuccess(true);
+        setIsCheckingResult(false);
+        try {
+          confetti({
+            particleCount: 150,
+            spread: 95,
+            origin: { y: 0.6 }
+          });
+        } catch {}
 
-          setTimeout(() => {
-            setIsWalletModalOpen(false);
-            setCurrentView('home');
-          }, 2500);
-          return;
-        }
+        setTimeout(() => {
+          setIsWalletModalOpen(false);
+          setCurrentView('home');
+        }, 2500);
+        return;
       }
 
       setCheckPaymentMessage('Chưa nhận được giao dịch từ ngân hàng. Hệ thống đang tự động kiểm tra lại...');
@@ -440,7 +465,9 @@ export const WalletModal: React.FC = () => {
 
   // Manual Check Now button
   const handleManualRecheck = async () => {
-    const codeToVerify = payOsOrderCode || Number(transferCode) || Number(localStorage.getItem('last_payos_order_code')) || Number(localStorage.getItem('last_payos_memo'));
+    const codeToVerify = payOsOrderCode || currentDeposit?.orderCode;
+    if (!codeToVerify) return;
+
     setIsCheckingResult(true);
     setCheckPaymentMessage('Đang truy vấn trạng thái đơn hàng từ PayOS...');
     try {
@@ -468,24 +495,22 @@ export const WalletModal: React.FC = () => {
         return;
       }
 
-      if (codeToVerify) {
-        const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
-        if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
-          await refreshAllData();
-          setDepositSuccess(true);
-          try {
-            confetti({
-              particleCount: 150,
-              spread: 95,
-              origin: { y: 0.6 }
-            });
-          } catch {}
-          setTimeout(() => {
-            setIsWalletModalOpen(false);
-            setCurrentView('home');
-          }, 2500);
-          return;
-        }
+      const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+      if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
+        await refreshAllData();
+        setDepositSuccess(true);
+        try {
+          confetti({
+            particleCount: 150,
+            spread: 95,
+            origin: { y: 0.6 }
+          });
+        } catch {}
+        setTimeout(() => {
+          setIsWalletModalOpen(false);
+          setCurrentView('home');
+        }, 2500);
+        return;
       }
 
       setCheckPaymentMessage('Chưa nhận được giao dịch từ ngân hàng. Vui lòng hoàn tất chuyển khoản theo đúng mã đơn hàng.');
@@ -506,12 +531,6 @@ export const WalletModal: React.FC = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // High-reliability VietQR image URL (Always loads perfectly)
-  const getVietQrUrl = () => {
-    const memo = payOsOrderCode ? `NAP ${payOsOrderCode}` : `NAP ${transferCode}`;
-    return `https://img.vietqr.io/image/970422-555507042002-compact2.png?amount=${depositAmount}&addInfo=${encodeURIComponent(memo)}&accountName=${encodeURIComponent('HUYNH VAN PHONG')}`;
   };
 
   const getMethodName = () => {
@@ -1044,16 +1063,16 @@ export const WalletModal: React.FC = () => {
                   ) : (
                     /* Active QR View */
                     <div className="space-y-4">
-                      {/* Crisp Centered QR Code */}
+                      {/* Crisp Centered QR Code from PayOS */}
                       <div className="p-3 bg-white rounded-2xl shadow-xl max-w-[240px] mx-auto flex flex-col items-center justify-center border border-slate-200">
-                        {isCreatingPayOsLink ? (
+                        {isCreatingPayOsLink || !currentDeposit?.qrCode ? (
                           <div className="w-48 h-48 flex flex-col items-center justify-center text-slate-700 gap-2">
                             <RefreshCw size={26} className="animate-spin text-red-600" />
-                            <span className="text-[11px] font-bold">Đang tạo mã QR...</span>
+                            <span className="text-[11px] font-bold">Đang tải mã QR PayOS...</span>
                           </div>
                         ) : (
                           <img
-                            src={getVietQrUrl()}
+                            src={currentDeposit.qrCode}
                             alt="VietQR PayOS"
                             className="w-48 h-48 object-contain rounded-lg"
                             loading="eager"
@@ -1069,17 +1088,17 @@ export const WalletModal: React.FC = () => {
                         <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                           <span className="text-slate-400">Ngân hàng:</span>
                           <span className="font-bold text-white flex items-center gap-1">
-                            <Building2 size={13} className="text-amber-400" /> MB Bank (Quân Đội)
+                            <Building2 size={13} className="text-amber-400" /> {currentDeposit?.bankName || 'MB Bank (Quân Đội)'}
                           </span>
                         </div>
 
                         <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                           <span className="text-slate-400">Số tài khoản:</span>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-amber-400">{payOsAccountNo}</span>
+                            <span className="font-mono font-bold text-amber-400">{currentDeposit?.accountNumber || payOsAccountNo}</span>
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(payOsAccountNo, 'stk')}
+                              onClick={() => copyToClipboard(currentDeposit?.accountNumber || payOsAccountNo, 'stk')}
                               className="p-1 px-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 text-[10px] flex items-center gap-1 cursor-pointer"
                             >
                               {copiedField === 'stk' ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
@@ -1090,23 +1109,23 @@ export const WalletModal: React.FC = () => {
 
                         <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                           <span className="text-slate-400">Chủ tài khoản:</span>
-                          <span className="font-bold text-slate-200 uppercase">{payOsAccountName}</span>
+                          <span className="font-bold text-slate-200 uppercase">{currentDeposit?.accountName || payOsAccountName}</span>
                         </div>
 
                         <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                           <span className="text-slate-400">Số tiền:</span>
-                          <span className="font-black text-red-400">{depositAmount.toLocaleString('vi-VN')} đ</span>
+                          <span className="font-black text-red-400">{(currentDeposit?.amount || depositAmount).toLocaleString('vi-VN')} đ</span>
                         </div>
 
                         <div className="flex items-center justify-between">
                           <span className="text-slate-400">Nội dung chuyển:</span>
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                              {payOsOrderCode ? `NAP ${payOsOrderCode}` : `NAP ${transferCode}`}
+                              {currentDeposit?.description || (payOsOrderCode ? `NAP ${payOsOrderCode}` : '')}
                             </span>
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(payOsOrderCode ? `NAP ${payOsOrderCode}` : `NAP ${transferCode}`, 'memo')}
+                              onClick={() => copyToClipboard(currentDeposit?.description || (payOsOrderCode ? `NAP ${payOsOrderCode}` : ''), 'memo')}
                               className="p-1 px-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
                             >
                               {copiedField === 'memo' ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
@@ -1117,23 +1136,19 @@ export const WalletModal: React.FC = () => {
                       </div>
 
                       {/* Optional PayOS Hosted Checkout Link Button */}
-                      {payOsCheckoutUrl && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (payOsOrderCode) localStorage.setItem('last_payos_order_code', String(payOsOrderCode));
-                            if (transferCode) localStorage.setItem('last_payos_memo', transferCode);
-                            localStorage.setItem('last_payos_amount', String(depositAmount));
-                            window.location.href = payOsCheckoutUrl;
-                          }}
+                      {(currentDeposit?.checkoutUrl || payOsCheckoutUrl) && (
+                        <a
+                          href={currentDeposit?.checkoutUrl || payOsCheckoutUrl || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                         >
                           <ExternalLink size={14} className="text-amber-400" />
                           <span>Mở trang thanh toán PayOS trực tiếp (Chuyển trang an toàn)</span>
-                        </button>
+                        </a>
                       )}
 
-                      {/* Primary Button: "Thanh toán đã hoàn tất" (Removed "Tôi đã chuyển khoản") */}
+                      {/* Primary Button: "Thanh toán đã hoàn tất" */}
                       <button
                         type="button"
                         onClick={handlePaymentCompleted}
@@ -1162,7 +1177,7 @@ export const WalletModal: React.FC = () => {
                           Thanh toán thành công!
                         </span>
                         <h3 className="text-2xl font-black text-white">
-                          +{depositAmount.toLocaleString('vi-VN')} đ
+                          +{(currentDeposit?.amount || depositAmount).toLocaleString('vi-VN')} đ
                         </h3>
                         <p className="text-xs text-slate-400">
                           Hệ thống đã xác nhận biến động số dư và cộng tiền vào ví. Đang chuyển về trang chủ...
@@ -1183,7 +1198,7 @@ export const WalletModal: React.FC = () => {
                           {checkPaymentMessage}
                         </p>
                         <span className="inline-block text-[11px] text-slate-500 font-mono bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                          Mã đơn PayOS: #{payOsOrderCode || transferCode}
+                          Mã đơn PayOS: #{payOsOrderCode || currentDeposit?.orderCode || ''}
                         </span>
                       </div>
 
