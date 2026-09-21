@@ -79,9 +79,9 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({ isOpen, accoun
           <div className="relative">
             <input
               type="number"
-              step={10000}
-              min={10000}
-              max={account.price - 10000}
+              step="any"
+              min={1000}
+              max={account.price - 1000}
               value={targetPrice}
               onChange={e => setTargetPrice(Number(e.target.value))}
               className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono font-bold focus:border-amber-500 focus:outline-none"

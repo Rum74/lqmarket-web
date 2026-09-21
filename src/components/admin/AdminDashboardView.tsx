@@ -1657,7 +1657,7 @@ export const AdminDashboardView: React.FC = () => {
                     onChange={e => setNewUserForm({ ...newUserForm, balance: e.target.value })}
                     placeholder="0"
                     min="0"
-                    step="10000"
+                    step="any"
                     className="w-full bg-slate-950 border border-slate-800 text-amber-400 font-bold rounded-xl p-2.5 focus:outline-none focus:border-amber-500"
                   />
                 </div>

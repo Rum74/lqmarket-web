@@ -23,7 +23,9 @@ import {
   Sparkles,
   History,
   ShieldCheck,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const DEFAULT_TIER_OPTIONS = [
@@ -91,6 +93,22 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'claimed' | 'reserved' | 'disabled'>('all');
   const [tierFilter, setTierFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Pagination for Inventory
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, tierFilter, searchTerm, subTab]);
+
+  // Pagination calculations for Inventory
+  const totalItems = blindBagAccounts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const paginatedAccounts = blindBagAccounts.slice(startIndex, startIndex + pageSize);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -487,7 +505,7 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  blindBagAccounts.map(acc => {
+                  paginatedAccounts.map(acc => {
                     const isRevealed = Boolean(revealedPasswords[acc.id]);
                     const displayPassword = isRevealed ? revealedPasswords[acc.id] : acc.password;
 
@@ -590,6 +608,85 @@ export const AdminBlindBagWarehouseTab: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalItems > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-950/90 border-t border-slate-800 text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <span>
+                  Hiển thị <strong className="text-white">{startIndex + 1}</strong> - <strong className="text-white">{Math.min(startIndex + pageSize, totalItems)}</strong> trên tổng số <strong className="text-amber-400 font-mono">{totalItems}</strong> tài khoản
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-500">Mỗi trang:</span>
+                  <select
+                    value={pageSize}
+                    onChange={e => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={validCurrentPage <= 1}
+                    className="p-1.5 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 transition-colors cursor-pointer"
+                    title="Trang trước"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  <div className="flex items-center gap-1 px-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPages || Math.abs(p - validCurrentPage) <= 1)
+                      .reduce((acc: (number | string)[], p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                          acc.push('...');
+                        }
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, idx) =>
+                        p === '...' ? (
+                          <span key={`dots-${idx}`} className="px-1 text-slate-600">...</span>
+                        ) : (
+                          <button
+                            key={`page-${p}`}
+                            onClick={() => setCurrentPage(Number(p))}
+                            className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              validCurrentPage === p
+                                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                                : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={validCurrentPage >= totalPages}
+                    className="p-1.5 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 transition-colors cursor-pointer"
+                    title="Trang sau"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

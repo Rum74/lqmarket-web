@@ -404,8 +404,8 @@ export const SellAccountView: React.FC = () => {
                   <input
                     type="number"
                     required
-                    min={10000}
-                    step={10000}
+                    min={1000}
+                    step="any"
                     value={price}
                     onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))}
                     placeholder="VD: 500000"
@@ -422,7 +422,8 @@ export const SellAccountView: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    min={10000}
+                    min={0}
+                    step="any"
                     value={originalPrice}
                     onChange={e => setOriginalPrice(e.target.value === '' ? '' : Number(e.target.value))}
                     placeholder="VD: 650000"

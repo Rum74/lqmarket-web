@@ -650,7 +650,6 @@ export const MysteryBoxView: React.FC = () => {
                         </div>
 
                         <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-900">
-                          <span>Rank: <strong className="text-amber-400 font-bold">{item.accountData.rank || 'Kim Cương'}</strong></span>
                           <span>Bảo mật: <strong className="text-emerald-400">{item.accountData.credentials.securityType || 'Trắng Thông Tin'}</strong></span>
                           <span>Server: <strong className="text-sky-400 font-bold">Việt Nam</strong></span>
                         </div>
