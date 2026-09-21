@@ -204,7 +204,7 @@ const handleCreatePayment = async (req: AuthenticatedRequest, res: Response) => 
       const timePart = Date.now().toString().slice(-6);
       const randPart = Math.floor(10 + Math.random() * 89);
       orderCode = Number(`${timePart}${randPart}`);
-      const exists = await WalletTransaction.exists({ orderCode });
+      const exists = await WalletTransaction.findOne({ orderCode });
       if (!exists) {
         isUnique = true;
       }
@@ -341,7 +341,10 @@ const handleCreatePayment = async (req: AuthenticatedRequest, res: Response) => 
     });
   } catch (error: any) {
     console.error('Payment create error:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi tạo yêu cầu thanh toán.' });
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Lỗi tạo yêu cầu thanh toán.'
+    });
   }
 };
 

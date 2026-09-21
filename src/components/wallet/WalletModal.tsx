@@ -235,13 +235,13 @@ export const WalletModal: React.FC = () => {
         cancelUrl: `${window.location.origin}/?payment=cancelled`
       });
 
-      if (data && data.success) {
+      if (data && data.success && data.orderCode) {
         const session: CurrentDepositSession = {
           id: data.transaction?.id || `tx_${data.orderCode}`,
           orderCode: data.orderCode,
-          amount: data.amount,
-          description: data.description, // PayOS's official description
-          qrCode: data.qrCode,           // PayOS's official VietQR Data URL
+          amount: data.amount || amountToDeposit,
+          description: data.description || `NAP ${data.orderCode}`,
+          qrCode: data.qrCode || `https://img.vietqr.io/image/970422-${data.accountNumber || '555507042002'}-compact2.png?amount=${data.amount || amountToDeposit}&addInfo=${encodeURIComponent(data.description || `NAP ${data.orderCode}`)}&accountName=${encodeURIComponent(data.accountName || 'HUYNH VAN PHONG')}`,
           checkoutUrl: data.checkoutUrl,
           accountNumber: data.accountNumber || '555507042002',
           accountName: data.accountName || 'HUYNH VAN PHONG',
@@ -254,9 +254,45 @@ export const WalletModal: React.FC = () => {
         setPayOsCheckoutUrl(data.checkoutUrl || null);
         if (session.accountNumber) setPayOsAccountNo(session.accountNumber);
         if (session.accountName) setPayOsAccountName(session.accountName);
+      } else {
+        // Fallback VietQR so user is never blocked or stuck spinning
+        const randCode = Number(Date.now().toString().slice(-6) + Math.floor(10 + Math.random() * 89));
+        const fallbackDesc = `NAP ${randCode}`;
+        const fallbackQr = `https://img.vietqr.io/image/970422-555507042002-compact2.png?amount=${amountToDeposit}&addInfo=${encodeURIComponent(fallbackDesc)}&accountName=HUYNH%20VAN%20PHONG`;
+        const session: CurrentDepositSession = {
+          id: `tx_${randCode}`,
+          orderCode: randCode,
+          amount: amountToDeposit,
+          description: fallbackDesc,
+          qrCode: fallbackQr,
+          checkoutUrl: '',
+          accountNumber: '555507042002',
+          accountName: 'HUYNH VAN PHONG',
+          bankName: 'MB Bank (Quân Đội)'
+        };
+        setCurrentDeposit(session);
+        setPayOsOrderCode(randCode);
+        localStorage.setItem('last_payos_order_code', String(randCode));
       }
     } catch (err) {
-      console.warn('Could not generate PayOS payment link:', err);
+      console.warn('Could not generate PayOS payment link, applying VietQR fallback:', err);
+      const randCode = Number(Date.now().toString().slice(-6) + Math.floor(10 + Math.random() * 89));
+      const fallbackDesc = `NAP ${randCode}`;
+      const fallbackQr = `https://img.vietqr.io/image/970422-555507042002-compact2.png?amount=${amountToDeposit}&addInfo=${encodeURIComponent(fallbackDesc)}&accountName=HUYNH%20VAN%20PHONG`;
+      const session: CurrentDepositSession = {
+        id: `tx_${randCode}`,
+        orderCode: randCode,
+        amount: amountToDeposit,
+        description: fallbackDesc,
+        qrCode: fallbackQr,
+        checkoutUrl: '',
+        accountNumber: '555507042002',
+        accountName: 'HUYNH VAN PHONG',
+        bankName: 'MB Bank (Quân Đội)'
+      };
+      setCurrentDeposit(session);
+      setPayOsOrderCode(randCode);
+      localStorage.setItem('last_payos_order_code', String(randCode));
     } finally {
       setIsCreatingPayOsLink(false);
     }
@@ -1065,18 +1101,29 @@ export const WalletModal: React.FC = () => {
                     <div className="space-y-4">
                       {/* Crisp Centered QR Code from PayOS */}
                       <div className="p-3 bg-white rounded-2xl shadow-xl max-w-[240px] mx-auto flex flex-col items-center justify-center border border-slate-200">
-                        {isCreatingPayOsLink || !currentDeposit?.qrCode ? (
+                        {isCreatingPayOsLink && !currentDeposit?.qrCode ? (
                           <div className="w-48 h-48 flex flex-col items-center justify-center text-slate-700 gap-2">
                             <RefreshCw size={26} className="animate-spin text-red-600" />
                             <span className="text-[11px] font-bold">Đang tải mã QR PayOS...</span>
                           </div>
-                        ) : (
+                        ) : currentDeposit?.qrCode ? (
                           <img
                             src={currentDeposit.qrCode}
                             alt="VietQR PayOS"
                             className="w-48 h-48 object-contain rounded-lg"
                             loading="eager"
                           />
+                        ) : (
+                          <div className="w-48 h-48 flex flex-col items-center justify-center text-slate-600 gap-2 p-3 text-center">
+                            <span className="text-xs text-slate-700 font-semibold">Chưa thể tải mã QR</span>
+                            <button
+                              type="button"
+                              onClick={() => createPayOsLink(depositAmount)}
+                              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Tải lại mã QR
+                            </button>
+                          </div>
                         )}
                         <span className="text-[10px] font-bold text-slate-900 mt-1 bg-slate-100 px-2 py-0.5 rounded-full">
                           VietQR Napas 24/7

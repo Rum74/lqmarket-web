@@ -174,6 +174,15 @@ export class MemoryCollection<T extends { id?: string; _id?: any }> {
     return this.findOne({ id });
   }
 
+  exists(query: any): any {
+    for (const item of this.items.values()) {
+      if (matchesQuery(item, query)) {
+        return Promise.resolve({ _id: item.id || item._id });
+      }
+    }
+    return Promise.resolve(null);
+  }
+
   updateOne(query: any, update: any): any {
     const p = this.findOneAndUpdate(query, update);
     const queryPromise: any = Promise.resolve(p);
