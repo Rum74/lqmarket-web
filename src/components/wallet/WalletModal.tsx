@@ -318,7 +318,7 @@ export const WalletModal: React.FC = () => {
         userName: currentUser?.name
       });
 
-      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.status === 'SUCCESS' || syncData.isPaid)) {
         await refreshAllData();
         const creditedAmount = syncData.amount || depositAmount || 50000;
         setManualSyncFeedback({
@@ -334,7 +334,7 @@ export const WalletModal: React.FC = () => {
       // 2. Fallback to check-payment endpoint
       const checkData = await api.get(`/api/payos/check-payment/${targetCode}`);
 
-      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
+      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.status === 'SUCCESS' || checkData.isPaid)) {
         await refreshAllData();
         const creditedAmount = checkData.amount || depositAmount || 50000;
         setManualSyncFeedback({
@@ -400,9 +400,10 @@ export const WalletModal: React.FC = () => {
       if (!payOsOrderCode) return;
       try {
         const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
-        if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
+        if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
           // Real transaction verified by PayOS and already credited strictly once in DB
           await refreshAllData();
+          setDepositStep('processing');
           setDepositSuccess(true);
           setIsCheckingResult(false);
 
@@ -451,8 +452,9 @@ export const WalletModal: React.FC = () => {
         userName: currentUser?.name
       });
 
-      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.status === 'SUCCESS' || syncData.isPaid)) {
         await refreshAllData();
+        setDepositStep('processing');
         setDepositSuccess(true);
         setIsCheckingResult(false);
         try {
@@ -472,8 +474,9 @@ export const WalletModal: React.FC = () => {
 
       // 2. Fallback check-payment endpoint
       const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}`);
-      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.isPaid)) {
+      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.status === 'SUCCESS' || checkData.isPaid)) {
         await refreshAllData();
+        setDepositStep('processing');
         setDepositSuccess(true);
         setIsCheckingResult(false);
         try {
@@ -514,8 +517,9 @@ export const WalletModal: React.FC = () => {
         userName: currentUser?.name
       });
 
-      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.isPaid)) {
+      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.status === 'SUCCESS' || syncData.isPaid)) {
         await refreshAllData();
+        setDepositStep('processing');
         setDepositSuccess(true);
         try {
           confetti({
@@ -532,8 +536,9 @@ export const WalletModal: React.FC = () => {
       }
 
       const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
-      if (data && data.success && (data.status === 'PAID' || data.isPaid)) {
+      if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
         await refreshAllData();
+        setDepositStep('processing');
         setDepositSuccess(true);
         try {
           confetti({

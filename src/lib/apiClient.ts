@@ -132,6 +132,7 @@ export async function apiRequest<T = any>(
 
   try {
     const res = await fetch(url, {
+      cache: options.cache || 'no-store',
       ...options,
       headers,
       signal: options.signal || controller.signal
