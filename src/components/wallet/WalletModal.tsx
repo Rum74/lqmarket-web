@@ -95,11 +95,22 @@ export const WalletModal: React.FC = () => {
   // 5-minute Countdown Timer (300s)
   const [timeLeft, setTimeLeft] = useState<number>(300);
   
-  // Processing status
+  // Processing status & Order paid detection
+  const [isOrderPaid, setIsOrderPaid] = useState<boolean>(false);
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [checkPaymentMessage, setCheckPaymentMessage] = useState<string>('Đang tải, vui lòng đợi...');
-  const initialBalanceRef = useRef<number | null>(null);
-  const depositStartedAtRef = useRef<number>(Date.now());
+
+  // Reset all deposit states cleanly for a fresh transaction
+  const resetAllDepositStates = () => {
+    setDepositStep('select');
+    setDepositSuccess(false);
+    setIsOrderPaid(false);
+    setIsCheckingResult(false);
+    setCurrentDeposit(null);
+    setPayOsOrderCode(null);
+    setPayOsCheckoutUrl(null);
+    setCheckPaymentMessage('Đang tải, vui lòng đợi...');
+  };
 
   // Manual Order Code Sync Recovery
   const [manualSyncCode, setManualSyncCode] = useState<string>('');
@@ -143,21 +154,19 @@ export const WalletModal: React.FC = () => {
     }
   }, [currentUser, isWalletModalOpen, activeTab]);
 
-  // Initialize or reset when modal opens (preserve 'qr' or 'processing' if returning from payment)
+  // Initialize or reset when modal opens
   useEffect(() => {
     if (isWalletModalOpen) {
       if (activeTab === 'guide' && currentUser?.role !== 'admin') {
         setActiveTab('deposit');
       }
-      setDepositStep(prev => (prev === 'qr' || prev === 'processing' ? prev : 'select'));
+      resetAllDepositStates();
       setSelectedMethod('qr_pay');
-      setDepositSuccess(false);
-      setIsCheckingResult(false);
       setWithdrawSuccess(false);
       setWithdrawError(null);
       setLockedMethodNotice(null);
     }
-  }, [isWalletModalOpen, activeTab, currentUser?.role]);
+  }, [isWalletModalOpen, currentUser?.role]);
 
   // Auto-detect when returned from PayOS redirect (URL params)
   useEffect(() => {
@@ -364,11 +373,7 @@ export const WalletModal: React.FC = () => {
 
   // Generate QR code and reset 5-minute timer
   const initPaymentSession = () => {
-    setDepositSuccess(false);
-    setIsCheckingResult(false);
-    setCurrentDeposit(null);
-    setPayOsOrderCode(null);
-    setPayOsCheckoutUrl(null);
+    resetAllDepositStates();
     setTimeLeft(300); // 5 minutes
     setDepositStep('qr');
     createPayOsLink(depositAmount);
@@ -386,53 +391,6 @@ export const WalletModal: React.FC = () => {
     return () => clearInterval(timer);
   }, [isWalletModalOpen, activeTab, depositStep, timeLeft]);
 
-  // Track initial balance when starting a deposit flow
-  useEffect(() => {
-    if (depositStep === 'select' || depositStep === 'review') {
-      if (currentUser?.balance !== undefined) {
-        initialBalanceRef.current = currentUser.balance;
-      }
-      depositStartedAtRef.current = Date.now();
-    }
-  }, [depositStep, currentUser?.balance]);
-
-  // Real-time balance increase / recent deposit completion auto-detection
-  useEffect(() => {
-    if ((depositStep === 'qr' || depositStep === 'processing') && !depositSuccess) {
-      const currentBal = currentUser?.balance;
-      const initialBal = initialBalanceRef.current;
-      const balanceIncreased = initialBal !== null && currentBal !== undefined && currentBal > initialBal;
-
-      const recentSuccessDeposit = transactions?.find(t =>
-        t.type === 'deposit' &&
-        t.status === 'success' &&
-        (
-          (payOsOrderCode && t.orderCode === payOsOrderCode) ||
-          (currentDeposit?.orderCode && t.orderCode === currentDeposit.orderCode) ||
-          (new Date(t.createdAt).getTime() >= depositStartedAtRef.current - 60000)
-        )
-      );
-
-      if (balanceIncreased || recentSuccessDeposit) {
-        setDepositStep('processing');
-        setDepositSuccess(true);
-        setIsCheckingResult(false);
-        try {
-          confetti({
-            particleCount: 150,
-            spread: 95,
-            origin: { y: 0.6 }
-          });
-        } catch {}
-
-        setTimeout(() => {
-          setIsWalletModalOpen(false);
-          setCurrentView('home');
-        }, 2500);
-      }
-    }
-  }, [currentUser?.balance, transactions, depositStep, depositSuccess, payOsOrderCode, currentDeposit?.orderCode, setIsWalletModalOpen, setCurrentView]);
-
   // Background polling for real PayOS payment status (2s interval)
   useEffect(() => {
     if (!isWalletModalOpen || depositSuccess || activeTab !== 'deposit') {
@@ -445,43 +403,29 @@ export const WalletModal: React.FC = () => {
       return;
     }
 
+    const code = payOsOrderCode || currentDeposit?.orderCode;
+    if (!code) return;
+
     const checkStatus = async () => {
-      const code = payOsOrderCode || currentDeposit?.orderCode;
-      if (!code) return;
       try {
-        const data = await api.get(`/api/payos/check-payment/${code}?userId=${currentUser?.id || ''}`);
+        const data = await api.get(`/api/payos/check-payment/${code}`);
         if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
-          // Real transaction verified by PayOS and already credited strictly once in DB
+          // This specific order code is verified as paid
+          setIsOrderPaid(true);
           await refreshAllData();
-          setDepositStep('processing');
-          setDepositSuccess(true);
-          setIsCheckingResult(false);
-
-          try {
-            confetti({
-              particleCount: 130,
-              spread: 95,
-              origin: { y: 0.6 }
-            });
-          } catch {}
-
-          // Auto redirect to home after 2.5 seconds
-          setTimeout(() => {
-            setIsWalletModalOpen(false);
-            setCurrentView('home');
-          }, 2500);
         }
       } catch (e) {}
     };
 
     pollIntervalRef.current = setInterval(checkStatus, 2000);
+    checkStatus();
 
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [isWalletModalOpen, depositSuccess, activeTab, depositStep, payOsOrderCode, currentDeposit?.orderCode, currentUser?.id, refreshAllData, setIsWalletModalOpen, setCurrentView]);
+  }, [isWalletModalOpen, depositSuccess, activeTab, depositStep, payOsOrderCode, currentDeposit?.orderCode, refreshAllData]);
 
-  // Action: "Thanh toán đã hoàn tất" -> chuyển sang màn hình Chờ xử lý (Processing) và truy vấn thật từ PayOS
+  // Action: "Thanh toán đã hoàn tất"
   const handlePaymentCompleted = async () => {
     const codeToVerify = payOsOrderCode || currentDeposit?.orderCode;
     if (!codeToVerify) {
@@ -489,84 +433,56 @@ export const WalletModal: React.FC = () => {
       return;
     }
 
+    // If isOrderPaid is not true yet, do a strict live check with PayOS
+    if (!isOrderPaid) {
+      setIsCheckingResult(true);
+      setCheckPaymentMessage('Đang kiểm tra kết quả thanh toán từ ngân hàng...');
+      try {
+        const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+        if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
+          setIsOrderPaid(true);
+        } else {
+          // Not paid yet! Keep disabled and return immediately
+          setIsCheckingResult(false);
+          setCheckPaymentMessage('Chưa nhận được thanh toán cho mã đơn này.');
+          return;
+        }
+      } catch {
+        setIsCheckingResult(false);
+        return;
+      }
+    }
+
+    // Payment is verified!
+    await refreshAllData();
     setDepositStep('processing');
-    setIsCheckingResult(true);
-    setCheckPaymentMessage('Đang kết nối ngân hàng & cổng PayOS để xác nhận giao dịch...');
+    setDepositSuccess(true);
+    setIsCheckingResult(false);
 
     try {
-      // 1. Try manual sync with PayOS
-      const syncData = await api.post('/api/payos/manual-sync', {
-        orderCode: codeToVerify,
-        userId: currentUser?.id,
-        userEmail: currentUser?.email,
-        userName: currentUser?.name
+      confetti({
+        particleCount: 150,
+        spread: 95,
+        origin: { y: 0.6 }
       });
+    } catch {}
 
-      if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.status === 'SUCCESS' || syncData.isPaid)) {
-        await refreshAllData();
-        setDepositStep('processing');
-        setDepositSuccess(true);
-        setIsCheckingResult(false);
-        try {
-          confetti({
-            particleCount: 150,
-            spread: 95,
-            origin: { y: 0.6 }
-          });
-        } catch {}
-
-        setTimeout(() => {
-          setIsWalletModalOpen(false);
-          setCurrentView('home');
-        }, 2500);
-        return;
-      }
-
-      // 2. Fallback check-payment endpoint
-      const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}?userId=${currentUser?.id || ''}`);
-      if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.status === 'SUCCESS' || checkData.isPaid)) {
-        await refreshAllData();
-        setDepositStep('processing');
-        setDepositSuccess(true);
-        setIsCheckingResult(false);
-        try {
-          confetti({
-            particleCount: 150,
-            spread: 95,
-            origin: { y: 0.6 }
-          });
-        } catch {}
-
-        setTimeout(() => {
-          setIsWalletModalOpen(false);
-          setCurrentView('home');
-        }, 2500);
-        return;
-      }
-
-      // 3. Fallback: check if balance already increased in App state
-      await refreshAllData();
-      if (initialBalanceRef.current !== null && currentUser?.balance !== undefined && currentUser.balance > initialBalanceRef.current) {
-        setDepositStep('processing');
-        setDepositSuccess(true);
-        setIsCheckingResult(false);
-        try {
-          confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
-        } catch {}
-        setTimeout(() => {
-          setIsWalletModalOpen(false);
-          setCurrentView('home');
-        }, 2500);
-        return;
-      }
-
-      setCheckPaymentMessage('Chưa nhận được giao dịch từ ngân hàng. Hệ thống đang tự động kiểm tra lại...');
-      setIsCheckingResult(false);
-    } catch (e) {
-      setCheckPaymentMessage('Đang chờ hệ thống PayOS xử lý giao dịch...');
-      setIsCheckingResult(false);
-    }
+    setTimeout(() => {
+      resetAllDepositStates();
+      setIsWalletModalOpen(false);
+      setCurrentView('home');
+    }, 2500);
   };
+
+  // When isOrderPaid becomes true on QR step, auto-complete after 3 seconds if user doesn't click
+  useEffect(() => {
+    if (isOrderPaid && depositStep === 'qr' && !depositSuccess) {
+      const timer = setTimeout(() => {
+        handlePaymentCompleted();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOrderPaid, depositStep, depositSuccess]);
 
   // Manual Check Now button
   const handleManualRecheck = async () => {
@@ -584,6 +500,7 @@ export const WalletModal: React.FC = () => {
       });
 
       if (syncData && syncData.success && (syncData.status === 'PAID' || syncData.status === 'SUCCESS' || syncData.isPaid)) {
+        setIsOrderPaid(true);
         await refreshAllData();
         setDepositStep('processing');
         setDepositSuccess(true);
@@ -595,14 +512,16 @@ export const WalletModal: React.FC = () => {
           });
         } catch {}
         setTimeout(() => {
+          resetAllDepositStates();
           setIsWalletModalOpen(false);
           setCurrentView('home');
         }, 2500);
         return;
       }
 
-      const data = await api.get(`/api/payos/check-payment/${codeToVerify}?userId=${currentUser?.id || ''}`);
+      const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
       if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
+        setIsOrderPaid(true);
         await refreshAllData();
         setDepositStep('processing');
         setDepositSuccess(true);
@@ -614,21 +533,7 @@ export const WalletModal: React.FC = () => {
           });
         } catch {}
         setTimeout(() => {
-          setIsWalletModalOpen(false);
-          setCurrentView('home');
-        }, 2500);
-        return;
-      }
-
-      // Check if balance already increased
-      await refreshAllData();
-      if (initialBalanceRef.current !== null && currentUser?.balance !== undefined && currentUser.balance > initialBalanceRef.current) {
-        setDepositStep('processing');
-        setDepositSuccess(true);
-        try {
-          confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
-        } catch {}
-        setTimeout(() => {
+          resetAllDepositStates();
           setIsWalletModalOpen(false);
           setCurrentView('home');
         }, 2500);
@@ -745,7 +650,10 @@ export const WalletModal: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setIsWalletModalOpen(false)}
+            onClick={() => {
+              resetAllDepositStates();
+              setIsWalletModalOpen(false);
+            }}
             className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-900 border border-slate-800 cursor-pointer"
           >
             <X size={16} />
@@ -758,7 +666,7 @@ export const WalletModal: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('deposit');
-                setDepositStep('select');
+                resetAllDepositStates();
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'deposit' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-400 hover:text-white bg-slate-900'
@@ -767,7 +675,10 @@ export const WalletModal: React.FC = () => {
               Nạp Tiền
             </button>
             <button
-              onClick={() => setActiveTab('withdraw')}
+              onClick={() => {
+                resetAllDepositStates();
+                setActiveTab('withdraw');
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'withdraw' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-400 hover:text-white bg-slate-900'
               }`}
@@ -775,7 +686,10 @@ export const WalletModal: React.FC = () => {
               Rút Tiền
             </button>
             <button
-              onClick={() => setActiveTab('history')}
+              onClick={() => {
+                resetAllDepositStates();
+                setActiveTab('history');
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'history' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-slate-400 hover:text-white bg-slate-900'
               }`}
@@ -988,12 +902,21 @@ export const WalletModal: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => setDepositStep('review')}
-                      disabled={depositAmount < 2000}
+                      onClick={initPaymentSession}
+                      disabled={depositAmount < 2000 || isCreatingPayOsLink}
                       className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-red-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      <CheckCircle2 size={16} />
-                      <span>Nạp ngay</span>
+                      {isCreatingPayOsLink ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Đang tạo mã QR...</span>
+                        </>
+                      ) : (
+                        <>
+                          <QrCode size={16} />
+                          <span>Xử lý thanh toán</span>
+                        </>
+                      )}
                     </button>
                   </div>
 
@@ -1129,11 +1052,14 @@ export const WalletModal: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => setDepositStep('review')}
+                      onClick={() => {
+                        resetAllDepositStates();
+                        setDepositStep('select');
+                      }}
                       className="px-3 py-1.5 text-slate-300 hover:text-white bg-slate-950 hover:bg-slate-800 rounded-xl border border-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                     >
                       <ArrowLeft size={14} />
-                      <span>Trang trước</span>
+                      <span>Chọn lại mệnh giá</span>
                     </button>
 
                     {/* 5-minute timer */}
@@ -1268,27 +1194,28 @@ export const WalletModal: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Optional PayOS Hosted Checkout Link Button */}
-                      {(currentDeposit?.checkoutUrl || payOsCheckoutUrl) && (
-                        <a
-                          href={currentDeposit?.checkoutUrl || payOsCheckoutUrl || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                        >
-                          <ExternalLink size={14} className="text-amber-400" />
-                          <span>Mở trang thanh toán PayOS trực tiếp (Chuyển trang an toàn)</span>
-                        </a>
-                      )}
-
-                      {/* Primary Button: "Thanh toán đã hoàn tất" */}
+                      {/* Primary Button: "Thanh toán đã hoàn tất" - Disabled until PayOS verifies receipt */}
                       <button
                         type="button"
                         onClick={handlePaymentCompleted}
-                        className="w-full py-3.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-sm transition-all shadow-xl shadow-red-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                        disabled={!isOrderPaid}
+                        className={`w-full py-3.5 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 ${
+                          isOrderPaid
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-xl shadow-emerald-600/30 cursor-pointer animate-pulse ring-2 ring-emerald-400'
+                            : 'bg-slate-800/80 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60'
+                        }`}
                       >
-                        <CheckCircle2 size={16} />
-                        <span>Thanh toán đã hoàn tất</span>
+                        {isOrderPaid ? (
+                          <>
+                            <CheckCircle2 size={18} className="text-white" />
+                            <span>Thanh toán đã hoàn tất (Đã xác nhận)</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw size={15} className="animate-spin text-slate-400" />
+                            <span>Chờ thanh toán qua ngân hàng...</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   )}
