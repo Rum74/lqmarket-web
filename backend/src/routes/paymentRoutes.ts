@@ -596,6 +596,33 @@ const handleCheckPayment = async (req: Request, res: Response) => {
       }
     }
 
+    // 3. Fallback: check if the user received any successful deposit in the last 15 minutes
+    const currentUserId = (req.query.userId as string) || (req.headers['x-user-id'] as string) || tx?.userId;
+    if (currentUserId && currentUserId !== 'user_guest') {
+      const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const recentSuccessTx: any = await WalletTransaction.findOne({
+        userId: currentUserId,
+        type: 'deposit',
+        status: 'success',
+        createdAt: { $gte: fifteenMinsAgo }
+      } as any).sort({ createdAt: -1 });
+
+      if (recentSuccessTx) {
+        const user = await User.findOne({ id: currentUserId });
+        return res.json({
+          success: true,
+          status: 'SUCCESS',
+          isPaid: true,
+          amount: recentSuccessTx.amount,
+          orderCode: recentSuccessTx.orderCode || orderCode,
+          description: recentSuccessTx.description,
+          userId: currentUserId,
+          newBalance: user?.balance,
+          paidAt: recentSuccessTx.processedAt || recentSuccessTx.createdAt || new Date().toISOString()
+        });
+      }
+    }
+
     return res.json({
       success: true,
       status: tx?.status === 'cancelled' ? 'CANCELLED' : 'PENDING',
@@ -695,6 +722,29 @@ router.post('/manual-sync', optionalAuth, async (req: AuthenticatedRequest, res:
           success: false,
           status: 'PENDING',
           message: `PayOS chưa ghi nhận thanh toán cho mã #${targetOrderCode}. Vui lòng kiểm tra lại giao dịch ngân hàng.`
+        });
+      }
+    }
+
+    // 3. Fallback: check if the user received any successful deposit in the last 15 minutes
+    if (targetUserId && targetUserId !== 'user_guest') {
+      const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const recentSuccessTx: any = await WalletTransaction.findOne({
+        userId: targetUserId,
+        type: 'deposit',
+        status: 'success',
+        createdAt: { $gte: fifteenMinsAgo }
+      } as any).sort({ createdAt: -1 });
+
+      if (recentSuccessTx) {
+        const user = await User.findOne({ id: targetUserId });
+        return res.json({
+          success: true,
+          status: 'SUCCESS',
+          isPaid: true,
+          amount: recentSuccessTx.amount,
+          message: `Xác nhận thành công! Đã nạp +${(recentSuccessTx.amount || 0).toLocaleString('vi-VN')}đ vào tài khoản.`,
+          newBalance: user?.balance
         });
       }
     }

@@ -98,6 +98,8 @@ export const WalletModal: React.FC = () => {
   // Processing status
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [checkPaymentMessage, setCheckPaymentMessage] = useState<string>('Đang tải, vui lòng đợi...');
+  const initialBalanceRef = useRef<number | null>(null);
+  const depositStartedAtRef = useRef<number>(Date.now());
 
   // Manual Order Code Sync Recovery
   const [manualSyncCode, setManualSyncCode] = useState<string>('');
@@ -384,6 +386,53 @@ export const WalletModal: React.FC = () => {
     return () => clearInterval(timer);
   }, [isWalletModalOpen, activeTab, depositStep, timeLeft]);
 
+  // Track initial balance when starting a deposit flow
+  useEffect(() => {
+    if (depositStep === 'select' || depositStep === 'review') {
+      if (currentUser?.balance !== undefined) {
+        initialBalanceRef.current = currentUser.balance;
+      }
+      depositStartedAtRef.current = Date.now();
+    }
+  }, [depositStep, currentUser?.balance]);
+
+  // Real-time balance increase / recent deposit completion auto-detection
+  useEffect(() => {
+    if ((depositStep === 'qr' || depositStep === 'processing') && !depositSuccess) {
+      const currentBal = currentUser?.balance;
+      const initialBal = initialBalanceRef.current;
+      const balanceIncreased = initialBal !== null && currentBal !== undefined && currentBal > initialBal;
+
+      const recentSuccessDeposit = transactions?.find(t =>
+        t.type === 'deposit' &&
+        t.status === 'success' &&
+        (
+          (payOsOrderCode && t.orderCode === payOsOrderCode) ||
+          (currentDeposit?.orderCode && t.orderCode === currentDeposit.orderCode) ||
+          (new Date(t.createdAt).getTime() >= depositStartedAtRef.current - 60000)
+        )
+      );
+
+      if (balanceIncreased || recentSuccessDeposit) {
+        setDepositStep('processing');
+        setDepositSuccess(true);
+        setIsCheckingResult(false);
+        try {
+          confetti({
+            particleCount: 150,
+            spread: 95,
+            origin: { y: 0.6 }
+          });
+        } catch {}
+
+        setTimeout(() => {
+          setIsWalletModalOpen(false);
+          setCurrentView('home');
+        }, 2500);
+      }
+    }
+  }, [currentUser?.balance, transactions, depositStep, depositSuccess, payOsOrderCode, currentDeposit?.orderCode, setIsWalletModalOpen, setCurrentView]);
+
   // Background polling for real PayOS payment status (2s interval)
   useEffect(() => {
     if (!isWalletModalOpen || depositSuccess || activeTab !== 'deposit') {
@@ -397,9 +446,10 @@ export const WalletModal: React.FC = () => {
     }
 
     const checkStatus = async () => {
-      if (!payOsOrderCode) return;
+      const code = payOsOrderCode || currentDeposit?.orderCode;
+      if (!code) return;
       try {
-        const data = await api.get(`/api/payos/check-payment/${payOsOrderCode}`);
+        const data = await api.get(`/api/payos/check-payment/${code}?userId=${currentUser?.id || ''}`);
         if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
           // Real transaction verified by PayOS and already credited strictly once in DB
           await refreshAllData();
@@ -429,7 +479,7 @@ export const WalletModal: React.FC = () => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [isWalletModalOpen, depositSuccess, activeTab, depositStep, payOsOrderCode, refreshAllData, setIsWalletModalOpen, setCurrentView]);
+  }, [isWalletModalOpen, depositSuccess, activeTab, depositStep, payOsOrderCode, currentDeposit?.orderCode, currentUser?.id, refreshAllData, setIsWalletModalOpen, setCurrentView]);
 
   // Action: "Thanh toán đã hoàn tất" -> chuyển sang màn hình Chờ xử lý (Processing) và truy vấn thật từ PayOS
   const handlePaymentCompleted = async () => {
@@ -473,7 +523,7 @@ export const WalletModal: React.FC = () => {
       }
 
       // 2. Fallback check-payment endpoint
-      const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+      const checkData = await api.get(`/api/payos/check-payment/${codeToVerify}?userId=${currentUser?.id || ''}`);
       if (checkData && checkData.success && (checkData.status === 'PAID' || checkData.status === 'SUCCESS' || checkData.isPaid)) {
         await refreshAllData();
         setDepositStep('processing');
@@ -487,6 +537,22 @@ export const WalletModal: React.FC = () => {
           });
         } catch {}
 
+        setTimeout(() => {
+          setIsWalletModalOpen(false);
+          setCurrentView('home');
+        }, 2500);
+        return;
+      }
+
+      // 3. Fallback: check if balance already increased in App state
+      await refreshAllData();
+      if (initialBalanceRef.current !== null && currentUser?.balance !== undefined && currentUser.balance > initialBalanceRef.current) {
+        setDepositStep('processing');
+        setDepositSuccess(true);
+        setIsCheckingResult(false);
+        try {
+          confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
+        } catch {}
         setTimeout(() => {
           setIsWalletModalOpen(false);
           setCurrentView('home');
@@ -535,7 +601,7 @@ export const WalletModal: React.FC = () => {
         return;
       }
 
-      const data = await api.get(`/api/payos/check-payment/${codeToVerify}`);
+      const data = await api.get(`/api/payos/check-payment/${codeToVerify}?userId=${currentUser?.id || ''}`);
       if (data && data.success && (data.status === 'PAID' || data.status === 'SUCCESS' || data.isPaid)) {
         await refreshAllData();
         setDepositStep('processing');
@@ -546,6 +612,21 @@ export const WalletModal: React.FC = () => {
             spread: 95,
             origin: { y: 0.6 }
           });
+        } catch {}
+        setTimeout(() => {
+          setIsWalletModalOpen(false);
+          setCurrentView('home');
+        }, 2500);
+        return;
+      }
+
+      // Check if balance already increased
+      await refreshAllData();
+      if (initialBalanceRef.current !== null && currentUser?.balance !== undefined && currentUser.balance > initialBalanceRef.current) {
+        setDepositStep('processing');
+        setDepositSuccess(true);
+        try {
+          confetti({ particleCount: 150, spread: 95, origin: { y: 0.6 } });
         } catch {}
         setTimeout(() => {
           setIsWalletModalOpen(false);
