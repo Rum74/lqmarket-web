@@ -48,6 +48,22 @@ export interface ServerMysteryReward {
 
 export const DEFAULT_SERVER_BOX_TIERS: ServerMysteryBoxTier[] = [
   {
+    id: 'blindbag_1000',
+    name: 'Túi Học Sinh 1K - Thử Vận May',
+    tier: 'student',
+    price: 1000,
+    originalPrice: 10000,
+    description: 'Túi mù siêu rẻ dành cho học sinh - sinh viên. Cơ hội trúng Acc Liên Quân xịn sò, Lượt mở free & Voucher giảm giá!',
+    badge: 'HỌC SINH (1K)',
+    colorGradient: 'from-emerald-600/80 via-teal-800/60 to-slate-950',
+    borderColor: 'border-emerald-500/60 hover:border-emerald-400',
+    iconBg: 'bg-emerald-500/20 text-emerald-300',
+    totalOpened: 850,
+    stockRemaining: 500,
+    highlightText: 'Acc Liên Quân kho thật, Lượt mở miễn phí, Voucher 5K',
+    isActive: true
+  },
+  {
     id: 'box_bronze',
     name: 'Túi 19K - Túi Đồng May Mắn',
     tier: 'bronze',
@@ -114,6 +130,46 @@ export const DEFAULT_SERVER_BOX_TIERS: ServerMysteryBoxTier[] = [
 ];
 
 export const DEFAULT_SERVER_REWARDS: ServerMysteryReward[] = [
+  // ==========================================
+  // 0. TÚI HỌC SINH 1K
+  // ==========================================
+  {
+    id: 'rew_1k_acc',
+    boxTierId: 'blindbag_1000',
+    type: 'account',
+    title: 'Tài khoản Liên Quân Học Sinh',
+    subtitle: 'Rank Vàng - Bạch Kim, 20+ Tướng, Trắng Thông Tin',
+    value: 20000,
+    rarity: 'rare',
+    dropWeight: 40,
+    dropRate: 40
+  },
+  {
+    id: 'rew_1k_free',
+    boxTierId: 'blindbag_1000',
+    type: 'free_turn',
+    title: 'Lượt mở túi miễn phí (Túi 1K)',
+    subtitle: 'Tặng 1 lượt mở tiếp Túi Học Sinh 1K hoàn toàn miễn phí',
+    value: 1000,
+    rarity: 'rare',
+    dropWeight: 30,
+    dropRate: 30
+  },
+  {
+    id: 'rew_1k_v5k',
+    boxTierId: 'blindbag_1000',
+    type: 'voucher',
+    title: 'Voucher 5K Học Sinh',
+    subtitle: 'Giảm ngay 5.000đ khi thanh toán đơn mua nick trên sàn',
+    value: 5000,
+    rarity: 'common',
+    dropWeight: 30,
+    dropRate: 30,
+    voucherCode: 'VOUCHER5K',
+    voucherDiscount: 5000,
+    voucherMinOrder: 10000
+  },
+
   // ==========================================
   // 1. TÚI 19K (TÚI ĐỒNG MAY MẮN)
   // ==========================================

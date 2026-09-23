@@ -314,8 +314,8 @@ export const UnboxModal: React.FC<UnboxModalProps> = ({
                   </div>
                 )}
 
-                {/* 4. If Free Turn */}
-                {rewardResult.type === 'free_turn' && (
+                {/* 4. If Free Turn / Free Spin */}
+                {(rewardResult.type === 'free_turn' || (rewardResult.type as string) === 'free_spin') && (
                   <div className="p-3 bg-purple-950/40 border border-purple-800/60 rounded-xl text-xs space-y-1">
                     <div className="text-purple-300 font-bold flex items-center gap-1.5">
                       <RotateCcw size={14} className="text-purple-400" />

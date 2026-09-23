@@ -399,6 +399,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     disabled: 0
   });
 
+  // Automatically synchronize available free turns from user inventory items
+  useEffect(() => {
+    const turnsMap: Record<string, number> = {};
+    (userInventory || []).forEach(item => {
+      const type = String(item.rewardType || '').toLowerCase();
+      if ((type === 'free_turn' || type === 'free_spin') && !item.isUsed) {
+        const tier = item.customData?.boxTierId || 'all';
+        turnsMap[tier] = (turnsMap[tier] || 0) + 1;
+      }
+    });
+    setUserFreeTurns(turnsMap);
+  }, [userInventory]);
+
   // View States
   const [currentView, setCurrentViewState] = useState<AppView>(() => {
     if (typeof window !== 'undefined') {
@@ -2293,7 +2306,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const res = await api.post(`/api/mystery-boxes/${boxTierId}/open`, {});
+      const hasFreeTurn = (userFreeTurns[boxTierId] || 0) > 0 || (userFreeTurns['all'] || 0) > 0;
+      const res = await api.post(`/api/mystery-boxes/${boxTierId}/open`, { isFreeTurn: hasFreeTurn });
       if (res && res.success) {
         if (res.reward) {
           fetchAllMongoData();

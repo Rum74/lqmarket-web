@@ -8,6 +8,7 @@ import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
 import { UserInventory } from '../models/UserInventory';
 import { MysteryHistory } from '../models/MysteryHistory';
+import { executeOpenBlindBag } from '../services/blindBagService';
 import {
   authenticateToken,
   requireAdmin,
@@ -441,17 +442,6 @@ router.get('/admin/claims', authenticateToken, requireAdmin, handleListClaims);
 
 /**
  * POST /api/blind-bags/open hoặc POST /api/blind-bags/:id/open
- * Luồng chuẩn theo User Request:
- * 1. Xác thực người dùng
- * 2. Kiểm tra chương trình Túi mù có đang mở không
- * 3. Tìm túi mù tương ứng
- * 4. Kiểm tra số dư hoặc lượt mở miễn phí
- * 5. Atomically chọn 1 ACC trong kho BlindBagAccount có status = "available" & blindBagId = túi hiện tại
- *    Sử dụng findOneAndUpdate atomically để chống race condition khi 2 người mở cùng lúc!
- * 6. Nếu hết ACC (available = 0) -> return OUT_OF_STOCK (Tuyệt đối không random / fake TK/MK)
- * 7. Trừ tiền số dư ví người dùng (nếu không dùng free turn)
- * 8. Ghi log BlindBagClaim, UserInventory, WalletTransaction, MysteryHistory, Notification
- * 9. Trả kết quả chính xác TK + MK của ACC đó!
  */
 const handleOpenBlindBagAccount = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -462,221 +452,21 @@ const handleOpenBlindBagAccount = async (req: AuthenticatedRequest, res: Respons
       return res.status(401).json({ success: false, message: 'Vui lòng đăng nhập để mở Túi Mù.' });
     }
 
-    // 1. Kiểm tra sự kiện
-    const setting = await Setting.findOne({
-      key: { $in: ['mystery_box_active', 'mystery_box_event_active'] }
+    const useFreeTurn = Boolean(req.body?.isFreeTurn || req.body?.useFreeTurn);
+    const result = await executeOpenBlindBag({
+      userId,
+      bagId: blindBagId,
+      useFreeTurn
     });
-    if (setting && setting.value === false) {
-      return res.status(400).json({
-        success: false,
-        message: 'Chương trình Xé Túi Mù hiện đang tạm đóng. Vui lòng quay lại sau!'
-      });
+
+    if (!result.success) {
+      const statusCode = result.code === 'INSUFFICIENT_BALANCE' ? 400 :
+                         result.code === 'OUT_OF_STOCK' ? 400 :
+                         result.code === 'BOX_NOT_FOUND' ? 404 : 400;
+      return res.status(statusCode).json(result);
     }
 
-    // 2. Tìm thông tin Túi mù
-    let box = await MysteryBox.findOne({
-      $or: [{ id: blindBagId }, { tier: blindBagId }]
-    });
-    if (!box) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy thông tin gói Túi Mù này.'
-      });
-    }
-
-    if (box.isActive === false) {
-      return res.status(400).json({
-        success: false,
-        message: 'Hạng Túi Mù này đang tạm dừng hoạt động.'
-      });
-    }
-
-    // 3. Kiểm tra user & số dư ví
-    let user = await User.findOne({ id: userId });
-    if (!user) {
-      user = await User.create({
-        id: userId,
-        name: req.user?.email ? req.user.email.split('@')[0] : 'Thành Viên',
-        email: req.user?.email || `user_${userId}@lqmarket.vn`,
-        role: 'buyer',
-        balance: 500000,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    const isFreeTurn = Boolean(req.body?.isFreeTurn || req.body?.useFreeTurn);
-    const boxPrice = isFreeTurn ? 0 : box.price;
-
-    if (!isFreeTurn && user.balance < boxPrice) {
-      return res.status(400).json({
-        success: false,
-        message: `Số dư không đủ để mở túi này. Cần ${boxPrice.toLocaleString('vi-VN')}đ, số dư hiện tại: ${user.balance.toLocaleString('vi-VN')}đ.`,
-        errorCode: 'INSUFFICIENT_BALANCE',
-        requiredAmount: boxPrice,
-        currentBalance: user.balance
-      });
-    }
-
-    // 4. ATOMICALLY CHỌN VÀ GIỮ ACC TRONG KHO BLINDBAGACCOUNT
-    // Khớp theo box.id hoặc box.tier (ví dụ: 'box_bronze' hoặc 'bronze' hoặc 'blindbag_1000')
-    const candidateBagIds = [box.id, box.tier];
-    if (box.price === 1000) candidateBagIds.push('blindbag_1000');
-    if (box.price === 5000) candidateBagIds.push('blindbag_5000');
-    if (box.price === 10000) candidateBagIds.push('blindbag_10000');
-    if (box.price === 19000 || box.price === 20000) candidateBagIds.push('blindbag_20000', 'box_bronze');
-
-    const nowIso = new Date().toISOString();
-
-    // Dùng findOneAndUpdate atomic để đảm bảo nếu 2 người mở cùng lúc thì không bao giờ nhận trùng ACC!
-    const claimedAccount = await BlindBagAccount.findOneAndUpdate(
-      {
-        blindBagId: { $in: candidateBagIds },
-        status: 'available'
-      },
-      {
-        $set: {
-          status: 'claimed',
-          claimedBy: user.id,
-          claimedByName: user.name || user.email,
-          claimedAt: nowIso,
-          updatedAt: nowIso
-        }
-      },
-      { new: true }
-    );
-
-    // 5. NẾU HẾT ACC TRONG KHO (available = 0)
-    if (!claimedAccount) {
-      return res.status(400).json({
-        success: false,
-        code: 'OUT_OF_STOCK',
-        message: 'Kho tài khoản phần thưởng hiện đã hết. Vui lòng quay lại sau!'
-      });
-    }
-
-    // 6. TRỪ TIỀN VÍ
-    if (boxPrice > 0) {
-      user.balance -= boxPrice;
-      await user.save();
-
-      // Ghi lịch sử giao dịch ví
-      const tx = new WalletTransaction({
-        id: `tx_bga_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        userId: user.id,
-        userName: user.name,
-        userEmail: user.email,
-        type: 'purchase',
-        amount: -boxPrice,
-        status: 'success',
-        note: `Mở Túi Mù: ${box.name} (Nhận Acc #${claimedAccount.username})`,
-        createdAt: nowIso
-      });
-      await tx.save();
-    }
-
-    // 7. GHI LỊCH SỬ NHẬN ACC (BlindBagClaim)
-    const claimRecord = new BlindBagClaim({
-      id: `bbc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      userId: user.id,
-      userName: user.name || user.email,
-      blindBagId: box.id,
-      blindBagAccountId: claimedAccount.id,
-      username: claimedAccount.username,
-      claimedAt: nowIso,
-      status: 'success'
-    });
-    await claimRecord.save();
-
-    // 8. TỰ ĐỘNG LƯU VÀO USER INVENTORY (Kho đồ của User để xem lại bất kỳ lúc nào)
-    const inventoryItem = new UserInventory({
-      id: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      userId: user.id,
-      source: 'mystery_box',
-      rewardType: 'account',
-      title: `Acc Liên Quân: ${claimedAccount.username}`,
-      value: box.price,
-      rarity: 'epic',
-      accountData: {
-        rank: 'Tinh Anh',
-        heroesCount: 40,
-        skinsCount: 25,
-        credentials: {
-          username: claimedAccount.username,
-          password: claimedAccount.password,
-          securityType: 'Trắng Thông Tin',
-          secretNotes: claimedAccount.notes || 'Tài khoản nhận từ kho Túi Mù'
-        }
-      },
-      isUsed: false,
-      receivedAt: nowIso
-    });
-    await inventoryItem.save();
-
-    // 9. GHI VÀO LỊCH SỬ MỞ TÚI CHUNG (MysteryHistory) ĐỂ BẢNG FEED CẬP NHẬT
-    const historyItem = new MysteryHistory({
-      id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      userId: user.id,
-      userName: user.name,
-      userAvatar: user.avatar,
-      boxTierId: box.tier || box.id,
-      boxName: box.name,
-      rewardId: claimedAccount.id,
-      rewardType: 'account',
-      rewardTitle: `Acc Liên Quân: ${claimedAccount.username}`,
-      rewardValue: box.price,
-      rewardRarity: 'epic',
-      accountDelivered: {
-        username: claimedAccount.username,
-        password: claimedAccount.password,
-        securityType: 'Trắng Thông Tin',
-        secretNotes: claimedAccount.notes || 'Tài khoản nhận từ kho Túi Mù'
-      },
-      openedAt: nowIso
-    });
-    await historyItem.save();
-
-    // 10. TĂNG TOTAL OPENED CỦA TÚI MÙ
-    box.totalOpened = (box.totalOpened || 0) + 1;
-    await box.save();
-
-    // 11. GỬI THÔNG BÁO CHO USER
-    const notif = new Notification({
-      id: `notif_${Date.now()}`,
-      userId: user.id,
-      title: 'Chúc mừng mở Túi Mù thành công!',
-      message: `Bạn vừa mở ${box.name} và nhận được tài khoản Liên Quân: ${claimedAccount.username}. Xem thông tin đăng nhập trong Kho Đồ!`,
-      type: 'system',
-      createdAt: nowIso
-    });
-    await notif.save();
-
-    // 12. TRẢ KẾT QUẢ ĐÚNG TK + MK THẬT TỪ DATABASE
-    return res.json({
-      success: true,
-      message: `🎉 CHÚC MỪNG! Bạn đã nhận được tài khoản Liên Quân: ${claimedAccount.username}!`,
-      reward: {
-        id: claimedAccount.id,
-        accountId: claimedAccount.id,
-        type: 'account',
-        title: `Tài Khoản Liên Quân [${claimedAccount.username}]`,
-        username: claimedAccount.username,
-        password: claimedAccount.password,
-        value: box.price,
-        rarity: 'epic',
-        accountData: {
-          rank: 'Tinh Anh',
-          heroesCount: 40,
-          skinsCount: 25,
-          credentials: {
-            username: claimedAccount.username,
-            password: claimedAccount.password,
-            securityType: 'Trắng Thông Tin',
-            secretNotes: claimedAccount.notes || ''
-          }
-        }
-      },
-      newBalance: user.balance
-    });
+    return res.json(result);
   } catch (error: any) {
     console.error('Error opening blind bag account:', error);
     return res.status(500).json({
