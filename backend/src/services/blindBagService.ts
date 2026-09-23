@@ -229,19 +229,11 @@ export async function executeOpenBlindBag({
     };
   }
 
-  // 7. Xác định danh sách candidateBagIds tương ứng với kho acc
-  const candidateBagIds = [box.id, box.tier];
-  if (box.price === 1000) candidateBagIds.push('blindbag_1000');
-  if (box.price === 5000) candidateBagIds.push('blindbag_5000');
-  if (box.price === 10000) candidateBagIds.push('blindbag_10000');
-  if (box.price === 19000 || box.price === 20000) candidateBagIds.push('blindbag_20000', 'box_bronze');
-  if (box.price === 49000 || box.price === 50000) candidateBagIds.push('box_gold');
-  if (box.price === 99000 || box.price === 100000) candidateBagIds.push('box_diamond');
-  if (box.price >= 199000) candidateBagIds.push('box_special');
-
-  // Lấy danh sách account AVAILABLE từ KHO ACC TÚI MÙ (BlindBagAccount)
+  // 7. Lấy danh sách account AVAILABLE từ KHO ACC TÚI MÙ (BlindBagAccount) có cùng blindBagId của túi
+  // TUYỆT ĐỐI không lấy account của túi khác, không lấy 'all'
+  const targetBagIds = Array.from(new Set([box.id, box.tier].filter(Boolean)));
   const availableAccounts: IBlindBagAccount[] = await BlindBagAccount.find({
-    blindBagId: { $in: [...candidateBagIds, 'all'] },
+    blindBagId: { $in: targetBagIds },
     status: 'available'
   }).lean();
 

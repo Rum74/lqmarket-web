@@ -476,18 +476,13 @@ export const AdminMysteryBoxManagement: React.FC = () => {
     }
 
     if (editingReward.type === 'account') {
+      updates.boxTierId = editTier;
       updates.accountData = {
-        rank: editAccRank,
-        heroesCount: Number(editAccHeroes),
-        skinsCount: Number(editAccSkins),
+        rank: editAccRank || 'Tinh Anh',
+        heroesCount: Number(editAccHeroes) || 45,
+        skinsCount: Number(editAccSkins) || 30,
         rareSkinName: editAccRareSkin.trim() || undefined,
-        description: editSubtitle.trim() || undefined,
-        credentials: {
-          username: editAccUsername.trim(),
-          password: editAccPassword.trim(),
-          securityType: editAccSecurityType,
-          secretNotes: editAccSecretNotes.trim() || undefined
-        }
+        description: editSubtitle.trim() || undefined
       };
     }
 
@@ -526,22 +521,14 @@ export const AdminMysteryBoxManagement: React.FC = () => {
     }
 
     if (newRewardType === 'account') {
-      if (!newAccUsername.trim() || !newAccPassword.trim()) {
-        alert('Vui lòng nhập đầy đủ Tài khoản và Mật khẩu thật để trao cho người trúng!');
-        return;
-      }
+      // TK/MK thật nằm trong KHO ACC TÚI MÙ, nơi mỗi account đã có blindBagId
+      payload.boxTierId = newRewardTier;
       payload.accountData = {
-        rank: newAccRank,
-        heroesCount: Number(newAccHeroes),
-        skinsCount: Number(newAccSkins),
-        rareSkinName: newAccRareSkin.trim() || undefined,
-        description: newRewardSubtitle.trim() || undefined,
-        credentials: {
-          username: newAccUsername.trim(),
-          password: newAccPassword.trim(),
-          securityType: newAccSecurityType,
-          secretNotes: newAccSecretNotes.trim() || undefined
-        }
+        rank: 'Tinh Anh',
+        heroesCount: 45,
+        skinsCount: 30,
+        rareSkinName: '',
+        description: newRewardSubtitle.trim() || 'Tài khoản cấp từ Kho ACC Túi Mù'
       };
     }
 
@@ -1122,7 +1109,13 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                   <label className="text-slate-400 font-bold">Loại phần thưởng:</label>
                   <select
                     value={newRewardType}
-                    onChange={e => setNewRewardType(e.target.value as any)}
+                    onChange={e => {
+                      const nextType = e.target.value as any;
+                      setNewRewardType(nextType);
+                      if (nextType === 'account' && (newRewardTier === 'all' || !newRewardTier)) {
+                        setNewRewardTier(mysteryBoxes[0]?.id || 'blindbag_1000');
+                      }
+                    }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium"
                   >
                     <option value="account">Tài khoản Game Liên Quân</option>
@@ -1134,13 +1127,18 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-400 font-bold">Áp dụng cho Hạng Túi:</label>
+                  <label className="text-slate-400 font-bold">
+                    {newRewardType === 'account' ? 'Túi mù (blindBagId):' : 'Áp dụng cho Hạng Túi:'}
+                  </label>
                   <select
                     value={newRewardTier}
                     onChange={e => setNewRewardTier(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium"
+                    required
                   >
-                    <option value="all">Tất cả các túi (All Tiers)</option>
+                    {newRewardType !== 'account' && (
+                      <option value="all">Tất cả các túi (All Tiers)</option>
+                    )}
                     {mysteryBoxes.map(b => (
                       <option key={b.id} value={b.id}>
                         {b.name} ({b.price.toLocaleString('vi-VN')}đ)
@@ -1156,7 +1154,7 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                   type="text"
                   value={newRewardTitle}
                   onChange={e => setNewRewardTitle(e.target.value)}
-                  placeholder="Ví dụ: Hoàn tiền mặt 50.000đ vào ví"
+                  placeholder={newRewardType === 'account' ? 'Ví dụ: Tài khoản Liên Quân VIP / Rank Cao' : 'Ví dụ: Hoàn tiền mặt 50.000đ vào ví'}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   required
                 />
@@ -1202,107 +1200,28 @@ export const AdminMysteryBoxManagement: React.FC = () => {
 
               {/* Account fields if type === account */}
               {newRewardType === 'account' && (
-                <div className="space-y-3 p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                      <Gamepad2 size={14} />
-                      Thông tin tài khoản Liên Quân
+                <div className="p-4 bg-emerald-950/40 border border-emerald-800/60 rounded-2xl text-xs space-y-2.5 text-left">
+                  <div className="text-emerald-300 font-bold flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Gamepad2 size={16} className="text-emerald-400" />
+                      <span>Cấp tài khoản từ KHO ACC TÚI MÙ</span>
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
-                      Server: Việt Nam
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
+                      blindBagId: {newRewardTier}
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[11px]">Tài khoản / Garena ID:</label>
-                      <input
-                        type="text"
-                        value={newAccUsername}
-                        onChange={e => setNewAccUsername(e.target.value)}
-                        placeholder="VD: lq_master_pro"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-mono text-xs"
-                        required
-                      />
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Không nhập TK/MK trực tiếp tại đây. TK/MK thật nằm trong <strong className="text-cyan-400">KHO ACC TÚI MÙ</strong> (Tab Kho ACC Túi Mù).
+                  </p>
+                  <div className="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                      <span>⚡ Cơ chế tự động:</span>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[11px]">Mật khẩu:</label>
-                      <input
-                        type="text"
-                        value={newAccPassword}
-                        onChange={e => setNewAccPassword(e.target.value)}
-                        placeholder="VD: Pass123@#"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-mono text-xs"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[10px]">Rank tài khoản:</label>
-                      <select
-                        value={newAccRank}
-                        onChange={e => setNewAccRank(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
-                      >
-                        <option value="Đồng">Đồng</option>
-                        <option value="Bạc">Bạc</option>
-                        <option value="Vàng">Vàng</option>
-                        <option value="Bạch Kim">Bạch Kim</option>
-                        <option value="Kim Cương">Kim Cương</option>
-                        <option value="Tinh Anh">Tinh Anh</option>
-                        <option value="Cao Thủ">Cao Thủ</option>
-                        <option value="Chiến Tướng">Chiến Tướng</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[10px]">Số tướng:</label>
-                      <input
-                        type="number"
-                        value={newAccHeroes}
-                        onChange={e => setNewAccHeroes(Number(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[10px]">Số trang phục:</label>
-                      <input
-                        type="number"
-                        value={newAccSkins}
-                        onChange={e => setNewAccSkins(Number(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[10px]">Bảo mật:</label>
-                      <select
-                        value={newAccSecurityType}
-                        onChange={e => setNewAccSecurityType(e.target.value as any)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
-                      >
-                        <option value="Trắng Thông Tin">Trắng Thông Tin 100%</option>
-                        <option value="SĐT Có Thể Đổi">SĐT Có Thể Đổi</option>
-                        <option value="Email Đã Đổi">Email Đã Đổi</option>
-                        <option value="Facebook Đã Huỷ">Facebook Đã Huỷ</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-slate-400 font-bold text-[10px]">Skin nổi bật / SSS:</label>
-                      <input
-                        type="text"
-                        value={newAccRareSkin}
-                        onChange={e => setNewAccRareSkin(e.target.value)}
-                        placeholder="VD: Nakroth Thứ Nguyên Vệ Thần"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-[11px]"
-                      />
-                    </div>
+                    <ul className="list-disc pl-4 space-y-0.5 text-slate-300 text-[11px]">
+                      <li>Gán phần thưởng này vào túi mù: <span className="text-amber-300 font-mono font-bold">{newRewardTier}</span></li>
+                      <li>Khi người dùng xé trúng: hệ thống tìm tài khoản có cùng <span className="text-cyan-300 font-mono">blindBagId</span> và <span className="text-emerald-300 font-mono">status = AVAILABLE</span></li>
+                      <li>Bốc ngẫu nhiên 1 tài khoản, claim sang <span className="text-purple-300 font-mono">CLAIMED</span> và trả username/password thật cho người dùng</li>
+                    </ul>
                   </div>
                 </div>
               )}
@@ -1924,33 +1843,19 @@ export const AdminMysteryBoxManagement: React.FC = () => {
               )}
 
               {editingReward.type === 'account' && (
-                <div className="space-y-3 p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-amber-400">Thông tin đăng nhập tài khoản:</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
-                      Server: Việt Nam
+                <div className="p-3.5 bg-emerald-950/40 border border-emerald-800/60 rounded-2xl text-xs space-y-2 text-left">
+                  <div className="text-emerald-300 font-bold flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Gamepad2 size={16} className="text-emerald-400" />
+                      <span>Tài khoản tự động từ KHO ACC TÚI MÙ</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
+                      blindBagId: {editTier}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block">Tài khoản:</label>
-                      <input
-                        type="text"
-                        value={editAccUsername}
-                        onChange={e => setEditAccUsername(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block">Mật khẩu:</label>
-                      <input
-                        type="text"
-                        value={editAccPassword}
-                        onChange={e => setEditAccPassword(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono"
-                      />
-                    </div>
-                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Phần thưởng loại Tài khoản được cấp phát ngẫu nhiên từ <strong>Kho ACC Túi Mù</strong> theo túi <span className="text-amber-300 font-mono font-bold">{editTier}</span> khi người dùng quay trúng. Không cần cấu hình TK/MK trực tiếp tại đây.
+                  </p>
                 </div>
               )}
 
