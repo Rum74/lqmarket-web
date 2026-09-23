@@ -7,7 +7,7 @@ mongoose.set('bufferCommands', false);
 
 let isConnected = false;
 
-const VERIFIED_ATLAS_URI = 'mongodb+srv://huynhvanphong7402_db_user:rum7402@lqmarketcluster.hf9awbe.mongodb.net/lqmarket?retryWrites=true&w=majority&appName=LQMarketCluster';
+const VERIFIED_ATLAS_URI = 'mongodb+srv://huynhvanphong7402_db_user:rum7402@lqmarketcluster.hf9awbe.mongodb.net/test?retryWrites=true&w=majority&appName=LQMarketCluster';
 
 function resolveMongoUri(): string {
   let uri = (process.env.MONGODB_URI || '').trim();
@@ -20,13 +20,6 @@ function resolveMongoUri(): string {
   // If URI is empty, generic template, or contains bad credentials
   if (!uri || uri.includes('username:password@cluster')) {
     uri = VERIFIED_ATLAS_URI;
-  }
-
-  // Ensure target database name is /lqmarket
-  if (uri.includes('.mongodb.net/?')) {
-    uri = uri.replace('.mongodb.net/?', '.mongodb.net/lqmarket?');
-  } else if (uri.endsWith('.mongodb.net/')) {
-    uri = uri.replace('.mongodb.net/', '.mongodb.net/lqmarket');
   }
 
   return uri;
@@ -42,6 +35,7 @@ export async function connectDB(): Promise<boolean> {
   const targetUri = resolveMongoUri();
 
   const opts: mongoose.ConnectOptions = {
+    dbName: 'test',
     serverSelectionTimeoutMS: 15000,
     connectTimeoutMS: 30000,
     socketTimeoutMS: 45000,
@@ -54,10 +48,10 @@ export async function connectDB(): Promise<boolean> {
   };
 
   try {
-    console.log('🔄 Connecting to MongoDB Atlas...');
+    console.log('🔄 Connecting to MongoDB Atlas (database: test)...');
     await mongoose.connect(targetUri, opts);
     isConnected = true;
-    console.log('✅ Connected to MongoDB Atlas successfully!');
+    console.log(`✅ Connected to MongoDB Atlas successfully! Active Database: ${mongoose.connection.db?.databaseName || 'test'}`);
     await syncCollections();
     return true;
   } catch (error: any) {
