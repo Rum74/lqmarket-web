@@ -268,8 +268,10 @@ interface AppContextType {
   totalSystemCompletedSales: number;
   totalSystemAvailableAccounts: number;
   isAutoApproveAccounts: boolean;
+  isSellerEnabled: boolean;
   refreshAllData: () => Promise<void>;
   adminToggleAutoApproveAccounts: (enabled: boolean) => Promise<{ success: boolean; message: string }>;
+  adminToggleSellerEnabled: (enabled: boolean) => Promise<{ success: boolean; message: string }>;
   resetToDefaultData: () => void;
   clearAllDatabaseData: () => Promise<{ success: boolean; message: string }>;
   clearAllFirebaseData: () => Promise<{ success: boolean; message: string }>;
@@ -675,6 +677,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [totalSystemCompletedSales, setTotalSystemCompletedSales] = useState<number>(0);
   const [totalSystemAvailableAccounts, setTotalSystemAvailableAccounts] = useState<number>(0);
   const [isAutoApproveAccounts, setIsAutoApproveAccounts] = useState<boolean>(false);
+  const [isSellerEnabled, setIsSellerEnabled] = useState<boolean>(false);
 
   // ----------------------------------------------------
   // MongoDB Master Data Fetching Function (High-Speed Bootstrap Sync)
@@ -708,6 +711,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (typeof stats.isAutoApprove === 'boolean') {
             setIsAutoApproveAccounts(stats.isAutoApprove);
           }
+        }
+
+        const sellerEnabledVal =
+          payload.seller_enabled ??
+          payload.isSellerEnabled ??
+          payload.settings?.seller_enabled ??
+          bootRes.seller_enabled ??
+          bootRes.isSellerEnabled ??
+          bootRes.settings?.seller_enabled ??
+          stats?.isSellerEnabled ??
+          stats?.seller_enabled;
+        if (typeof sellerEnabledVal !== 'undefined') {
+          setIsSellerEnabled(Boolean(sellerEnabledVal));
         }
 
         const boxActive = payload.isMysteryBoxEventActive ?? bootRes.isMysteryBoxEventActive ?? stats?.isMysteryBoxEventActive;
@@ -2589,6 +2605,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const adminToggleSellerEnabled = async (enabled: boolean): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsSellerEnabled(enabled);
+      const res = await api.put('/api/admin/settings/seller', { enabled });
+      await fetchAllMongoData();
+      return {
+        success: true,
+        message: res?.message || `Đã ${enabled ? 'BẬT' : 'TẮT'} chức năng Người bán thành công.`
+      };
+    } catch (err: any) {
+      await fetchAllMongoData();
+      return {
+        success: false,
+        message: err?.response?.data?.message || err.message || 'Không thể cập nhật cấu hình Người bán vào Database.'
+      };
+    }
+  };
+
   const resetToDefaultData = () => {
     fetchAllMongoData();
   };
@@ -2647,7 +2681,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalSystemCompletedSales,
         totalSystemAvailableAccounts,
         isAutoApproveAccounts,
+        isSellerEnabled,
         adminToggleAutoApproveAccounts,
+        adminToggleSellerEnabled,
         refreshAllData: fetchAllMongoData,
 
         currentView,

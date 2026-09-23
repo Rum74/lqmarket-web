@@ -57,7 +57,8 @@ export const SellAccountView: React.FC = () => {
     allUsers,
     orders,
     openLoginModal,
-    openRegisterModal
+    openRegisterModal,
+    isSellerEnabled
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
@@ -205,6 +206,53 @@ export const SellAccountView: React.FC = () => {
     setFormSubmittedSuccess(true);
     setActiveTab('manage');
   };
+
+  // Seller feature disabled check (Admin always bypasses)
+  if (currentUser.role !== 'admin' && !isSellerEnabled) {
+    return (
+      <div className="p-8 sm:p-12 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-6 max-w-2xl mx-auto my-8 shadow-2xl">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+          <Store size={32} />
+        </div>
+
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
+            <span>THÔNG BÁO TẠM ĐÓNG HỆ THỐNG ĐĂNG BÁN</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white">
+            Chức Năng Người Bán Đang Tạm Đóng
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
+            Hệ thống đăng bán tài khoản và Seller Center hiện đang được tạm dừng bởi Quản trị viên sàn LQMarket để bảo trì hoặc điều chỉnh chính sách. Vui lòng quay lại sau!
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-300 text-left space-y-2">
+          <div className="font-bold text-amber-400">Lưu ý cho thành viên:</div>
+          <ul className="space-y-1 text-slate-400 list-disc list-inside">
+            <li>Các tài khoản đã được phê duyệt vẫn hiển thị và giao dịch bình thường trên sàn.</li>
+            <li>Các giao dịch đang diễn ra và rút tiền về ví vẫn được bảo vệ 100% qua hệ thống Escrow.</li>
+            <li>Admin sàn sẽ mở lại tính năng đăng bán ngay khi hoàn tất điều chỉnh.</li>
+          </ul>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => setCurrentView('accounts')}
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+          >
+            Khám Phá Acc Đang Bán
+          </button>
+          <button
+            onClick={() => setCurrentView('home')}
+            className="w-full sm:w-auto px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+          >
+            Về Trang Chủ
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Guest (Not Logged In) prompt
   if (!currentUser.id) {

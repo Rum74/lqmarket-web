@@ -41,7 +41,8 @@ export const SellerCenterView: React.FC = () => {
     setSelectedAccountId,
     submitSellerVerification,
     sellerVerificationRequests,
-    deleteAccount
+    deleteAccount,
+    isSellerEnabled
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'reviews' | 'verification'>('overview');
@@ -201,6 +202,53 @@ export const SellerCenterView: React.FC = () => {
       setIsSubmittingVerification(false);
     }
   };
+
+  // Seller feature disabled check (Admin always bypasses)
+  if (currentUser.role !== 'admin' && !isSellerEnabled) {
+    return (
+      <div className="p-8 sm:p-12 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-6 max-w-2xl mx-auto my-8 shadow-2xl">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+          <Store size={32} />
+        </div>
+
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
+            <span>THÔNG BÁO TẠM ĐÓNG HỆ THỐNG SELLER CENTER</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white">
+            Seller Center Đang Tạm Đóng
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
+            Khu vực Quản trị Người bán (Seller Center) tạm thời ngừng truy cập đối với thành viên theo chính sách bảo trì của Quản trị viên sàn. Vui lòng quay lại sau!
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-300 text-left space-y-2">
+          <div className="font-bold text-amber-400">Thông tin quan trọng:</div>
+          <ul className="space-y-1 text-slate-400 list-disc list-inside">
+            <li>Số dư ví LQMarket Pay và các yêu cầu rút tiền ATM của bạn vẫn an toàn 100%.</li>
+            <li>Các đơn hàng đã chốt vẫn tiến hành bàn giao qua Escrow.</li>
+            <li>Bạn vẫn có thể nạp/rút tiền ví cá nhân tại menu Tài Khoản.</li>
+          </ul>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => setIsWalletOpen(true)}
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+          >
+            Mở Ví LQMarket Pay
+          </button>
+          <button
+            onClick={() => setCurrentView('home')}
+            className="w-full sm:w-auto px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+          >
+            Về Trang Chủ
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">

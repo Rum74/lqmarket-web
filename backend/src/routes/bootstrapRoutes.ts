@@ -181,10 +181,14 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       s.key === 'mystery_box_enabled'
     );
     const autoApproveSetting = allSettings.find(s => s.key === 'auto_approve_accounts');
+    const sellerEnabledSetting = allSettings.find(s => s.key === 'seller_enabled');
     const isMysteryBoxEventActive = eventActiveSetting
       ? (eventActiveSetting.value !== false && eventActiveSetting.value !== 'false' && eventActiveSetting.value !== 0)
       : true;
     const isAutoApprove = autoApproveSetting ? Boolean(autoApproveSetting.value) : false;
+    const isSellerEnabled = sellerEnabledSetting
+      ? (sellerEnabledSetting.value === true || sellerEnabledSetting.value === 'true' || sellerEnabledSetting.value === 1)
+      : false;
 
     const totalCompletedTransactions = Math.max(totalCompletedOrdersCount, totalSoldAccountsCount, 0);
 
@@ -339,6 +343,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       totalCompletedTransactions,
       isMysteryBoxEventActive,
       isAutoApprove,
+      isSellerEnabled,
+      seller_enabled: isSellerEnabled,
       totalAvailableAccounts: totalApprovedCount
     };
 
@@ -346,7 +352,9 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       mystery_box_event_active: isMysteryBoxEventActive,
       mystery_box_active: isMysteryBoxEventActive,
       mystery_box_enabled: isMysteryBoxEventActive,
-      auto_approve_accounts: isAutoApprove
+      auto_approve_accounts: isAutoApprove,
+      seller_enabled: isSellerEnabled,
+      is_seller_enabled: isSellerEnabled
     };
 
     console.log('[MONGO] /api/bootstrap fetched:', {
@@ -389,6 +397,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       mysteryHistory,
       stats: payloadStats,
       settings: payloadSettings,
+      seller_enabled: isSellerEnabled,
+      isSellerEnabled,
       isMysteryBoxEventActive,
       isAutoApproveAccounts: isAutoApprove,
       currentUser,

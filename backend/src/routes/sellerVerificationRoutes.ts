@@ -3,7 +3,7 @@ import { SellerVerification, ISellerVerification } from '../models/SellerVerific
 import { User } from '../models/User';
 import { Notification } from '../models/Notification';
 import { AuditLog } from '../models/AuditLog';
-import { authenticateToken, requireAdmin, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken, requireAdmin, requireSellerEnabled, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -78,7 +78,7 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
  * POST /api/seller-verifications/apply
  * User submits verification application
  */
-router.post('/apply', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/apply', authenticateToken, requireSellerEnabled, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {

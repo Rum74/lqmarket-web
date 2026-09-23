@@ -510,6 +510,37 @@ router.post('/settings', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// PUT /api/admin/settings/seller
+router.put('/settings/seller', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { enabled } = req.body;
+    const isEnabled = Boolean(enabled);
+    const nowIso = new Date().toISOString();
+
+    await Setting.findOneAndUpdate(
+      { key: 'seller_enabled' },
+      { $set: { value: isEnabled, updatedAt: nowIso } },
+      { upsert: true }
+    );
+
+    console.log(`[ADMIN] seller_enabled set to: ${isEnabled} by admin ${req.user?.userId || 'unknown'}`);
+
+    return res.json({
+      success: true,
+      seller_enabled: isEnabled,
+      message: isEnabled
+        ? 'Đã BẬT chức năng Người bán trên toàn sàn LQMarket.'
+        : 'Đã TẮT chức năng Người bán đối với người dùng bình thường (Admin vẫn toàn quyền).'
+    });
+  } catch (error: any) {
+    console.error('Error toggling seller_enabled:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi cập nhật trạng thái Người bán: ' + error.message
+    });
+  }
+});
+
 // POST /api/admin/clear-database
 router.post('/clear-database', async (req: AuthenticatedRequest, res: Response) => {
   try {

@@ -33,6 +33,7 @@ import priceAlertRoutes from './backend/src/routes/priceAlertRoutes';
 import affiliateRoutes from './backend/src/routes/affiliateRoutes';
 import { referralRouter } from './backend/src/routes/referralRoutes';
 import blindBagRoutes from './backend/src/routes/blindBagRoutes';
+import { Setting } from './backend/src/models/Setting';
 
 // Helper to resolve route modules across ESM and CJS imports
 const getRouter = (routeMod: any) => {
@@ -184,6 +185,26 @@ async function startServer() {
   app.use('/api/affiliate', resolvedAffiliateRoutes);
   app.use('/api/referrals', resolvedReferralRoutes);
   app.use('/api/referral', resolvedReferralRoutes); // Alias
+
+  // Public system settings endpoint (accessible without admin auth)
+  app.get(['/api/settings', '/api/system/settings'], async (req, res) => {
+    try {
+      const settings = await Setting.find().lean();
+      const map: Record<string, any> = {};
+      settings.forEach((s: any) => { map[s.key] = s.value; });
+      const isSellerEnabled = Boolean(map['seller_enabled']);
+      return res.json({
+        success: true,
+        settings: {
+          ...map,
+          seller_enabled: isSellerEnabled
+        },
+        seller_enabled: isSellerEnabled
+      });
+    } catch (e: any) {
+      return res.json({ success: true, seller_enabled: false });
+    }
+  });
 
   // Global Webhook listeners (PayOS IPN)
   app.all('/webhook', (req, res, next) => {

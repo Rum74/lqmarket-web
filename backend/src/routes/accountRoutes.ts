@@ -9,6 +9,7 @@ import {
   authenticateToken,
   optionalAuth,
   requireAdmin,
+  requireSellerEnabled,
   AuthenticatedRequest
 } from '../middleware/auth';
 
@@ -344,7 +345,7 @@ router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response
 });
 
 // POST /api/accounts (Create listing)
-router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', authenticateToken, requireSellerEnabled, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userPayload = req.user;
     if (!userPayload) {

@@ -77,6 +77,8 @@ export const AdminDashboardView: React.FC = () => {
     cloudSyncStatus,
     isAutoApproveAccounts,
     adminToggleAutoApproveAccounts,
+    isSellerEnabled,
+    adminToggleSellerEnabled,
     sellerVerificationRequests,
     disputeTickets
   } = useApp();
@@ -90,6 +92,7 @@ export const AdminDashboardView: React.FC = () => {
   const [isWipingData, setIsWipingData] = useState(false);
   const [isSeedingData, setIsSeedingData] = useState(false);
   const [isTogglingAutoApprove, setIsTogglingAutoApprove] = useState(false);
+  const [isTogglingSeller, setIsTogglingSeller] = useState(false);
   const [showWipeConfirmModal, setShowWipeConfirmModal] = useState(false);
 
   // Accounts Management State
@@ -1286,6 +1289,48 @@ export const AdminDashboardView: React.FC = () => {
             <Settings size={16} className="text-amber-400" />
             <span>Cấu Hình Vận Hành Hệ Thống Sàn LQMarket</span>
           </h3>
+
+          {/* Seller Feature Setting Toggle */}
+          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Store size={16} className="text-amber-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Chức năng Người bán (Seller Feature):</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  isSellerEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {isSellerEnabled ? 'BẬT (CHO PHÉP THÀNH VIÊN ĐĂNG BÁN)' : 'TẮT (CHỈ ADMIN ĐĂNG BÁN)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {isSellerEnabled
+                  ? 'Khi BẬT: Người dùng đủ điều kiện có thể đăng ký làm Người bán, đăng bán tài khoản và quản lý kho bán trong Seller Center.'
+                  : 'Khi TẮT: Vô hiệu hóa nút Đăng Bán và Seller Center đối với người dùng thông thường. Riêng Admin vẫn toàn quyền đăng bán và quản lý acc.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={isTogglingSeller}
+              onClick={async () => {
+                setIsTogglingSeller(true);
+                const nextState = !isSellerEnabled;
+                const res = await adminToggleSellerEnabled(nextState);
+                setIsTogglingSeller(false);
+                showNotification(res.message);
+              }}
+              className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                isSellerEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+              }`}
+              title={isSellerEnabled ? 'Bấm để Tắt chức năng người bán' : 'Bấm để Bật chức năng người bán'}
+            >
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  isSellerEnabled ? 'translate-x-7' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
 
           {/* Auto-Approve Accounts Setting Toggle */}
           <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

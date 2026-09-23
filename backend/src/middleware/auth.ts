@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
+import { Setting } from '../models/Setting';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lqmarket_super_secure_jwt_secret_key_2026_production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -202,3 +203,57 @@ export function requireSeller(
   }
   next();
 }
+
+/**
+ * Check if the seller functionality is enabled system-wide.
+ * Reads the 'seller_enabled' key from the Setting collection.
+ */
+export async function isSellerFeatureEnabled(): Promise<boolean> {
+  try {
+    const setting = await Setting.findOne({ key: 'seller_enabled' });
+    if (!setting) return false;
+    return Boolean(setting.value);
+  } catch (error) {
+    console.error('Error checking seller_enabled setting:', error);
+    return false;
+  }
+}
+
+/**
+ * Middleware to check whether the Seller feature is currently enabled.
+ * CRITICAL RULE:
+ * - Admin users ALWAYS bypass this check and can use seller functions anytime.
+ * - Regular sellers/buyers get 403 Forbidden with code SELLER_DISABLED if seller_enabled is false.
+ */
+export async function requireSellerEnabled(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    // 1. ADMIN BYPASS: Admin is ALWAYS permitted to use seller functions regardless of toggle
+    if (req.user && req.user.role === 'admin') {
+      return next();
+    }
+
+    // 2. Check system-wide setting
+    const enabled = await isSellerFeatureEnabled();
+    if (!enabled) {
+      return res.status(403).json({
+        success: false,
+        code: 'SELLER_DISABLED',
+        errorCode: 'SELLER_DISABLED',
+        message: 'Chức năng Người bán tạm thời bị vô hiệu hóa bởi Quản trị viên.'
+      });
+    }
+
+    return next();
+  } catch (err: any) {
+    console.error('Error in requireSellerEnabled middleware:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi kiểm tra quyền hạn hệ thống.'
+    });
+  }
+}
+

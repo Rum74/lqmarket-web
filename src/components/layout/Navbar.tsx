@@ -50,8 +50,11 @@ export const Navbar: React.FC = () => {
     compareAccountIds,
     setIsCompareModalOpen,
     setIsLoyaltyModalOpen,
-    userInventory
+    userInventory,
+    isSellerEnabled
   } = useApp();
+
+  const canAccessSeller = currentUser?.role === 'admin' || isSellerEnabled;
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -179,8 +182,8 @@ export const Navbar: React.FC = () => {
               </span>
             </button>
 
-            {/* Đăng Bán (Dành cho Người Bán / Admin / Khách) */}
-            {(!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
+            {/* Đăng Bán (Dành cho Người Bán / Admin / Khách khi tính năng Người bán bật hoặc Admin) */}
+            {canAccessSeller && (!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
               <button
                 id="nav-btn-sell"
                 onClick={() => {
@@ -508,7 +511,7 @@ export const Navbar: React.FC = () => {
                           )}
                         </button>
 
-                        {currentUser.role !== 'buyer' && (
+                        {currentUser.role !== 'buyer' && canAccessSeller && (
                           <button
                             onClick={() => {
                               setCurrentView('seller_center');
@@ -543,7 +546,7 @@ export const Navbar: React.FC = () => {
                           <span>Giới thiệu bạn bè (Referral)</span>
                         </button>
 
-                        {currentUser.role !== 'buyer' && (
+                        {currentUser.role !== 'buyer' && canAccessSeller && (
                           <button
                             onClick={() => {
                               setCurrentView('sell');
@@ -681,7 +684,7 @@ export const Navbar: React.FC = () => {
               </span>
             </button>
 
-            {(!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
+            {canAccessSeller && (!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
               <button
                 onClick={() => {
                   if (!isLoggedIn) {
