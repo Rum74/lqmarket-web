@@ -56,7 +56,7 @@ export async function ensureBoxRewards(boxId: string, boxTier: string, boxName: 
   }
 
   // Otherwise, create the standard reward pool: ACCOUNT, FREE_SPIN, VOUCHER
-  const defaultRewardsToCreate = [
+  const defaultRewardsToCreate: Partial<IMysteryReward>[] = [
     {
       id: `rew_${boxId}_acc_${Date.now()}`,
       boxTierId: boxId,
@@ -95,7 +95,7 @@ export async function ensureBoxRewards(boxId: string, boxTier: string, boxName: 
   ];
 
   for (const r of defaultRewardsToCreate) {
-    await MysteryReward.create(r);
+    await MysteryReward.create(r as any);
   }
 
   return await MysteryReward.find(query);
@@ -416,9 +416,10 @@ export async function executeOpenBlindBag({
 
       // Tạo luôn bản ghi Coupon trong DB để người dùng dùng được ngay khi mua nick
       try {
+        const finalVoucherCode: string = grantedVoucherCode || `VCH_${Date.now()}`;
         await Coupon.create({
           id: grantedVoucherId,
-          code: grantedVoucherCode,
+          code: finalVoucherCode,
           discountAmount: grantedVoucherDiscount,
           minOrder: box.price,
           maxUses: 100,

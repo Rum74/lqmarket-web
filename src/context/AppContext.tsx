@@ -405,7 +405,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (userInventory || []).forEach(item => {
       const type = String(item.rewardType || '').toLowerCase();
       if ((type === 'free_turn' || type === 'free_spin') && !item.isUsed) {
-        const tier = item.customData?.boxTierId || 'all';
+        const tier = (item.customData as any)?.boxTierId || 'all';
         turnsMap[tier] = (turnsMap[tier] || 0) + 1;
       }
     });
