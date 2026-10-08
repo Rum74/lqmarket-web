@@ -280,59 +280,15 @@ export const AuthModal: React.FC = () => {
           ) : (
             /* REGISTER FORM */
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-              {/* Role Selection */}
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                  Chọn loại tài khoản bạn muốn đăng ký:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole('buyer')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      selectedRole === 'buyer'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <UserCheck size={16} className={selectedRole === 'buyer' ? 'text-amber-400' : 'text-slate-400'} />
-                      <span className="text-xs font-bold">Khách Mua Hàng</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 leading-tight">
-                      Mua acc Liên Quân, bảo vệ tiền qua Escrow, nạp/rút ví.
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole('seller')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      selectedRole === 'seller'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Store size={16} className={selectedRole === 'seller' ? 'text-amber-400' : 'text-slate-400'} />
-                      <span className="text-xs font-bold">Người Bán (Shop)</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 leading-tight">
-                      Đăng bán acc, quản lý gian hàng, rút tiền về ATM.
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Họ và Tên (hoặc Tên Shop):</label>
+                <label className="text-xs font-medium text-slate-300 block mb-1">Họ và Tên:</label>
                 <div className="relative">
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="Nhập họ và tên hoặc tên shop..."
+                    placeholder="Nhập họ và tên của bạn..."
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                   <User size={14} className="absolute left-3 top-2.5 text-slate-400" />

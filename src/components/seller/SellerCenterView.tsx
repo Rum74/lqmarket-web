@@ -213,13 +213,13 @@ export const SellerCenterView: React.FC = () => {
 
         <div className="space-y-2">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
-            <span>THÔNG BÁO TẠM ĐÓNG HỆ THỐNG SELLER CENTER</span>
+            <span>HỆ THỐNG SHOP LIÊN QUÂN CHÍNH HÃNG</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">
             Seller Center Đang Tạm Đóng
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
-            Khu vực Quản trị Người bán (Seller Center) tạm thời ngừng truy cập đối với thành viên theo chính sách bảo trì của Quản trị viên sàn. Vui lòng quay lại sau!
+            Hệ thống hiện tại vận hành theo mô hình Shop chính thức: Toàn quyền đăng bán tài khoản thuộc về Quản trị viên (Admin). Chức năng Quản trị Người bán (Seller Center) tạm thời ngừng truy cập đối với thành viên cho đến khi Quản trị viên kích hoạt lại.
           </p>
         </div>
 

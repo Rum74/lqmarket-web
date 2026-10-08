@@ -7,54 +7,11 @@ import { authenticateToken, requireAdmin, requireSellerEnabled, AuthenticatedReq
 
 const router = Router();
 
-export const INITIAL_SELLER_VERIFICATIONS: ISellerVerification[] = [
-  {
-    id: 'svr_01',
-    userId: 'u2',
-    userName: 'Tuấn Shop LQ',
-    userEmail: 'tuan@lqmarket.com',
-    userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
-    fullName: 'Nguyễn Văn Tuấn',
-    userPhone: '0988776655',
-    idCardNumber: '001202008899',
-    zaloPhone: '0988776655',
-    socialLink: 'https://facebook.com/tuanshop',
-    agreedWarranty: true,
-    warrantyCommitment: true,
-    status: 'approved',
-    appliedAt: '2025-01-10T08:00:00.000Z',
-    reviewedAt: '2025-01-11T09:00:00.000Z',
-    reviewedBy: 'admin'
-  },
-  {
-    id: 'svr_02',
-    userId: 'u4',
-    userName: 'LQ Pro Seller',
-    userEmail: 'seller@lqmarket.com',
-    userAvatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&auto=format&fit=crop&q=80',
-    fullName: 'Trần Văn Mạnh',
-    userPhone: '0912345678',
-    idCardNumber: '024201004567',
-    zaloPhone: '0912345678',
-    socialLink: 'https://facebook.com/lqproshop',
-    agreedWarranty: true,
-    warrantyCommitment: true,
-    status: 'pending',
-    appliedAt: new Date(Date.now() - 86400000).toISOString()
-  }
-];
+export const INITIAL_SELLER_VERIFICATIONS: ISellerVerification[] = [];
 
 export async function ensureSellerVerificationsSeeded() {
-  try {
-    const count = await SellerVerification.countDocuments();
-    if (count === 0) {
-      for (const item of INITIAL_SELLER_VERIFICATIONS) {
-        await SellerVerification.create(item);
-      }
-    }
-  } catch (err) {
-    console.warn('[SellerVerification] Seeding error:', err);
-  }
+  // Do not insert mock data into production database
+  return;
 }
 
 // Auto-seed in background

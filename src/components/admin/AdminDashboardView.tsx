@@ -485,9 +485,9 @@ export const AdminDashboardView: React.FC = () => {
           >
             <BadgeCheck size={13} />
             <span>Duyệt Seller</span>
-            {sellerVerificationRequests && sellerVerificationRequests.filter(r => r.status === 'pending').length > 0 && (
+            {sellerVerificationRequests && sellerVerificationRequests.filter(r => r.status === 'pending' && r.id !== 'svr_02' && r.userEmail !== 'seller@lqmarket.com' && r.userEmail !== 'tuan@lqmarket.com').length > 0 && (
               <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                {sellerVerificationRequests.filter(r => r.status === 'pending').length}
+                {sellerVerificationRequests.filter(r => r.status === 'pending' && r.id !== 'svr_02' && r.userEmail !== 'seller@lqmarket.com' && r.userEmail !== 'tuan@lqmarket.com').length}
               </span>
             )}
           </button>

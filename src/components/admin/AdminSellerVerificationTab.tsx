@@ -33,7 +33,8 @@ export const AdminSellerVerificationTab: React.FC = () => {
     fetchVerifications();
   }, [fetchVerifications]);
 
-  const activeRequests = dbRequests !== null ? dbRequests : sellerVerificationRequests;
+  const activeRequests = (dbRequests !== null ? dbRequests : sellerVerificationRequests)
+    .filter(r => r.id !== 'svr_02' && r.userEmail !== 'seller@lqmarket.com' && r.userEmail !== 'tuan@lqmarket.com');
   const pendingRequests = activeRequests.filter(r => r.status === 'pending');
   const reviewedRequests = activeRequests.filter(r => r.status !== 'pending');
 

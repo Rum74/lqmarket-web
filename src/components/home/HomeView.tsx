@@ -41,7 +41,9 @@ export const HomeView: React.FC = () => {
     mysteryBoxes,
     totalSystemCompletedSales,
     totalSystemAvailableAccounts,
-    coupons
+    coupons,
+    currentUser,
+    isSellerEnabled
   } = useApp();
 
   const approvedAccounts = accounts.filter(a => a.status === 'approved');
@@ -175,14 +177,25 @@ export const HomeView: React.FC = () => {
               <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
             </button>
 
-            <button
-              id="hero-sell-btn"
-              onClick={() => setCurrentView('sell')}
-              className="w-full sm:w-auto px-5 py-3.5 bg-slate-800/80 hover:bg-slate-700 text-white text-xs sm:text-sm font-bold rounded-2xl border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Zap size={16} className="text-amber-400" />
-              <span>ĐĂNG BÁN ACC CỦA BẠN</span>
-            </button>
+            {(currentUser.role === 'admin' || isSellerEnabled) ? (
+              <button
+                id="hero-sell-btn"
+                onClick={() => setCurrentView('sell')}
+                className="w-full sm:w-auto px-5 py-3.5 bg-slate-800/80 hover:bg-slate-700 text-white text-xs sm:text-sm font-bold rounded-2xl border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Zap size={16} className="text-amber-400" />
+                <span>{currentUser.role === 'admin' ? 'ĐĂNG BÁN ACC (ADMIN)' : 'ĐĂNG BÁN ACC CỦA BẠN'}</span>
+              </button>
+            ) : (
+              <button
+                id="hero-mystery-box-btn"
+                onClick={() => setCurrentView('mystery_box')}
+                className="w-full sm:w-auto px-5 py-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs sm:text-sm font-bold rounded-2xl border border-amber-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Gift size={16} className="text-amber-400" />
+                <span>XÉ TÚI MÙ MAY MẮN</span>
+              </button>
+            )}
           </div>
 
           {/* Trust Metrics Bar - Live from Database */}
@@ -548,13 +561,15 @@ export const HomeView: React.FC = () => {
               </p>
             </div>
 
-            <button
-              onClick={() => setCurrentView('sell')}
-              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-500/30 hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <span>Trở thành người bán</span>
-              <ArrowRight size={14} />
-            </button>
+            {isSellerEnabled && (
+              <button
+                onClick={() => setCurrentView('sell')}
+                className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-xl bg-slate-900 border border-amber-500/30 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <span>Trở thành người bán</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -658,7 +673,7 @@ export const HomeView: React.FC = () => {
             ))}
           </div>
         </section>
-      ) : (
+      ) : (currentUser.role === 'admin' || isSellerEnabled) ? (
         <section className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-slate-900 border border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center sm:text-left">
             <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
@@ -677,6 +692,27 @@ export const HomeView: React.FC = () => {
           >
             <Zap size={16} />
             <span>ĐĂNG BÁN ACC NGAY</span>
+          </button>
+        </section>
+      ) : (
+        <section className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-slate-900 border border-emerald-500/20 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 text-center sm:text-left">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+              <ShieldCheck size={14} />
+              <span>SHOP TÀI KHOẢN LIÊN QUÂN CHÍNH HÃNG</span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-white">Toàn Bộ Acc Được Tuyển Chọn & Bảo Hành 100%</h3>
+            <p className="text-xs text-slate-400 max-w-xl">
+              Tất cả tài khoản trên shop được kiểm định bảo mật, cam kết trắng thông tin hoặc đúng bảo đảm, bàn giao thông tin đăng nhập tức thì ngay sau khi thanh toán.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setCurrentView('accounts')}
+            className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm rounded-2xl transition-all shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+          >
+            <Search size={16} />
+            <span>XEM KHO ACC NGAY</span>
           </button>
         </section>
       )}

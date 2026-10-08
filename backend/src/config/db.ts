@@ -22,6 +22,15 @@ function resolveMongoUri(): string {
     uri = VERIFIED_ATLAS_URI;
   }
 
+  // CRITICAL: Strictly ensure database name in URI is ALWAYS 'test' and NEVER 'lqmarket'
+  if (uri.includes('.mongodb.net/lqmarket')) {
+    uri = uri.replace('.mongodb.net/lqmarket', '.mongodb.net/test');
+  } else if (uri.includes('.mongodb.net/?')) {
+    uri = uri.replace('.mongodb.net/?', '.mongodb.net/test?');
+  } else if (uri.endsWith('.mongodb.net/')) {
+    uri = uri.replace('.mongodb.net/', '.mongodb.net/test');
+  }
+
   return uri;
 }
 

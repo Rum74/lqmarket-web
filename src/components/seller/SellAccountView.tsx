@@ -217,22 +217,22 @@ export const SellAccountView: React.FC = () => {
 
         <div className="space-y-2">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
-            <span>THÔNG BÁO TẠM ĐÓNG HỆ THỐNG ĐĂNG BÁN</span>
+            <span>HỆ THỐNG SHOP LIÊN QUÂN CHÍNH HÃNG</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">
             Chức Năng Người Bán Đang Tạm Đóng
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
-            Hệ thống đăng bán tài khoản và Seller Center hiện đang được tạm dừng bởi Quản trị viên sàn LQMarket để bảo trì hoặc điều chỉnh chính sách. Vui lòng quay lại sau!
+            Hệ thống hiện tại hoạt động theo mô hình Shop chính thức: Toàn quyền đăng bán tài khoản thuộc về Quản trị viên (Admin) để đảm bảo bảo mật và bảo hành tuyệt đối. Chức năng Người bán tự do đang được tạm đóng cho đến khi Quản trị viên kích hoạt lại.
           </p>
         </div>
 
         <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-300 text-left space-y-2">
-          <div className="font-bold text-amber-400">Lưu ý cho thành viên:</div>
+          <div className="font-bold text-amber-400">Chính sách vận hành hiện tại:</div>
           <ul className="space-y-1 text-slate-400 list-disc list-inside">
-            <li>Các tài khoản đã được phê duyệt vẫn hiển thị và giao dịch bình thường trên sàn.</li>
-            <li>Các giao dịch đang diễn ra và rút tiền về ví vẫn được bảo vệ 100% qua hệ thống Escrow.</li>
-            <li>Admin sàn sẽ mở lại tính năng đăng bán ngay khi hoàn tất điều chỉnh.</li>
+            <li>Toàn bộ tài khoản trên shop được Admin kiểm duyệt và bảo hành 100% trắng thông tin.</li>
+            <li>Hệ thống giao dịch tự động, bàn giao thông tin đăng nhập tức thì sau khi thanh toán.</li>
+            <li>Khi Admin mở lại tính năng Người bán, thành viên sẽ có thể nộp hồ sơ đăng bán trở lại.</li>
           </ul>
         </div>
 
@@ -241,7 +241,13 @@ export const SellAccountView: React.FC = () => {
             onClick={() => setCurrentView('accounts')}
             className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/20 cursor-pointer"
           >
-            Khám Phá Acc Đang Bán
+            Khám Phá Kho Acc Shop
+          </button>
+          <button
+            onClick={() => setCurrentView('mystery_box')}
+            className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl border border-slate-700 transition-all cursor-pointer"
+          >
+            Xé Túi Mù May Mắn
           </button>
           <button
             onClick={() => setCurrentView('home')}

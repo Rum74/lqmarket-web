@@ -243,7 +243,17 @@ export async function requireSellerEnabled(
         success: false,
         code: 'SELLER_DISABLED',
         errorCode: 'SELLER_DISABLED',
-        message: 'Chức năng Người bán tạm thời bị vô hiệu hóa bởi Quản trị viên.'
+        message: 'Hệ thống hiện tại hoạt động theo mô hình Shop chính thức: Toàn quyền đăng bán thuộc về Quản trị viên (Admin). Chức năng Người bán tự do đang được tạm đóng.'
+      });
+    }
+
+    // 3. When enabled, only registered sellers or admin can post
+    if (req.user && req.user.role !== 'seller' && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN_NOT_SELLER',
+        errorCode: 'FORBIDDEN_NOT_SELLER',
+        message: 'Bạn cần đăng ký và được duyệt làm Người bán trước khi có thể đăng bán tài khoản.'
       });
     }
 

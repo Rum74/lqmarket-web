@@ -510,8 +510,23 @@ router.post('/settings', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// GET /api/admin/settings/seller
+router.get('/settings/seller', async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const setting = await Setting.findOne({ key: 'seller_enabled' });
+    const isEnabled = setting ? Boolean(setting.value) : false;
+    return res.json({
+      success: true,
+      seller_enabled: isEnabled,
+      isSellerEnabled: isEnabled
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Lỗi đọc cấu hình Người bán: ' + error.message });
+  }
+});
+
 // PUT /api/admin/settings/seller
-router.put('/settings/seller', async (req: AuthenticatedRequest, res: Response) => {
+const handleToggleSeller = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { enabled } = req.body;
     const isEnabled = Boolean(enabled);
@@ -528,6 +543,7 @@ router.put('/settings/seller', async (req: AuthenticatedRequest, res: Response) 
     return res.json({
       success: true,
       seller_enabled: isEnabled,
+      isSellerEnabled: isEnabled,
       message: isEnabled
         ? 'Đã BẬT chức năng Người bán trên toàn sàn LQMarket.'
         : 'Đã TẮT chức năng Người bán đối với người dùng bình thường (Admin vẫn toàn quyền).'
@@ -539,7 +555,10 @@ router.put('/settings/seller', async (req: AuthenticatedRequest, res: Response) 
       message: 'Lỗi cập nhật trạng thái Người bán: ' + error.message
     });
   }
-});
+};
+
+router.put('/settings/seller', handleToggleSeller);
+router.post('/settings/seller', handleToggleSeller);
 
 // POST /api/admin/clear-database
 router.post('/clear-database', async (req: AuthenticatedRequest, res: Response) => {

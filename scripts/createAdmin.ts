@@ -46,7 +46,7 @@ async function createAdmin() {
 
   try {
     console.log('🔄 Đang kết nối tới MongoDB Atlas...');
-    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
+    await mongoose.connect(MONGODB_URI, { dbName: 'test', serverSelectionTimeoutMS: 8000 });
     console.log('✅ Đã kết nối MongoDB Atlas thành công!\n');
 
     // 1. Get inputs from CLI args, env, or interactive prompt

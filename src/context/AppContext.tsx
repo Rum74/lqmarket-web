@@ -538,42 +538,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Seller Verification Requests State
+  // Seller Verification Requests State (Initialized empty, populated purely by API/DB)
   const [sellerVerificationRequests, setSellerVerificationRequests] = useState<SellerVerificationRequest[]>(() => {
     try {
       const saved = localStorage.getItem('lqmarket_seller_verifications');
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 'svr_01',
-          userId: 'u2',
-          userName: 'Tuấn Shop LQ',
-          userEmail: 'tuan@lqmarket.com',
-          userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
-          fullName: 'Nguyễn Văn Tuấn',
-          userPhone: '0988776655',
-          idCardNumber: '001202008899',
-          zaloPhone: '0988776655',
-          socialLink: 'https://facebook.com/tuanshop',
-          agreedWarranty: true,
-          status: 'approved',
-          appliedAt: '2025-01-10T08:00:00.000Z'
-        },
-        {
-          id: 'svr_02',
-          userId: 'u4',
-          userName: 'LQ Pro Seller',
-          userEmail: 'seller@lqmarket.com',
-          userAvatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&auto=format&fit=crop&q=80',
-          fullName: 'Trần Văn Mạnh',
-          userPhone: '0912345678',
-          idCardNumber: '024201004567',
-          zaloPhone: '0912345678',
-          socialLink: 'https://facebook.com/lqproshop',
-          agreedWarranty: true,
-          status: 'pending',
-          appliedAt: new Date().toISOString()
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Strictly purge any legacy mock data containing svr_02 or fake email
+          return parsed.filter(p => p.id !== 'svr_02' && p.userEmail !== 'seller@lqmarket.com' && p.userEmail !== 'tuan@lqmarket.com');
         }
-      ];
+      }
+      return [];
     } catch {
       return [];
     }
@@ -690,7 +666,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [totalSystemCompletedSales, setTotalSystemCompletedSales] = useState<number>(0);
   const [totalSystemAvailableAccounts, setTotalSystemAvailableAccounts] = useState<number>(0);
   const [isAutoApproveAccounts, setIsAutoApproveAccounts] = useState<boolean>(false);
-  const [isSellerEnabled, setIsSellerEnabled] = useState<boolean>(false);
+  const [isSellerEnabled, setIsSellerEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('lqmarket_seller_enabled');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    }
+    return false;
+  });
 
   // ----------------------------------------------------
   // MongoDB Master Data Fetching Function (High-Speed Bootstrap Sync)
@@ -736,7 +720,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           stats?.isSellerEnabled ??
           stats?.seller_enabled;
         if (typeof sellerEnabledVal !== 'undefined') {
-          setIsSellerEnabled(Boolean(sellerEnabledVal));
+          const boolVal = Boolean(sellerEnabledVal);
+          setIsSellerEnabled(boolVal);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lqmarket_seller_enabled', String(boolVal));
+          }
         }
 
         const boxActive = payload.isMysteryBoxEventActive ?? bootRes.isMysteryBoxEventActive ?? stats?.isMysteryBoxEventActive;
@@ -793,22 +781,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const loadedCoupons = payload.coupons || bootRes.coupons;
-        if (Array.isArray(loadedCoupons) && loadedCoupons.length > 0) {
+        if (Array.isArray(loadedCoupons)) {
           setCoupons(loadedCoupons);
         }
 
         const loadedSvr = payload.sellerVerificationRequests || bootRes.sellerVerificationRequests;
-        if (Array.isArray(loadedSvr) && loadedSvr.length > 0) {
-          setSellerVerificationRequests(loadedSvr);
+        if (Array.isArray(loadedSvr)) {
+          const cleanSvr = loadedSvr.filter((r: any) => r.id !== 'svr_02' && r.userEmail !== 'seller@lqmarket.com' && r.userEmail !== 'tuan@lqmarket.com');
+          setSellerVerificationRequests(cleanSvr);
         }
 
         const loadedDisputes = payload.disputeTickets || bootRes.disputeTickets;
-        if (Array.isArray(loadedDisputes) && loadedDisputes.length > 0) {
+        if (Array.isArray(loadedDisputes)) {
           setDisputeTickets(loadedDisputes);
         }
 
         const loadedLogs = payload.adminAuditLogs || bootRes.adminAuditLogs;
-        if (Array.isArray(loadedLogs) && loadedLogs.length > 0) {
+        if (Array.isArray(loadedLogs)) {
           setAdminAuditLogs(loadedLogs);
         }
 
@@ -2621,15 +2610,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const adminToggleSellerEnabled = async (enabled: boolean): Promise<{ success: boolean; message: string }> => {
     try {
+      // Optimistic update
       setIsSellerEnabled(enabled);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lqmarket_seller_enabled', String(enabled));
+      }
+
       const res = await api.put('/api/admin/settings/seller', { enabled });
-      await fetchAllMongoData();
+      if (res && res.success === false) {
+        // Revert on failure
+        const reverted = !enabled;
+        setIsSellerEnabled(reverted);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lqmarket_seller_enabled', String(reverted));
+        }
+        return {
+          success: false,
+          message: res.message || 'Không thể cập nhật cấu hình Người bán vào Database.'
+        };
+      }
+
+      const finalVal = typeof res?.seller_enabled === 'boolean' ? res.seller_enabled : enabled;
+      setIsSellerEnabled(finalVal);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lqmarket_seller_enabled', String(finalVal));
+      }
+
       return {
         success: true,
-        message: res?.message || `Đã ${enabled ? 'BẬT' : 'TẮT'} chức năng Người bán thành công.`
+        message: res?.message || `Đã ${finalVal ? 'BẬT' : 'TẮT'} chức năng Người bán thành công.`
       };
     } catch (err: any) {
-      await fetchAllMongoData();
+      const reverted = !enabled;
+      setIsSellerEnabled(reverted);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lqmarket_seller_enabled', String(reverted));
+      }
       return {
         success: false,
         message: err?.response?.data?.message || err.message || 'Không thể cập nhật cấu hình Người bán vào Database.'
