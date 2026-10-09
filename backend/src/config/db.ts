@@ -87,12 +87,18 @@ export async function connectDB(): Promise<boolean> {
 
 async function syncCollections(): Promise<void> {
   try {
-    const { ensureReferralCollection } = await import('../models/Referral');
-    const { ensureReferralSettingCollection } = await import('../models/ReferralSetting');
-    await Promise.all([
-      ensureReferralCollection().catch(() => {}),
-      ensureReferralSettingCollection().catch(() => {})
-    ]);
+    if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      const collections = await mongoose.connection.db.listCollections().toArray();
+      const colNames = collections.map(c => c.name.toLowerCase());
+      if (!colNames.includes('referrals')) {
+        await mongoose.connection.db.createCollection('referrals').catch(() => {});
+        console.log('✅ Created MongoDB Atlas collection: referrals');
+      }
+      if (!colNames.includes('referralsettings')) {
+        await mongoose.connection.db.createCollection('referralsettings').catch(() => {});
+        console.log('✅ Created MongoDB Atlas collection: referralsettings');
+      }
+    }
   } catch (err: any) {
     console.warn('Sync collections notice:', err?.message || err);
   }
