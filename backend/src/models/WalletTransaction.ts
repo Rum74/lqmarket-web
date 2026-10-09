@@ -6,7 +6,7 @@ export interface IWalletTransaction {
   userId: string;
   userName?: string;
   userEmail?: string;
-  type: 'deposit' | 'withdraw' | 'purchase' | 'seller_payout' | 'refund' | 'referral_reward' | 'affiliate_commission' | 'admin_adjustment';
+  type: 'deposit' | 'deposit_bonus' | 'withdraw' | 'purchase' | 'seller_payout' | 'refund' | 'referral_reward' | 'affiliate_commission' | 'admin_adjustment';
   amount: number;
   status: 'pending' | 'success' | 'failed' | 'cancelled';
   note: string;
@@ -33,7 +33,7 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
     userEmail: { type: String, default: '' },
     type: {
       type: String,
-      enum: ['deposit', 'withdraw', 'purchase', 'seller_payout', 'refund', 'referral_reward', 'affiliate_commission', 'admin_adjustment'],
+      enum: ['deposit', 'deposit_bonus', 'withdraw', 'purchase', 'seller_payout', 'refund', 'referral_reward', 'affiliate_commission', 'admin_adjustment'],
       required: true,
       index: true
     },

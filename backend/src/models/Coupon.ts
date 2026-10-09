@@ -10,6 +10,10 @@ export interface ICoupon {
   maxDiscount?: number;
   maxUses: number;
   usedCount: number;
+  maxUsesPerUser?: number;
+  totalBudget?: number;
+  spentBudget?: number;
+  promotionId?: string;
   validFrom: string;
   validTo: string;
   isActive: boolean;
@@ -27,6 +31,10 @@ const CouponSchema = new Schema<ICoupon>(
     maxDiscount: { type: Number },
     maxUses: { type: Number, default: 500 },
     usedCount: { type: Number, default: 0 },
+    maxUsesPerUser: { type: Number, default: 1 },
+    totalBudget: { type: Number, default: 0 },
+    spentBudget: { type: Number, default: 0 },
+    promotionId: { type: String, default: null, index: true },
     validFrom: { type: String, default: () => new Date().toISOString() },
     validTo: { type: String, default: () => new Date(Date.now() + 365 * 86400000).toISOString() },
     isActive: { type: Boolean, default: true, index: true },

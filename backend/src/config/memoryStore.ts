@@ -324,6 +324,8 @@ export const memoryStore = {
   referralSettings: new MemoryCollection<any>('referralSettings'),
   blindBagAccounts: new MemoryCollection<any>('blindBagAccounts'),
   blindBagClaims: new MemoryCollection<any>('blindBagClaims'),
+  promotions: new MemoryCollection<any>('promotions'),
+  promotionRewardLogs: new MemoryCollection<any>('promotionRewardLogs'),
   createCollection: <T extends { id?: string; _id?: any } = any>(name: string) => new MemoryCollection<T>(name),
 };
 

@@ -482,7 +482,12 @@ export const AdminMysteryBoxManagement: React.FC = () => {
         heroesCount: Number(editAccHeroes) || 45,
         skinsCount: Number(editAccSkins) || 30,
         rareSkinName: editAccRareSkin.trim() || undefined,
-        description: editSubtitle.trim() || undefined
+        description: editSubtitle.trim() || undefined,
+        credentials: {
+          username: '',
+          password: '',
+          securityType: 'Trắng Thông Tin'
+        }
       };
     }
 
@@ -528,7 +533,12 @@ export const AdminMysteryBoxManagement: React.FC = () => {
         heroesCount: 45,
         skinsCount: 30,
         rareSkinName: '',
-        description: newRewardSubtitle.trim() || 'Tài khoản cấp từ Kho ACC Túi Mù'
+        description: newRewardSubtitle.trim() || 'Tài khoản cấp từ Kho ACC Túi Mù',
+        credentials: {
+          username: '',
+          password: '',
+          securityType: 'Trắng Thông Tin'
+        }
       };
     }
 

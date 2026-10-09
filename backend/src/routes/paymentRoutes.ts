@@ -5,6 +5,7 @@ import { User } from '../models/User';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
 import { optionalAuth, AuthenticatedRequest } from '../middleware/auth';
+import { applyDepositBonus } from '../services/promotionService';
 
 const router = Router();
 
@@ -197,6 +198,21 @@ export async function creditUserDeposit(orderCode: number, amount?: number, desc
       await notif.save();
     } catch (notifErr) {
       console.warn('Deposit notification warning:', notifErr);
+    }
+
+    // 8. Safely and idempotently evaluate & grant Promotion Deposit Bonus
+    try {
+      const bonusRes = await applyDepositBonus({
+        userId: targetUser.id,
+        amount: depositAmount,
+        orderCode: numOrderCode,
+        transactionId: finalTx?.id || `tx_${numOrderCode}`
+      });
+      if (bonusRes.success && bonusRes.bonusAmount > 0) {
+        console.log(`🎁 [PROMOTION BONUS GRANTED] +${bonusRes.bonusAmount}đ for order #${numOrderCode} to ${targetUser.name}`);
+      }
+    } catch (bonusErr) {
+      console.warn('⚠️ [PROMOTION BONUS] Failed during deposit reward hook:', bonusErr);
     }
 
     processedOrderCodes.add(numOrderCode);

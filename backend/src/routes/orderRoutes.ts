@@ -6,6 +6,8 @@ import { WalletTransaction } from '../models/WalletTransaction';
 import { Notification } from '../models/Notification';
 import { Review } from '../models/Review';
 import { Coupon } from '../models/Coupon';
+import { Promotion } from '../models/Promotion';
+import { PromotionRewardLog } from '../models/PromotionRewardLog';
 import { processOrderReferralReward } from '../services/referralService';
 import {
   authenticateToken,
@@ -49,7 +51,56 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       });
     }
 
-    const discountedPrice = Math.max(0, account.price - Number(voucherDiscount || 0));
+    // Verify and calculate coupon/voucher discount on backend (Never trust client-sent discount)
+    let verifiedDiscount = 0;
+    let verifiedVoucherCode = '';
+    let matchedCouponDoc: any = null;
+    let matchedPromotionDoc: any = null;
+
+    if (voucherCodeUsed) {
+      const cleanCode = String(voucherCodeUsed).trim().toUpperCase();
+      // 1. Check Coupon model
+      matchedCouponDoc = await Coupon.findOne({ code: cleanCode, isActive: true });
+      // 2. Also check Promotion model with type 'account_discount'
+      matchedPromotionDoc = await Promotion.findOne({ code: cleanCode, type: 'account_discount', isActive: true, status: 'active' });
+
+      const discountSource = matchedCouponDoc || matchedPromotionDoc;
+
+      if (discountSource) {
+        const now = new Date();
+        const validDates =
+          (!discountSource.validFrom || new Date(discountSource.validFrom) <= now) &&
+          (!discountSource.validTo || new Date(discountSource.validTo) >= now) &&
+          (!discountSource.startDate || new Date(discountSource.startDate) <= now) &&
+          (!discountSource.endDate || new Date(discountSource.endDate) >= now);
+
+        const meetsMinOrder = !discountSource.minOrder || account.price >= discountSource.minOrder;
+        const hasRemainingUses = !discountSource.maxUses || discountSource.usedCount < discountSource.maxUses;
+
+        // Check user limit
+        const maxUsesPerUser = discountSource.maxUsesPerUser || 1;
+        const userPriorUsage = await Order.countDocuments({
+          buyerId: buyer.id,
+          voucherCodeUsed: cleanCode
+        });
+
+        if (validDates && meetsMinOrder && hasRemainingUses && userPriorUsage < maxUsesPerUser) {
+          let calcDisc = 0;
+          if (discountSource.discountPercent) {
+            calcDisc = Math.round((account.price * discountSource.discountPercent) / 100);
+            if (discountSource.maxDiscount && calcDisc > discountSource.maxDiscount) {
+              calcDisc = discountSource.maxDiscount;
+            }
+          } else if (discountSource.discountAmount) {
+            calcDisc = discountSource.discountAmount;
+          }
+          verifiedDiscount = Math.min(calcDisc, account.price);
+          verifiedVoucherCode = cleanCode;
+        }
+      }
+    }
+
+    const discountedPrice = Math.max(0, account.price - verifiedDiscount);
     const fee = Math.round(discountedPrice * 0.05); // 5% sàn fee
     const totalAmount = discountedPrice;
 
@@ -93,8 +144,8 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       accountCode: account.code,
       accountTitle: account.title,
       accountPrice: account.price,
-      voucherDiscount: Number(voucherDiscount) || 0,
-      voucherCodeUsed,
+      voucherDiscount: verifiedDiscount,
+      voucherCodeUsed: verifiedVoucherCode || undefined,
       referralCode: cleanRef || undefined,
       affiliateUserId: affiliateUser?.id || undefined,
       fee,
@@ -110,12 +161,42 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 
     await newOrder.save();
 
-    // If coupon was applied, increment its usedCount
-    if (voucherCodeUsed) {
-      Coupon.updateOne(
-        { code: String(voucherCodeUsed).toUpperCase() },
-        { $inc: { usedCount: 1 } }
-      ).catch(() => {});
+    // If coupon was applied, increment its usedCount and record audit log
+    if (verifiedVoucherCode) {
+      if (matchedCouponDoc) {
+        Coupon.updateOne(
+          { code: verifiedVoucherCode },
+          { $inc: { usedCount: 1, spentBudget: verifiedDiscount } }
+        ).catch(() => {});
+      }
+      if (matchedPromotionDoc) {
+        Promotion.updateOne(
+          { code: verifiedVoucherCode },
+          { $inc: { usedCount: 1, spentBudget: verifiedDiscount } }
+        ).catch(() => {});
+      }
+
+      // Record reward log
+      try {
+        await PromotionRewardLog.create({
+          id: `pmlog_order_${orderId}`,
+          promotionId: matchedPromotionDoc?.id || matchedCouponDoc?.id || 'coupon',
+          promotionCode: verifiedVoucherCode,
+          promotionTitle: matchedPromotionDoc?.title || `Mã giảm giá ${verifiedVoucherCode}`,
+          promotionType: 'account_discount',
+          userId: buyer.id,
+          userName: buyer.name,
+          userEmail: buyer.email,
+          orderId,
+          baseAmount: account.price,
+          rewardAmount: verifiedDiscount,
+          status: 'success',
+          note: `Giảm giá mua acc ${account.code} (${orderCode})`,
+          createdAt: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.warn('Coupon reward log warning:', logErr);
+      }
     }
 
     // Record buyer wallet transaction

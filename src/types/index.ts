@@ -570,3 +570,102 @@ export interface ReferralUserStats {
   totalEarned: number;
 }
 
+// ----------------------------------------------------
+// MARKETING & PROMOTION TYPES (HỆ THỐNG KHUYẾN MÃI)
+// ----------------------------------------------------
+export type PromotionType = 'deposit_bonus' | 'account_discount' | 'banner_announcement';
+export type PromotionStatus = 'draft' | 'scheduled' | 'active' | 'paused' | 'expired' | 'out_of_budget';
+export type PromotionTargetAudience = 'all' | 'guest_only' | 'logged_in' | 'new_users_only' | 'first_time_deposit';
+export type PromotionFrequency = 'once_per_session' | 'once_per_day' | 'every_time';
+
+export interface PromotionItem {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  bannerUrl?: string;
+  terms?: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  ctaAction?: 'navigate' | 'copy_code' | 'open_deposit';
+  type: PromotionType;
+  status: PromotionStatus;
+  isActive: boolean;
+  priority: number;
+  showPopup: boolean;
+  popupDelaySeconds: number;
+  popupFrequency: PromotionFrequency;
+  hideHoursAfterClose: number;
+  targetAudience: PromotionTargetAudience;
+  
+  // Deposit Bonus Rules
+  bonusPercent?: number;
+  bonusAmount?: number;
+  minDeposit?: number;
+  maxBonusPerTx?: number;
+  maxBonusPerUser?: number;
+  firstDepositOnly?: boolean;
+
+  // Account Discount Rules
+  discountPercent?: number;
+  discountAmount?: number;
+  minOrder?: number;
+  maxDiscount?: number;
+  maxUsesPerUser?: number;
+
+  // Budget & Usage Limits
+  totalBudget: number;
+  spentBudget: number;
+  maxUses: number;
+  usedCount: number;
+
+  // Analytics
+  impressions: number;
+  clicks: number;
+
+  // Schedule
+  startDate: string;
+  endDate: string;
+
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PromotionRewardLogItem {
+  id: string;
+  promotionId: string;
+  promotionCode: string;
+  promotionTitle?: string;
+  promotionType: 'deposit_bonus' | 'account_discount';
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  orderCode?: number;
+  transactionId?: string;
+  orderId?: string;
+  baseAmount: number;
+  rewardAmount: number;
+  status: 'success' | 'reversed' | 'failed';
+  note?: string;
+  createdAt: string;
+}
+
+export interface PromotionKPIStats {
+  totalPromotions: number;
+  activePromotions: number;
+  totalBudget: number;
+  spentBudget: number;
+  remainingBudget: number;
+  totalImpressions: number;
+  totalClicks: number;
+  ctr: string;
+  totalConversions: number;
+  depositBonusCount: number;
+  totalDepositBonusGranted: number;
+  discountOrderCount: number;
+  totalDiscountGranted: number;
+}
+
+

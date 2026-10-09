@@ -11,6 +11,7 @@ import { AdminCouponsTab } from './AdminCouponsTab';
 import { AdminAuditLogsTab } from './AdminAuditLogsTab';
 import { AdminReferralsTab } from './AdminReferralsTab';
 import { AdminBlindBagWarehouseTab } from './AdminBlindBagWarehouseTab';
+import { AdminMarketingPromotionsTab } from './AdminMarketingPromotionsTab';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -49,7 +50,8 @@ import {
   Gamepad2,
   Tag,
   FileText,
-  Gift
+  Gift,
+  Megaphone
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -84,7 +86,7 @@ export const AdminDashboardView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'payouts' | 'users' | 'mystery_box' | 'blind_bag_warehouse' | 'audit_logs' | 'referrals' | 'settings'
+    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'promotions' | 'payouts' | 'users' | 'mystery_box' | 'blind_bag_warehouse' | 'audit_logs' | 'referrals' | 'settings'
   >('pending');
   const [rejectionModalAccId, setRejectionModalAccId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -502,6 +504,18 @@ export const AdminDashboardView: React.FC = () => {
           >
             <Tag size={13} />
             <span>Mã Giảm Giá</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('promotions')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'promotions'
+                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-white font-black shadow-lg shadow-red-600/30'
+                : 'text-rose-400 hover:text-white bg-rose-500/10 border border-rose-500/20'
+            }`}
+          >
+            <Megaphone size={13} />
+            <span>Marketing & Khuyến Mãi</span>
           </button>
 
           <button
@@ -1470,6 +1484,11 @@ export const AdminDashboardView: React.FC = () => {
       {/* TAB: COUPONS */}
       {activeTab === 'coupons' && (
         <AdminCouponsTab />
+      )}
+
+      {/* TAB: MARKETING & PROMOTIONS */}
+      {activeTab === 'promotions' && (
+        <AdminMarketingPromotionsTab />
       )}
 
       {/* TAB: AUDIT LOGS */}

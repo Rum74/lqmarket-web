@@ -38,6 +38,7 @@ import { ChatModal } from './components/chat/ChatModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { SellerProfileModal } from './components/seller/SellerProfileModal';
 import { ProfileModal } from './components/profile/ProfileModal';
+import { PromotionPopupModal } from './components/common/PromotionPopupModal';
 
 const MainLayout: React.FC = () => {
   const {
@@ -121,6 +122,9 @@ const MainLayout: React.FC = () => {
 
       {/* Live Messenger Modal */}
       <ChatModal />
+
+      {/* Global Marketing Promotion Customer Popup Modal */}
+      <PromotionPopupModal />
 
       {/* Global Footer */}
       <Footer />

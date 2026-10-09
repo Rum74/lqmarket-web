@@ -30,6 +30,7 @@ import affiliateRoutes from './routes/affiliateRoutes';
 import priceAlertRoutes from './routes/priceAlertRoutes';
 import referralRoutes, { referralRouter } from './routes/referralRoutes';
 import blindBagRoutes from './routes/blindBagRoutes';
+import promotionRoutes from './routes/promotionRoutes';
 
 async function startServer() {
   const app = express();
@@ -160,6 +161,8 @@ async function startServer() {
   const resolvedReferralRoutes = referralRoutes || referralRouter;
   app.use('/api/referrals', resolvedReferralRoutes);
   app.use('/api/referral', resolvedReferralRoutes);
+  app.use('/api/promotions', promotionRoutes);
+  app.use('/api/marketing/promotions', promotionRoutes);
 
   // Global Webhook listeners
   app.all('/webhook', (req, res, next) => {
