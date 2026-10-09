@@ -352,7 +352,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  // Core App Collections (Initialized with Stale-While-Revalidate cache for instant 0ms render)
+  const [accounts, setAccounts] = useState<AccountItem[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem('lqmarket_cached_accounts');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [wishlistIds, setWishlistIds] = useState<string[]>(() => {
@@ -380,7 +392,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [wishlistIds]);
 
   // Mystery Box (Túi Mù May Mắn) States
-  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>([]);
+  const [mysteryBoxes, setMysteryBoxes] = useState<MysteryBoxTierConfig[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem('lqmarket_cached_boxes');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [mysteryRewards, setMysteryRewards] = useState<MysteryBoxRewardItem[]>([]);
   const [mysteryHistory, setMysteryHistory] = useState<MysteryBoxHistoryItem[]>([]);
   const [userInventory, setUserInventory] = useState<UserInventoryItem[]>([]);
@@ -663,8 +686,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(DEFAULT_FILTERS);
 
   // System Stats & Config State
-  const [totalSystemCompletedSales, setTotalSystemCompletedSales] = useState<number>(0);
-  const [totalSystemAvailableAccounts, setTotalSystemAvailableAccounts] = useState<number>(0);
+  const [totalSystemCompletedSales, setTotalSystemCompletedSales] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_cached_sales');
+      return saved ? Number(saved) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [totalSystemAvailableAccounts, setTotalSystemAvailableAccounts] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('lqmarket_cached_acc_count');
+      return saved ? Number(saved) : 0;
+    } catch {
+      return 0;
+    }
+  });
   const [isAutoApproveAccounts, setIsAutoApproveAccounts] = useState<boolean>(false);
   const [isSellerEnabled, setIsSellerEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -694,16 +731,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? bootRes.accounts
           : null;
         if (fetchedAccounts) {
-          setAccounts(fetchedAccounts.map(normalizeAccount));
+          const norm = fetchedAccounts.map(normalizeAccount);
+          setAccounts(norm);
+          try {
+            localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(norm.slice(0, 100)));
+          } catch {}
         }
 
         const stats = payload.stats || bootRes.stats;
         if (stats) {
           if (typeof stats.totalAvailableAccounts === 'number') {
             setTotalSystemAvailableAccounts(stats.totalAvailableAccounts);
+            try { localStorage.setItem('lqmarket_cached_acc_count', String(stats.totalAvailableAccounts)); } catch {}
           }
           if (typeof stats.totalCompletedTransactions === 'number') {
             setTotalSystemCompletedSales(stats.totalCompletedTransactions);
+            try { localStorage.setItem('lqmarket_cached_sales', String(stats.totalCompletedTransactions)); } catch {}
           }
           if (typeof stats.isAutoApprove === 'boolean') {
             setIsAutoApproveAccounts(stats.isAutoApprove);
@@ -733,7 +776,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const boxes = Array.isArray(payload.mysteryBoxes) ? payload.mysteryBoxes : Array.isArray(bootRes.mysteryBoxes) ? bootRes.mysteryBoxes : null;
-        if (boxes) setMysteryBoxes(boxes);
+        if (boxes) {
+          setMysteryBoxes(boxes);
+          try { localStorage.setItem('lqmarket_cached_boxes', JSON.stringify(boxes)); } catch {}
+        }
 
         const rewards = Array.isArray(payload.mysteryRewards) ? payload.mysteryRewards : Array.isArray(bootRes.mysteryRewards) ? bootRes.mysteryRewards : null;
         if (rewards) setMysteryRewards(rewards);

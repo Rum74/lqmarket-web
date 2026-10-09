@@ -5,7 +5,15 @@ process.env.TZ = 'Asia/Ho_Chi_Minh';
 
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { connectDB, getDBConnectionStatus } from './config/db';
+import { securityMiddleware } from './middleware/security';
+import {
+  globalRateLimiter,
+  authRateLimiter,
+  paymentRateLimiter,
+  promotionRateLimiter
+} from './middleware/rateLimiter';
 
 // Modular Route Handlers
 import authRoutes from './routes/authRoutes';
@@ -86,6 +94,21 @@ async function startServer() {
   app.options('*', cors());
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Compression
+  app.use(compression({ threshold: 1024 }));
+
+  // Security Middleware (Headers & NoSQL injection sanitization)
+  app.use(securityMiddleware);
+
+  // Rate Limiting
+  app.use('/api', globalRateLimiter);
+  app.use('/api/auth/login', authRateLimiter);
+  app.use('/api/auth/register', authRateLimiter);
+  app.use('/api/payments/create-payment-link', paymentRateLimiter);
+  app.use('/api/payos/create-payment-link', paymentRateLimiter);
+  app.use('/api/promotions/:id/click', promotionRateLimiter);
+  app.use('/api/promotions/:id/impression', promotionRateLimiter);
 
   // Debug Logger for all API requests
   app.use((req, res, next) => {

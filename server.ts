@@ -7,8 +7,18 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
+import compression from 'compression';
 import { connectDB, getDBConnectionStatus } from './backend/src/config/db';
 import { seedMemoryMarketData } from './backend/src/config/memoryStore';
+import { securityMiddleware } from './backend/src/middleware/security';
+import {
+  globalRateLimiter,
+  authRateLimiter,
+  paymentRateLimiter,
+  promotionRateLimiter,
+  uploadRateLimiter,
+  adminRateLimiter
+} from './backend/src/middleware/rateLimiter';
 
 // Modular Route Handlers
 import authRoutes from './backend/src/routes/authRoutes';
@@ -47,6 +57,12 @@ const getRouter = (routeMod: any) => {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // High-performance response compression mounted at the top
+  app.use(compression({
+    threshold: 512,
+    level: 6
+  }));
 
   // CORS Configuration with CLIENT_URL support
   const allowedOrigins = (process.env.CLIENT_URL || '')
@@ -93,6 +109,20 @@ async function startServer() {
   app.options('*', cors());
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Security hardening: Security headers & NoSQL injection sanitization
+  app.use(securityMiddleware);
+
+  // Rate limiting to block hackers, DDoS, and brute force attacks
+  app.use('/api', globalRateLimiter);
+  app.use('/api/auth/login', authRateLimiter);
+  app.use('/api/auth/register', authRateLimiter);
+  app.use('/api/payments/create-payment-link', paymentRateLimiter);
+  app.use('/api/payos/create-payment-link', paymentRateLimiter);
+  app.use('/api/promotions/:id/click', promotionRateLimiter);
+  app.use('/api/promotions/:id/impression', promotionRateLimiter);
+  app.use('/api/upload', uploadRateLimiter);
+  app.use('/api/admin', adminRateLimiter);
 
   // Connect Database (MongoDB Atlas) in background so server binds to port 3000 immediately
   connectDB().catch(err => {

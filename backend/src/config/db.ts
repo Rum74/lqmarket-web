@@ -1,6 +1,4 @@
 import mongoose from 'mongoose';
-import { ensureReferralCollection } from '../models/Referral';
-import { ensureReferralSettingCollection } from '../models/ReferralSetting';
 
 // Disable command buffering so queries do not hang indefinitely when disconnected
 mongoose.set('bufferCommands', false);
@@ -89,9 +87,11 @@ export async function connectDB(): Promise<boolean> {
 
 async function syncCollections(): Promise<void> {
   try {
+    const { ensureReferralCollection } = await import('../models/Referral');
+    const { ensureReferralSettingCollection } = await import('../models/ReferralSetting');
     await Promise.all([
-      ensureReferralCollection(),
-      ensureReferralSettingCollection()
+      ensureReferralCollection().catch(() => {}),
+      ensureReferralSettingCollection().catch(() => {})
     ]);
   } catch (err: any) {
     console.warn('Sync collections notice:', err?.message || err);

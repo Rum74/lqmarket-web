@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PromotionItem, PromotionKPIStats, PromotionRewardLogItem } from '../../types';
 import { api } from '../../lib/apiClient';
 import { PromotionPopupModal } from '../common/PromotionPopupModal';
+import { compressImage } from '../../utils/imageCompressor';
 import {
   Megaphone,
   Plus,
@@ -30,8 +31,43 @@ import {
   Gift,
   HelpCircle,
   ShieldCheck,
-  Send
+  Send,
+  Upload,
+  Image as ImageIcon,
+  FolderOpen,
+  Loader2,
+  X,
+  Check,
+  ExternalLink
 } from 'lucide-react';
+
+const PRESET_BANNERS = [
+  {
+    name: 'Đại Tiệc Nạp Ví VietQR',
+    tag: 'Thưởng 5-10%',
+    url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80'
+  },
+  {
+    name: 'Siêu Sale Acc VIP Skin SSS',
+    tag: 'Giảm 10-20%',
+    url: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80'
+  },
+  {
+    name: 'Túi Mù May Mắn Vận Đỏ',
+    tag: 'Trúng Acc VIP',
+    url: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1200&q=80'
+  },
+  {
+    name: 'Tân Thủ Khởi Đầu Vinh Quang',
+    tag: 'Tặng 20.000đ',
+    url: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=1200&q=80'
+  },
+  {
+    name: 'Đại Chiến Mùa Hè - Tri Ân Game Thủ',
+    tag: 'Sự Kiện Hot',
+    url: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1200&q=80'
+  }
+];
 
 export const AdminMarketingPromotionsTab: React.FC = () => {
   const { currentUser } = useApp();
@@ -59,6 +95,86 @@ export const AdminMarketingPromotionsTab: React.FC = () => {
   const [retryOrderCodeInput, setRetryOrderCodeInput] = useState('');
   const [isRetryingBonus, setIsRetryingBonus] = useState(false);
   const [retryResultMsg, setRetryResultMsg] = useState<string | null>(null);
+
+  // Banner Upload & Media Library State
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [uploadBannerError, setUploadBannerError] = useState<string | null>(null);
+  const [showCustomUrlInput, setShowCustomUrlInput] = useState(false);
+
+  // Media Library Modal State
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
+  const [mediaLibraryItems, setMediaLibraryItems] = useState<any[]>([]);
+  const [selectedMediaCategory, setSelectedMediaCategory] = useState<string>('all');
+  const [mediaSearchTerm, setMediaSearchTerm] = useState<string>('');
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+
+  const fetchMediaLibrary = async () => {
+    try {
+      setIsLoadingMedia(true);
+      const res: any = await api.get('/api/upload/library');
+      if (res && Array.isArray(res.items)) {
+        setMediaLibraryItems(res.items);
+      }
+    } catch (err) {
+      console.warn('Error loading media library:', err);
+    } finally {
+      setIsLoadingMedia(false);
+    }
+  };
+
+  const handleOpenMediaLibrary = () => {
+    setIsMediaLibraryOpen(true);
+    fetchMediaLibrary();
+  };
+
+  const handleSelectMediaItem = (item: any) => {
+    setFormData(prev => ({ ...prev, bannerUrl: item.url }));
+    setIsMediaLibraryOpen(false);
+    flashSuccess(`Đã chọn banner: "${item.title || 'Thành công'}"`);
+  };
+
+  const handleBannerFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadBannerError('Vui lòng chọn tệp hình ảnh hợp lệ (JPG, PNG, WebP).');
+      return;
+    }
+
+    try {
+      setIsUploadingBanner(true);
+      setUploadBannerError(null);
+
+      // 1. Client-side Canvas compression (optimizes to 1280x720, ~40-60KB)
+      const compressedDataUrl = await compressImage(file, {
+        maxWidth: 1280,
+        maxHeight: 720,
+        quality: 0.85,
+        mimeType: 'image/jpeg'
+      });
+
+      // 2. Call /api/upload
+      const uploadRes: any = await api.post('/api/upload', {
+        image: compressedDataUrl,
+        filename: file.name,
+        title: formData.title || file.name,
+        category: formData.type === 'deposit_bonus' ? 'deposit' : formData.type === 'account_discount' ? 'sale' : 'banner'
+      });
+
+      const finalUrl = uploadRes?.url || uploadRes?.imageUrl || compressedDataUrl;
+      setFormData(prev => ({ ...prev, bannerUrl: finalUrl }));
+      fetchMediaLibrary(); // Refresh library with newly uploaded image
+      flashSuccess('Đã tải ảnh banner lên thành công!');
+    } catch (err: any) {
+      console.warn('Banner upload error:', err);
+      setUploadBannerError(err?.message || 'Không thể tải ảnh lên. Vui lòng thử lại.');
+    } finally {
+      setIsUploadingBanner(false);
+      if (e.target) e.target.value = '';
+    }
+  };
 
   // Form State
   const defaultFormData: Partial<PromotionItem> = {
@@ -889,15 +1005,182 @@ export const AdminMarketingPromotionsTab: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="text-slate-300 font-bold block mb-1">Banner URL (Ảnh bìa popup)</label>
+                {/* BANNER SELECTION & UPLOAD SECTION */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-300 font-bold block text-sm">
+                      Banner popup (Ảnh bìa chương trình) *
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-medium">
+                      Khuyến nghị: 1200x630 (16:9) hoặc 1080x1080 (1:1)
+                    </span>
+                  </div>
+
+                  {/* Hidden File Input */}
                   <input
-                    type="text"
-                    value={formData.bannerUrl}
-                    onChange={e => setFormData({ ...formData, bannerUrl: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:border-rose-500"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleBannerFileSelect}
+                    className="hidden"
                   />
+
+                  {/* Current Selected Banner Preview Card */}
+                  {formData.bannerUrl ? (
+                    <div className="relative rounded-2xl overflow-hidden border border-rose-500/40 bg-slate-950 p-2 group shadow-lg shadow-black/40">
+                      <div className="relative aspect-[16/9] sm:aspect-[21/9] w-full rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center">
+                        <img
+                          src={formData.bannerUrl}
+                          alt="Banner Preview"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
+
+                        {/* Top Info Badges */}
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/90 text-white text-[11px] font-bold shadow-md">
+                          <Check size={12} />
+                          <span>Banner đã sẵn sàng</span>
+                        </div>
+
+                        {/* Action Buttons Overlay */}
+                        <div className="absolute bottom-2 right-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-bold border border-slate-700 shadow-md flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Upload size={12} />
+                            Đổi ảnh khác
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, bannerUrl: '' })}
+                            className="px-2.5 py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-bold shadow-md flex items-center gap-1 cursor-pointer"
+                            title="Xóa banner hiện tại"
+                          >
+                            <X size={12} />
+                            Gỡ bỏ
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Empty Placeholder Box */
+                    <div className="rounded-2xl border-2 border-dashed border-slate-800 hover:border-slate-700 bg-slate-950/60 p-4 text-center transition-colors">
+                      <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-400 mx-auto flex items-center justify-center mb-2">
+                        <ImageIcon size={24} />
+                      </div>
+                      <p className="text-slate-300 font-bold text-sm mb-1">Chưa có ảnh banner cho popup</p>
+                      <p className="text-slate-500 text-xs mb-3">
+                        Tải ảnh từ máy tính hoặc chọn banner chuẩn thiết kế có sẵn trong thư viện
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Banner Action Buttons Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {/* 1. Upload from Computer / Device */}
+                    <button
+                      type="button"
+                      disabled={isUploadingBanner}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50 transition-all"
+                    >
+                      {isUploadingBanner ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          <span>Đang nén & tải lên...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={14} />
+                          <span>Tải ảnh từ thiết bị</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* 2. Choose from Media Library */}
+                    <button
+                      type="button"
+                      onClick={handleOpenMediaLibrary}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 border border-slate-700 hover:border-amber-500/40 shadow-md cursor-pointer transition-all"
+                    >
+                      <FolderOpen size={14} />
+                      <span>Thư viện banner</span>
+                      {mediaLibraryItems.length > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-[10px] text-amber-300">
+                          {mediaLibraryItems.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* 3. Toggle Custom URL */}
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
+                      className={`px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                        showCustomUrlInput
+                          ? 'bg-slate-800 text-rose-400 border-rose-500/50'
+                          : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-800'
+                      }`}
+                    >
+                      <ExternalLink size={14} />
+                      <span>{showCustomUrlInput ? 'Đóng ô link' : 'Nhập URL ngoài'}</span>
+                    </button>
+                  </div>
+
+                  {/* Upload Error Banner */}
+                  {uploadBannerError && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                      <AlertCircle size={14} className="shrink-0" />
+                      <span>{uploadBannerError}</span>
+                    </div>
+                  )}
+
+                  {/* Optional Custom URL Text Field */}
+                  {showCustomUrlInput && (
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1 animate-fadeIn">
+                      <label className="text-slate-400 text-[11px] block font-medium">
+                        Dán đường dẫn ảnh trực tiếp (CDN / Cloudflare / Imgur):
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.bannerUrl || ''}
+                        onChange={e => setFormData({ ...formData, bannerUrl: e.target.value })}
+                        placeholder="https://images.unsplash.com/... hoặc link ảnh bất kỳ"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-rose-500 font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {/* Quick Preset Selector Chips */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] text-slate-400 font-medium block">
+                      Gợi ý banner nhanh:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PRESET_BANNERS.slice(0, 4).map((p, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, bannerUrl: p.url })}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                            formData.bannerUrl === p.url
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500'
+                              : 'bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          <span>{p.name}</span>
+                          <span className="text-[9px] opacity-70">({p.tag})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1203,6 +1486,233 @@ export const AdminMarketingPromotionsTab: React.FC = () => {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: THƯ VIỆN ẢNH BANNER MARKETING & POPUP LQMARKET */}
+      {/* ======================================================== */}
+      {isMediaLibraryOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700/90 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl shadow-black">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-500 to-amber-500 text-white flex items-center justify-center shadow-lg shadow-rose-950/40">
+                  <FolderOpen size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                    <span>Thư Viện Ảnh Banner LQMarket</span>
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[11px] font-bold">
+                      {mediaLibraryItems.length || PRESET_BANNERS.length} ảnh
+                    </span>
+                  </h3>
+                  <p className="text-slate-400 text-xs">
+                    Chọn nhanh banner thiết kế sẵn hoặc tải ảnh mới từ thiết bị để gắn vào popup
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isUploadingBanner}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                >
+                  <Upload size={13} />
+                  <span>Tải ảnh mới</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMediaLibraryOpen(false)}
+                  className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="p-4 border-b border-slate-800/80 bg-slate-950/40 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Category Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                {[
+                  { id: 'all', label: 'Tất cả ảnh' },
+                  { id: 'deposit', label: 'Thưởng nạp ví' },
+                  { id: 'sale', label: 'Mã giảm giá' },
+                  { id: 'event', label: 'Sự kiện / Banner' },
+                  { id: 'uploaded', label: 'Đã tải lên' }
+                ].map(cat => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedMediaCategory(cat.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      selectedMediaCategory === cat.id
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'bg-slate-800/70 text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Box */}
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={mediaSearchTerm}
+                  onChange={e => setMediaSearchTerm(e.target.value)}
+                  placeholder="Tìm kiếm banner..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            {/* Media Grid */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {isLoadingMedia ? (
+                <div className="py-16 text-center text-slate-400 space-y-3">
+                  <Loader2 size={32} className="animate-spin text-rose-500 mx-auto" />
+                  <p className="text-sm">Đang tải danh mục thư viện ảnh...</p>
+                </div>
+              ) : (
+                (() => {
+                  // Merge preset banners with dynamic library items
+                  const allItems: any[] = mediaLibraryItems.length > 0
+                    ? mediaLibraryItems
+                    : PRESET_BANNERS.map((p, idx) => ({
+                        id: `preset_${idx}`,
+                        title: p.name,
+                        category: p.tag.includes('Nạp') ? 'deposit' : p.tag.includes('Giảm') ? 'sale' : 'event',
+                        url: p.url,
+                        recommendedTag: p.tag,
+                        uploadedAt: new Date().toISOString()
+                      }));
+
+                  // Apply Category Filter & Search
+                  const filtered = allItems.filter(item => {
+                    const matchCategory =
+                      selectedMediaCategory === 'all' ||
+                      item.category === selectedMediaCategory ||
+                      (selectedMediaCategory === 'event' && item.category === 'banner');
+
+                    const matchSearch =
+                      !mediaSearchTerm.trim() ||
+                      (item.title && item.title.toLowerCase().includes(mediaSearchTerm.toLowerCase())) ||
+                      (item.recommendedTag && item.recommendedTag.toLowerCase().includes(mediaSearchTerm.toLowerCase()));
+
+                    return matchCategory && matchSearch;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="py-16 text-center text-slate-400 space-y-3 bg-slate-950/40 rounded-2xl border border-slate-800 p-6">
+                        <ImageIcon size={40} className="text-slate-600 mx-auto" />
+                        <p className="text-sm font-bold text-slate-300">Không tìm thấy banner phù hợp</p>
+                        <p className="text-xs text-slate-500">
+                          Thử đổi từ khóa tìm kiếm hoặc bấm nút "Tải ảnh mới" để thêm banner từ máy tính của bạn.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {filtered.map((item, idx) => {
+                        const isCurrent = formData.bannerUrl === item.url;
+                        return (
+                          <div
+                            key={item.id || idx}
+                            className={`group relative rounded-2xl overflow-hidden border transition-all flex flex-col bg-slate-950 ${
+                              isCurrent
+                                ? 'border-emerald-500 shadow-lg shadow-emerald-950/30'
+                                : 'border-slate-800 hover:border-rose-500/50 hover:shadow-lg hover:shadow-rose-950/20'
+                            }`}
+                          >
+                            {/* Thumbnail */}
+                            <div className="relative aspect-[16/9] w-full bg-slate-900 overflow-hidden">
+                              <img
+                                src={item.url}
+                                alt={item.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src =
+                                    'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                              {/* Category Badge */}
+                              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold border border-white/10">
+                                {item.recommendedTag || (item.category === 'deposit' ? 'Thưởng nạp' : item.category === 'sale' ? 'Mã giảm giá' : 'Banner')}
+                              </span>
+
+                              {/* Current Selected Badge */}
+                              {isCurrent && (
+                                <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-md flex items-center gap-1">
+                                  <Check size={10} /> Đang dùng
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Info & Select Button */}
+                            <div className="p-3 flex-1 flex flex-col justify-between gap-2 bg-slate-900/60">
+                              <div>
+                                <h4 className="font-bold text-xs text-white line-clamp-1 group-hover:text-rose-400 transition-colors">
+                                  {item.title}
+                                </h4>
+                                <span className="text-[10px] text-slate-500">Chuẩn 16:9 • Độ nét cao</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSelectMediaItem(item)}
+                                className={`w-full py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                  isCurrent
+                                    ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40'
+                                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md'
+                                }`}
+                              >
+                                {isCurrent ? (
+                                  <>
+                                    <Check size={12} />
+                                    <span>Đã áp dụng</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles size={12} />
+                                    <span>Sử dụng ảnh này</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+              <span>💡 Mẹo: Ảnh tải từ thiết bị sẽ được tự động tối ưu hóa dung lượng (Canvas JPG 85%) trước khi đưa vào thư viện.</span>
+              <button
+                type="button"
+                onClick={() => setIsMediaLibraryOpen(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold cursor-pointer"
+              >
+                Đóng thư viện
+              </button>
+            </div>
           </div>
         </div>
       )}

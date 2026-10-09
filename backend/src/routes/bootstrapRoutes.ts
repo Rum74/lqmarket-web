@@ -26,22 +26,42 @@ import {
 
 const router = Router();
 
+// One-time initialization guard to avoid querying MongoDB on every HTTP request
+let hasExecutedInitialSeed = false;
+
+// Micro-cache for public (unauthenticated) bootstrap requests (25-second TTL)
+let publicBootstrapCache: { payload: any; timestamp: number } | null = null;
+const CACHE_TTL_MS = 25000;
+
+export function invalidateBootstrapCache() {
+  publicBootstrapCache = null;
+}
+
 /**
  * GET /api/bootstrap
  * Ultra-fast aggregation endpoint that fetches initial marketplace data
- * in single parallel database roundtrip.
+ * in single parallel database roundtrip with in-memory caching.
  */
 router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const currentUserId = req.user?.userId;
     const isUserAdmin = req.user?.role === 'admin';
 
-    // Ensure initial coupons, seller verifications, and audit logs exist
-    await Promise.all([
-      ensureCouponsSeeded().catch(() => {}),
-      ensureSellerVerificationsSeeded().catch(() => {}),
-      ensureAuditLogsSeeded().catch(() => {})
-    ]);
+    // Fast-path: return cached public payload for guests (sub-1ms response)
+    if (!currentUserId && publicBootstrapCache && (Date.now() - publicBootstrapCache.timestamp < CACHE_TTL_MS)) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(publicBootstrapCache.payload);
+    }
+
+    // Ensure initial coupons, seller verifications, and audit logs exist once only
+    if (!hasExecutedInitialSeed) {
+      hasExecutedInitialSeed = true;
+      Promise.all([
+        ensureCouponsSeeded().catch(() => {}),
+        ensureSellerVerificationsSeeded().catch(() => {}),
+        ensureAuditLogsSeeded().catch(() => {})
+      ]).catch(() => {});
+    }
 
     // 1. Fetch core marketplace collections in parallel
     const [
@@ -85,14 +105,14 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       Setting.find().lean(),
       MysteryBox.find().lean(),
       MysteryReward.find().lean(),
-      MysteryHistory.find().sort({ createdAt: -1 }).limit(30).lean(),
+      MysteryHistory.find().sort({ createdAt: -1 }).limit(10).lean(),
       WalletTransaction.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
         .sort({ createdAt: -1 })
-        .limit(300)
+        .limit(isUserAdmin ? 150 : 60)
         .lean(),
       WithdrawalRequest.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
         .sort({ createdAt: -1 })
-        .limit(300)
+        .limit(isUserAdmin ? 150 : 60)
         .lean(),
       Coupon.find(isUserAdmin ? {} : { isActive: true })
         .sort({ createdAt: -1 })
@@ -366,7 +386,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       couponsCount: couponsRaw.length
     });
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data: {
         accounts,
@@ -390,31 +410,27 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         adminAuditLogs: isUserAdmin ? auditLogs : [],
         priceAlerts
       },
-      // Root-level fields for direct compatibility with legacy or flat consumers
-      accounts,
-      mysteryBoxes,
-      mysteryRewards,
-      mysteryHistory,
+      // Root-level fields: include scalar metadata for direct compatibility without 4MB payload duplication
       stats: payloadStats,
       settings: payloadSettings,
       seller_enabled: isSellerEnabled,
       isSellerEnabled,
       isMysteryBoxEventActive,
       isAutoApproveAccounts: isAutoApprove,
-      currentUser,
-      allUsers: isUserAdmin ? allUsers : undefined,
-      orders: userOrders,
-      transactions: mergedTransactions,
-      withdrawals: allWithdrawalsRaw,
-      userInventory,
-      notifications: userNotifications,
-      conversations: userConversations,
-      coupons: couponsRaw,
-      sellerVerificationRequests: sellerVerifications,
-      disputeTickets: disputes,
-      adminAuditLogs: isUserAdmin ? auditLogs : [],
-      priceAlerts
-    });
+      currentUser
+    };
+
+    // Set client caching header for fast browser rendering
+    res.setHeader('Cache-Control', currentUserId ? 'private, no-cache' : 'public, max-age=15');
+
+    if (!currentUserId) {
+      publicBootstrapCache = {
+        payload: responsePayload,
+        timestamp: Date.now()
+      };
+    }
+
+    return res.json(responsePayload);
   } catch (error: any) {
     console.error('Error in /api/bootstrap:', error);
     return res.status(500).json({

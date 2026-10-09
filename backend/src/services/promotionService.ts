@@ -76,7 +76,10 @@ export const INITIAL_PROMOTIONS_SEED: Partial<IPromotion>[] = [
   }
 ];
 
+let hasPromotionsSeeded = false;
+
 export async function ensurePromotionsSeeded() {
+  if (hasPromotionsSeeded) return;
   try {
     const count = await Promotion.countDocuments();
     if (count === 0) {
@@ -85,6 +88,7 @@ export async function ensurePromotionsSeeded() {
       }
       console.log('[PROMOTION] Seeded initial marketing promotions into database');
     }
+    hasPromotionsSeeded = true;
   } catch (err) {
     console.warn('[PROMOTION] Seed notice:', err);
   }
