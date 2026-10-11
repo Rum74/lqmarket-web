@@ -34,7 +34,8 @@ export const PromotionPopupModal: React.FC<PromotionPopupModalProps> = ({
     isLoggedIn,
     setCurrentView,
     setIsWalletOpen,
-    setIsWalletModalOpen
+    setIsWalletModalOpen,
+    openLoginModal
   } = useApp();
 
   const [activePromo, setActivePromo] = useState<PromotionItem | null>(null);
@@ -173,10 +174,23 @@ export const PromotionPopupModal: React.FC<PromotionPopupModalProps> = ({
 
     handleClose();
 
-    if (activePromo.ctaAction === 'open_deposit') {
+    // Check if CTA target is deposit / wallet topup
+    const isDepositAction =
+      activePromo.ctaAction === 'open_deposit' ||
+      activePromo.type === 'deposit_bonus' ||
+      (activePromo.ctaUrl && (activePromo.ctaUrl.includes('wallet') || activePromo.ctaUrl.includes('nap-tien')));
+
+    if (isDepositAction) {
+      if (!isLoggedIn) {
+        openLoginModal();
+        return;
+      }
       setIsWalletOpen(true);
       setIsWalletModalOpen(true);
-    } else if (activePromo.ctaAction === 'copy_code') {
+      return;
+    }
+
+    if (activePromo.ctaAction === 'copy_code') {
       if (activePromo.code) {
         navigator.clipboard?.writeText(activePromo.code);
         setCopiedCode(true);
@@ -185,10 +199,7 @@ export const PromotionPopupModal: React.FC<PromotionPopupModalProps> = ({
     } else {
       // Navigate to destination
       const targetUrl = activePromo.ctaUrl || '/';
-      if (targetUrl.includes('wallet') || targetUrl.includes('nap-tien')) {
-        setIsWalletOpen(true);
-        setIsWalletModalOpen(true);
-      } else if (targetUrl.includes('account') || targetUrl.includes('tai-khoan')) {
+      if (targetUrl.includes('account') || targetUrl.includes('tai-khoan')) {
         setCurrentView('accounts');
       } else if (targetUrl.startsWith('http')) {
         window.open(targetUrl, '_blank');

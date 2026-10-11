@@ -729,13 +729,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? payload.accounts
           : Array.isArray(bootRes.accounts)
           ? bootRes.accounts
+          : Array.isArray(payload?.data?.accounts)
+          ? payload.data.accounts
+          : Array.isArray(bootRes?.data?.accounts)
+          ? bootRes.data.accounts
           : null;
-        if (fetchedAccounts) {
+
+        if (Array.isArray(fetchedAccounts) && fetchedAccounts.length > 0) {
           const norm = fetchedAccounts.map(normalizeAccount);
           setAccounts(norm);
           try {
             localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(norm.slice(0, 100)));
           } catch {}
+        } else {
+          // Resilient fallback: fetch /api/accounts directly if bootstrap did not return accounts
+          api.get('/api/accounts?limit=100')
+            .then(accRes => {
+              const list = accRes?.data || accRes?.accounts;
+              if (Array.isArray(list) && list.length > 0) {
+                const norm = list.map(normalizeAccount);
+                setAccounts(norm);
+                try {
+                  localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(norm.slice(0, 100)));
+                } catch {}
+              }
+            })
+            .catch(() => {});
         }
 
         const stats = payload.stats || bootRes.stats;

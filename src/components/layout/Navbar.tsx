@@ -660,7 +660,10 @@ export const Navbar: React.FC = () => {
                 <span>Tất Cả Acc Liên Quân</span>
               </div>
               <span className="text-[10px] font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
-                {accounts.filter(a => a.status === 'approved').length} acc
+                {accounts.filter(a => {
+                  const s = String(a.status || '').toLowerCase();
+                  return s === 'approved' || s === 'active' || s === 'available' || (!a.status && s !== 'sold' && s !== 'rejected' && s !== 'hidden');
+                }).length} acc
               </span>
             </button>
 

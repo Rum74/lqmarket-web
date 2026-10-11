@@ -48,7 +48,13 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     const isUserAdmin = req.user?.role === 'admin';
 
     // Fast-path: return cached public payload for guests (sub-1ms response)
-    if (!currentUserId && publicBootstrapCache && (Date.now() - publicBootstrapCache.timestamp < CACHE_TTL_MS)) {
+    if (
+      !currentUserId &&
+      publicBootstrapCache &&
+      Date.now() - publicBootstrapCache.timestamp < CACHE_TTL_MS &&
+      Array.isArray(publicBootstrapCache.payload?.data?.accounts) &&
+      publicBootstrapCache.payload.data.accounts.length > 0
+    ) {
       res.setHeader('X-Cache', 'HIT');
       return res.json(publicBootstrapCache.payload);
     }
@@ -77,43 +83,59 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       allWithdrawalsRaw,
       couponsRaw
     ] = await Promise.all([
-      // Fetch accounts (Admin gets all, regular user gets all approved + sold + their own)
+      // Fetch accounts (Admin gets all, regular user/guest gets all approved + sold + active + unassigned)
       Account.find(
-        isUserAdmin
+        (isUserAdmin
           ? {}
           : currentUserId
           ? {
               $or: [
-                { status: { $in: ['approved', 'sold'] } },
+                { status: { $in: ['approved', 'sold', 'active', 'available', 'Approved'] } },
                 { sellerId: currentUserId },
-                { status: { $exists: false } }
+                { status: { $exists: false } },
+                { status: null },
+                { status: '' }
               ]
             }
           : {
               $or: [
-                { status: { $in: ['approved', 'sold'] } },
-                { status: { $exists: false } }
+                { status: { $in: ['approved', 'sold', 'active', 'available', 'Approved'] } },
+                { status: { $exists: false } },
+                { status: null },
+                { status: '' }
               ]
-            }
+            }) as any
       )
         .sort({ createdAt: -1 })
         .lean(),
 
-      Account.countDocuments({ status: 'approved' }),
+      Account.countDocuments({
+        $or: [
+          { status: { $in: ['approved', 'active', 'available', 'Approved'] } },
+          { status: { $exists: false } },
+          { status: null },
+          { status: '' }
+        ]
+      } as any),
       Order.countDocuments({ status: 'completed' }),
       Account.countDocuments({ status: 'sold' }),
       Setting.find().lean(),
       MysteryBox.find().lean(),
       MysteryReward.find().lean(),
       MysteryHistory.find().sort({ createdAt: -1 }).limit(10).lean(),
-      WalletTransaction.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
-        .sort({ createdAt: -1 })
-        .limit(isUserAdmin ? 150 : 60)
-        .lean(),
-      WithdrawalRequest.find(isUserAdmin ? {} : currentUserId ? { userId: currentUserId } : {})
-        .sort({ createdAt: -1 })
-        .limit(isUserAdmin ? 150 : 60)
-        .lean(),
+      // Unauthenticated guests have no transactions or withdrawals, avoid DB query
+      currentUserId || isUserAdmin
+        ? WalletTransaction.find(isUserAdmin ? {} : { userId: currentUserId })
+            .sort({ createdAt: -1 })
+            .limit(isUserAdmin ? 150 : 60)
+            .lean()
+        : Promise.resolve([]),
+      currentUserId || isUserAdmin
+        ? WithdrawalRequest.find(isUserAdmin ? {} : { userId: currentUserId })
+            .sort({ createdAt: -1 })
+            .limit(isUserAdmin ? 150 : 60)
+            .lean()
+        : Promise.resolve([]),
       Coupon.find(isUserAdmin ? {} : { isActive: true })
         .sort({ createdAt: -1 })
         .lean()
@@ -410,7 +432,8 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         adminAuditLogs: isUserAdmin ? auditLogs : [],
         priceAlerts
       },
-      // Root-level fields: include scalar metadata for direct compatibility without 4MB payload duplication
+      // Root-level fields: include accounts so any direct or flat client consumers never get undefined
+      accounts,
       stats: payloadStats,
       settings: payloadSettings,
       seller_enabled: isSellerEnabled,
@@ -423,7 +446,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
     // Set client caching header for fast browser rendering
     res.setHeader('Cache-Control', currentUserId ? 'private, no-cache' : 'public, max-age=15');
 
-    if (!currentUserId) {
+    if (!currentUserId && Array.isArray(accounts) && accounts.length > 0) {
       publicBootstrapCache = {
         payload: responsePayload,
         timestamp: Date.now()

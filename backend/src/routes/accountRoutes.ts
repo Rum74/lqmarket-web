@@ -53,12 +53,23 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       // Logged-in user: show public accounts PLUS their own pending/rejected accounts
       conditions.push({
         $or: [
-          { status: { $in: ['approved', 'sold'] } },
-          { sellerId: currentUserId }
+          { status: { $in: ['approved', 'sold', 'active', 'available', 'Approved'] } },
+          { sellerId: currentUserId },
+          { status: { $exists: false } },
+          { status: null },
+          { status: '' }
         ]
       });
     } else {
-      conditions.push({ status: { $in: ['approved', 'sold'] } });
+      // Guest visitors: show approved, sold, active, available, and unassigned accounts
+      conditions.push({
+        $or: [
+          { status: { $in: ['approved', 'sold', 'active', 'available', 'Approved'] } },
+          { status: { $exists: false } },
+          { status: null },
+          { status: '' }
+        ]
+      });
     }
 
     if (search) {

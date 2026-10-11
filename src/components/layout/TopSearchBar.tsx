@@ -43,7 +43,10 @@ export const TopSearchBar: React.FC = () => {
     { label: 'Cao Thủ', query: 'Cao Thủ', icon: '👑' }
   ];
 
-  const approvedAccountsCount = accounts.filter(a => a.status === 'approved').length;
+  const approvedAccountsCount = accounts.filter(a => {
+    const s = String(a.status || '').toLowerCase();
+    return s === 'approved' || s === 'active' || s === 'available' || (!a.status && s !== 'sold' && s !== 'rejected' && s !== 'hidden');
+  }).length;
 
   return (
     <div className="w-full max-w-[1536px] mx-auto px-3 sm:px-6 lg:px-8 mt-3 sm:mt-4 mb-2">

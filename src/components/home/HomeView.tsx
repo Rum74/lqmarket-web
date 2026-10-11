@@ -46,7 +46,10 @@ export const HomeView: React.FC = () => {
     isSellerEnabled
   } = useApp();
 
-  const approvedAccounts = accounts.filter(a => a.status === 'approved');
+  const approvedAccounts = accounts.filter(a => {
+    const s = String(a.status || '').toLowerCase();
+    return s === 'approved' || s === 'active' || s === 'available' || (!a.status && s !== 'sold' && s !== 'rejected' && s !== 'hidden');
+  });
 
   // Real-time dynamic counts per rank calculated directly from database
   const normalize = (str: string) => (str || '').trim().toLowerCase().normalize('NFC');

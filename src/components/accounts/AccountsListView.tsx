@@ -34,8 +34,11 @@ export const AccountsListView: React.FC = () => {
   const { accounts, filterOptions, setFilterOptions, resetFilters } = useApp();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // Filter approved accounts only
-  const approvedAccounts = accounts.filter(a => a.status === 'approved');
+  // Filter approved & active accounts available for sale on the marketplace
+  const approvedAccounts = accounts.filter(a => {
+    const s = String(a.status || '').toLowerCase();
+    return s === 'approved' || s === 'active' || s === 'available' || (!a.status && s !== 'sold' && s !== 'rejected' && s !== 'hidden');
+  });
 
   // Filter logic
   const filteredAccounts = approvedAccounts.filter(acc => {
