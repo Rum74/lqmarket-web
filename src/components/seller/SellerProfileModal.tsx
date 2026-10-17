@@ -456,7 +456,7 @@ export const SellerProfileModal: React.FC = () => {
                     <strong>100% Trắng Thông Tin:</strong> Tài khoản bán ra cam kết chưa liên kết Số điện thoại hoặc Email, người mua có thể tự do liên kết bảo mật chính chủ ngay sau khi nhận acc.
                   </li>
                   <li>
-                    <strong>Bảo Hiểm Escrow:</strong> Tiền được sàn LQMarket giữ an toàn. Chỉ khi người mua vào game kiểm tra đúng 100% thông tin và bấm [Xác Nhận Nhận Acc] thì tiền mới chuyển cho shop.
+                    <strong>Bảo Hiểm Escrow:</strong> Tiền được hệ thống cholienquan.com giữ an toàn. Chỉ khi người mua vào game kiểm tra đúng 100% thông tin và bấm [Xác Nhận Nhận Acc] thì tiền mới chuyển cho shop.
                   </li>
                   <li>
                     <strong>Bảo Hành Trọn Đời:</strong> Cam kết hoàn tiền 100% hoặc đổi acc tương đương nếu phát hiện bất kỳ tranh chấp tài khoản nào sau khi mua.
@@ -470,7 +470,7 @@ export const SellerProfileModal: React.FC = () => {
               <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-200/90 leading-relaxed">
-                  <strong>Khuyến Cáo Bảo Mật:</strong> Tuyệt đối không giao dịch chuyển khoản trực tiếp bên ngoài sàn để tránh bị lừa đảo mạo danh. Tất cả giao dịch trên LQMarket đều được kiểm soát bởi hợp đồng trung gian tự động.
+                  <strong>Khuyến Cáo Bảo Mật:</strong> Tuyệt đối không giao dịch chuyển khoản trực tiếp bên ngoài để tránh bị lừa đảo mạo danh. Tất cả giao dịch trên cholienquan.com đều được kiểm soát bởi hợp đồng trung gian tự động.
                 </div>
               </div>
             </div>

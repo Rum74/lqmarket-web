@@ -7,7 +7,7 @@ export const GameAccountPolicyView: React.FC = () => {
     <PolicyLayout
       id="chinh-sach-tai-khoan-game"
       title="Chính Sách Tài Khoản Game Liên Quân Mobile"
-      subtitle="Quy định nghiêm ngặt về tiêu chuẩn, nguồn gốc hợp pháp, phân loại và trách nhiệm bảo đảm đối với các sản phẩm tài khoản game đăng bán trên sàn LQMarket."
+      subtitle="Quy định nghiêm ngặt về tiêu chuẩn, nguồn gốc hợp pháp, phân loại và trách nhiệm bảo đảm đối với các sản phẩm tài khoản game đăng bán trên hệ thống cholienquan.com."
       icon={<Gamepad2 size={24} />}
     >
       {/* 1. Tuyên bố độc lập quan trọng */}

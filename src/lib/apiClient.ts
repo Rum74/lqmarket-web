@@ -15,22 +15,9 @@ export function getApiBaseUrl(): string {
 
   let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim();
 
-  // If no explicit VITE_API_URL provided, check environment hostname
+  // Default to same-origin relative path for local development, production, and preview environments
   if (!rawApiUrl) {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (
-        hostname === 'cholienquan.com' ||
-        hostname === 'www.cholienquan.com'
-      ) {
-        rawApiUrl = 'https://api.cholienquan.com';
-      } else {
-        // Default to same-origin relative path for local development, preview environments (*.run.app), and container routing
-        rawApiUrl = '';
-      }
-    } else {
-      rawApiUrl = '';
-    }
+    rawApiUrl = '';
   }
 
   rawApiUrl = rawApiUrl.replace(/\/+$/, '');
@@ -123,9 +110,9 @@ export async function apiRequest<T = any>(
     }
   }
 
-  // Set 8-second timeout controller so UI never hangs indefinitely
+  // Set 25-second timeout controller so large data syncs never abort prematurely
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   const method = options.method || 'GET';
   console.log('[API REQUEST]', method, url);
@@ -166,7 +153,7 @@ export async function apiRequest<T = any>(
 
     return {
       success: false,
-      message: isAbort ? 'Kết nối máy chủ quá hạn (8s).' : 'Không thể kết nối trực tiếp đến máy chủ API.',
+      message: isAbort ? 'Kết nối máy chủ quá hạn (25s).' : 'Không thể kết nối trực tiếp đến máy chủ API.',
       errorCode: isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
       isUnavailable: true
     };

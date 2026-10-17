@@ -455,7 +455,7 @@ router.post('/:id/dispute', authenticateToken, async (req: AuthenticatedRequest,
 
     return res.json({
       success: true,
-      message: 'Đã gửi yêu cầu khiếu nại lên ban quản trị sàn LQMarket.',
+      message: 'Đã gửi yêu cầu khiếu nại lên ban quản trị cholienquan.com.',
       order: order.toJSON()
     });
   } catch (error: any) {

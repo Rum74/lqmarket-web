@@ -5,7 +5,7 @@ export const BLOG_POSTS: BlogPostItem[] = [
     id: 'blog-1',
     slug: 'top-acc-lien-quan-thach-dau-gia-tot',
     title: 'Top Acc Liên Quân Thách Đấu & Chiến Tướng Giá Tốt Nhất Tháng 9/2026',
-    summary: 'Tổng hợp danh sách các tài khoản Liên Quân bậc Thách Đấu, Chiến Tướng full tướng, 200+ trang phục hiếm giá chỉ từ 800k có sẵn trên sàn LQMarket.',
+    summary: 'Tổng hợp danh sách các tài khoản Liên Quân bậc Thách Đấu, Chiến Tướng full tướng, 200+ trang phục hiếm giá chỉ từ 800k có sẵn trên cholienquan.com.',
     content: `Việc sở hữu một tài khoản Liên Quân bậc Thách Đấu hoặc Chiến Tướng không chỉ giúp game thủ tự tin vào trận leo rank mà còn tiết kiệm hàng trăm giờ cày cuốc.
 
 ### 1. Tiêu chí chọn mua Acc Thách Đấu chuẩn:
@@ -13,8 +13,8 @@ export const BLOG_POSTS: BlogPostItem[] = [
 - **Bảng ngọc cấp 3:** Cần tối thiểu 90 viên ngọc cấp 3 (Full 30 viên Công Vật Lý / Tốc Đánh / Xuyên Giáp và 30 viên Công Phép / Xuyên Giáp Phép).
 - **Trang phục giới hạn:** Các skin SSS Hữu Hạn như Nakroth Thứ Nguyên Vệ Thần, Tel'Annas Thần Sứ, Raz Muay Thái tăng trải nghiệm kỹ năng và hiệu ứng biến về cực mượt.
 
-### 2. Mua acc an toàn qua Escrow tại LQMarket:
-Trên sàn LQMarket, 100% số tiền thanh toán của bạn được giữ an toàn trong ví Escrow. Bạn sẽ nhận mật khẩu ngay lập tức, đăng nhập vào game kiểm tra đúng rank Thách Đấu và đổi thông tin mật khẩu trước khi tiền được chuyển cho người bán.`,
+### 2. Mua acc an toàn qua Escrow tại cholienquan.com:
+Tại cholienquan.com, 100% số tiền thanh toán của bạn được giữ an toàn trong ví Escrow. Bạn sẽ nhận mật khẩu ngay lập tức, đăng nhập vào game kiểm tra đúng rank Thách Đấu và đổi thông tin mật khẩu trước khi tiền được chuyển cho người bán.`,
     coverImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80',
     category: 'review',
     author: 'Admin LQMarket',

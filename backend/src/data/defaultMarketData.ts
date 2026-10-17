@@ -9,7 +9,7 @@ export const DEFAULT_SERVER_USERS: Array<Partial<IUser>> = [
     username: 'admin',
     email: 'admin@lqmarket.vn',
     password: '', // will be hashed in seeder
-    phone: '0966924316',
+    phone: '0932547709',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80',
     role: 'admin',
     balance: 10000000,

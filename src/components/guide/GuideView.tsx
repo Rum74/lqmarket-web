@@ -50,7 +50,7 @@ export const GuideView: React.FC = () => {
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
             <strong className="text-amber-400 block text-sm">Bước 1: Giữ tiền an toàn</strong>
             <p className="text-slate-400 leading-relaxed">
-              Khi khách bấm Mua Ngay, số tiền sẽ được đóng băng trong tài khoản trung gian của sàn LQMarket. Người bán không thể rút tiền ngay.
+              Khi khách bấm Mua Ngay, số tiền sẽ được đóng băng trong tài khoản trung gian của hệ thống cholienquan.com. Người bán không thể rút tiền ngay.
             </p>
           </div>
 
@@ -150,19 +150,19 @@ export const GuideView: React.FC = () => {
           </div>
           <div>
             <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">KÊNH HỖ TRỢ & KHIẾU NẠI TRỰC TIẾP 24/7</span>
-            <h3 className="text-lg font-black text-white">Hotline / Zalo: 0966 923 416</h3>
+            <h3 className="text-lg font-black text-white">Hotline / Zalo: 0932 547 709</h3>
             <p className="text-xs text-slate-400 mt-0.5">Tiếp nhận khiếu nại đơn hàng, hỗ trợ nạp rút và bảo hiểm Escrow</p>
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
           <a
-            href="tel:0966923416"
+            href="tel:0932547709"
             className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-amber-500/20"
           >
             <Phone size={14} /> Gọi Hotline
           </a>
           <a
-            href="https://zalo.me/0966923416"
+            href="https://zalo.me/0932547709"
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20"

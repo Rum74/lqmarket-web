@@ -255,7 +255,7 @@ const updateProductStatusHandler = async (req: AuthenticatedRequest, res: Respon
             userId: account.sellerId,
             type: 'account',
             title: 'Tài khoản đã được duyệt!',
-            message: `Tài khoản "${account.title}" (#${account.code}) của bạn đã được Admin phê duyệt và hiển thị công khai trên sàn LQMarket.`,
+            message: `Tài khoản "${account.title}" (#${account.code}) của bạn đã được Admin phê duyệt và hiển thị công khai trên cholienquan.com.`,
             read: false,
             createdAt: new Date().toISOString()
           });
@@ -545,7 +545,7 @@ const handleToggleSeller = async (req: AuthenticatedRequest, res: Response) => {
       seller_enabled: isEnabled,
       isSellerEnabled: isEnabled,
       message: isEnabled
-        ? 'Đã BẬT chức năng Người bán trên toàn sàn LQMarket.'
+        ? 'Đã BẬT chức năng Người bán trên toàn hệ thống cholienquan.com.'
         : 'Đã TẮT chức năng Người bán đối với người dùng bình thường (Admin vẫn toàn quyền).'
     });
   } catch (error: any) {

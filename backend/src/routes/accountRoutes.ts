@@ -146,21 +146,25 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
 
     console.log('[MONGO] Collection: accounts, Result count:', accounts.length);
 
-    // Sanitize credentials for public queries
+    // Sanitize credentials and optimize images for public queries
     const sanitized = accounts.map((acc: any) => {
-      // Hide password unless current user is the seller or admin
       const isOwner = currentUserId && acc.sellerId === currentUserId;
-      if (!isOwner && !isUserAdmin) {
-        return {
-          ...acc,
-          credentials: {
-            ...acc.credentials,
-            password: '••••••••',
-            secretNotes: ''
-          }
-        };
+      let sanitizedImages = acc.images;
+      if (Array.isArray(sanitizedImages) && sanitizedImages.length > 0) {
+        sanitizedImages = [
+          sanitizedImages[0],
+          ...sanitizedImages.slice(1).filter((img: string) => !img.startsWith('data:'))
+        ];
       }
-      return acc;
+      return {
+        ...acc,
+        images: sanitizedImages,
+        credentials: isOwner || isUserAdmin ? acc.credentials : {
+          ...acc.credentials,
+          password: '••••••••',
+          secretNotes: ''
+        }
+      };
     });
 
     return res.json({
@@ -454,7 +458,7 @@ router.post('/', authenticateToken, requireSellerEnabled, async (req: Authentica
         type: 'account',
         title: initialStatus === 'approved' ? 'Tài khoản đã được đăng bán công khai' : 'Tài khoản đang chờ duyệt',
         message: initialStatus === 'approved'
-          ? `Tài khoản "${newAccount.title}" (#${newAccount.code}) đã được phê duyệt và hiển thị công khai trên sàn LQMarket.`
+          ? `Tài khoản "${newAccount.title}" (#${newAccount.code}) đã được phê duyệt và hiển thị công khai trên cholienquan.com.`
           : `Tài khoản "${newAccount.title}" (#${newAccount.code}) đã được gửi lên hệ thống và đang chờ Admin duyệt.`,
         read: false,
         createdAt: new Date().toISOString()
@@ -540,7 +544,7 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
             userId: account.sellerId,
             type: 'account',
             title: 'Tài khoản đã được phê duyệt!',
-            message: `Tài khoản "${account.title}" (#${account.code}) đã được Admin duyệt và hiển thị công khai trên sàn LQMarket.`,
+            message: `Tài khoản "${account.title}" (#${account.code}) đã được Admin duyệt và hiển thị công khai trên cholienquan.com.`,
             read: false,
             createdAt: new Date().toISOString()
           });

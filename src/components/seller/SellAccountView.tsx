@@ -858,7 +858,7 @@ export const SellAccountView: React.FC = () => {
                   className="mt-0.5 w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 cursor-pointer"
                 />
                 <span>
-                  Tôi đồng ý với chính sách trung gian sàn LQMarket (Phí 5% khi giao dịch hoàn tất và bảo hiểm hoàn tiền nếu sai mật khẩu).
+                  Tôi đồng ý với chính sách giao dịch cholienquan.com (Phí 5% khi giao dịch hoàn tất và bảo hiểm hoàn tiền nếu sai mật khẩu).
                 </span>
               </label>
             </div>

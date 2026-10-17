@@ -132,7 +132,7 @@ router.post('/register', async (req: Request, res: Response) => {
         userId: newUser.id,
         type: 'system',
         title: 'Chào mừng thành viên mới!',
-        message: `Chúc mừng bạn đã tạo tài khoản thành công trên Sàn giao dịch Liên Quân LQMarket. Hãy bảo vệ mật khẩu và nạp tiền để bắt đầu mua bán hoặc xé túi mù!`,
+        message: `Chúc mừng bạn đã tạo tài khoản thành công tại cholienquan.com. Hãy bảo vệ mật khẩu và nạp tiền để bắt đầu mua tài khoản hoặc xé túi mù!`,
         read: false,
         createdAt: new Date().toISOString()
       });

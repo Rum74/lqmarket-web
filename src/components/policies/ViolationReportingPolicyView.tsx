@@ -85,11 +85,11 @@ export const ViolationReportingPolicyView: React.FC = () => {
             </div>
             <strong className="text-white block text-sm">Hotline / Zalo Khẩn Cấp</strong>
             <p className="text-xs text-slate-400">Tiếp nhận báo cáo các vụ việc lừa đảo, chiếm đoạt tài sản khẩn cấp 24/7:</p>
-            <a href="tel:0966923416" className="text-amber-400 font-black text-sm block hover:underline">
-              0966 923 416
+            <a href="tel:0932547709" className="text-amber-400 font-black text-sm block hover:underline">
+              0932 547 709
             </a>
             <a
-              href="https://zalo.me/0966923416"
+              href="https://zalo.me/0932547709"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-cyan-400 hover:underline inline-flex items-center gap-1"

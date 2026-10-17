@@ -141,20 +141,26 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         .lean()
     ]);
 
-    // 2. Sanitize account passwords for non-owner public requests
+    // 2. Sanitize account passwords for non-owner public requests & optimize image payload
     const accounts = allAccountsRaw.map((acc: any) => {
       const isOwner = currentUserId && acc.sellerId === currentUserId;
-      if (!isOwner && !isUserAdmin) {
-        return {
-          ...acc,
-          credentials: {
-            ...acc.credentials,
-            password: '••••••••',
-            secretNotes: ''
-          }
-        };
+      let sanitizedImages = acc.images;
+      if (Array.isArray(sanitizedImages) && sanitizedImages.length > 0) {
+        // Keep primary cover image, filtering out extra large base64 duplicates for lightweight bootstrap listing
+        sanitizedImages = [
+          sanitizedImages[0],
+          ...sanitizedImages.slice(1).filter((img: string) => !img.startsWith('data:'))
+        ];
       }
-      return acc;
+      return {
+        ...acc,
+        images: sanitizedImages,
+        credentials: isOwner || isUserAdmin ? acc.credentials : {
+          ...acc.credentials,
+          password: '••••••••',
+          secretNotes: ''
+        }
+      };
     });
 
     // 3. Merge Transactions & WithdrawalRequests cleanly without dropping pending status
@@ -377,6 +383,28 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       }
     }
 
+    // Ensure public sellers are available so seller badges and profiles load for guests and buyers
+    if (!isUserAdmin || allUsers.length === 0) {
+      try {
+        const publicSellers = await User.find({
+          $or: [
+            { role: 'seller' },
+            { isVerifiedSeller: true },
+            { completedSales: { $gt: 0 } },
+            { sellerTier: { $in: ['VIP', 'PRO'] as any } }
+          ]
+        })
+          .select('id name username avatar rating completedSales isVerifiedSeller sellerTier bio createdAt')
+          .limit(40)
+          .lean();
+        if (publicSellers && publicSellers.length > 0) {
+          allUsers = publicSellers as any;
+        }
+      } catch (err) {
+        console.warn('Could not prefetch public sellers:', err);
+      }
+    }
+
     const payloadStats = {
       totalAccounts: accounts.length,
       totalApprovedAccounts: totalApprovedCount,
@@ -418,7 +446,7 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         stats: payloadStats,
         settings: payloadSettings,
         currentUser,
-        allUsers: isUserAdmin ? allUsers : undefined,
+        allUsers,
         orders: userOrders,
         transactions: mergedTransactions,
         withdrawals: allWithdrawalsRaw,

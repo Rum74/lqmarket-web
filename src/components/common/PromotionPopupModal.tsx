@@ -174,11 +174,20 @@ export const PromotionPopupModal: React.FC<PromotionPopupModalProps> = ({
 
     handleClose();
 
-    // Check if CTA target is deposit / wallet topup
+    // Check if CTA target is deposit / wallet topup (e.g. "Nạp ví ngay", "Nạp ngay", open_deposit)
+    const ctaTextLower = (activePromo.ctaText || '').toLowerCase();
+    const ctaUrlLower = (activePromo.ctaUrl || '').toLowerCase();
     const isDepositAction =
       activePromo.ctaAction === 'open_deposit' ||
       activePromo.type === 'deposit_bonus' ||
-      (activePromo.ctaUrl && (activePromo.ctaUrl.includes('wallet') || activePromo.ctaUrl.includes('nap-tien')));
+      ctaTextLower.includes('nạp') ||
+      ctaTextLower.includes('nap') ||
+      ctaTextLower.includes('ví') ||
+      ctaTextLower.includes('vi') ||
+      ctaUrlLower.includes('wallet') ||
+      ctaUrlLower.includes('nap-tien') ||
+      ctaUrlLower.includes('nap') ||
+      ctaUrlLower.includes('deposit');
 
     if (isDepositAction) {
       if (!isLoggedIn) {

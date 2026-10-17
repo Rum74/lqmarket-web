@@ -739,7 +739,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const norm = fetchedAccounts.map(normalizeAccount);
           setAccounts(norm);
           try {
-            localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(norm.slice(0, 100)));
+            const compactCache = norm.slice(0, 50).map(a => ({
+              ...a,
+              images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
+            }));
+            localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
           } catch {}
         } else {
           // Resilient fallback: fetch /api/accounts directly if bootstrap did not return accounts
@@ -750,7 +754,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const norm = list.map(normalizeAccount);
                 setAccounts(norm);
                 try {
-                  localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(norm.slice(0, 100)));
+                  const compactCache = norm.slice(0, 50).map(a => ({
+                    ...a,
+                    images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
+                  }));
+                  localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
                 } catch {}
               }
             })

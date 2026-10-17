@@ -17,7 +17,7 @@ export const OperatingRegulationsView: React.FC = () => {
         </h2>
         <div className="space-y-3 text-slate-300">
           <p>
-            <strong>1.1. Giới thiệu LQMarket:</strong> LQMarket là website thương mại điện tử hoạt động theo mô hình sàn giao dịch trung gian (Marketplace), phục vụ nhu cầu kết nối, trao đổi, mua bán tài khoản trò chơi trực tuyến Liên Quân Mobile (Arena of Valor) giữa các cá nhân người dùng có nhu cầu hợp pháp.
+            <strong>1.1. Giới thiệu LQMarket:</strong> LQMarket (cholienquan.com) là hệ thống mua bán, trao đổi tài khoản trò chơi trực tuyến Liên Quân Mobile (Arena of Valor) uy tín, phục vụ nhu cầu kết nối người dùng có nhu cầu hợp pháp.
           </p>
           <p>
             <strong>1.2. Chủ quản sàn:</strong> Nền tảng được vận hành bởi:
@@ -149,7 +149,7 @@ export const OperatingRegulationsView: React.FC = () => {
           <div>
             <h3 className="font-bold text-white text-sm mb-1.5">3. Quyền và nghĩa vụ của LQMarket</h3>
             <ul className="list-disc list-inside space-y-1 text-slate-400 pl-1 leading-relaxed">
-              <li>Duy trì sự vận hành ổn định, an toàn và bảo mật của nền tảng sàn giao dịch.</li>
+              <li>Duy trì sự vận hành ổn định, an toàn và bảo mật của nền tảng hệ thống cholienquan.com.</li>
               <li>Bảo toàn nguyên vẹn số tiền ký quỹ của các bên trong suốt quá trình giao dịch diễn ra.</li>
               <li>Có quyền từ chối hiển thị, gỡ bỏ sản phẩm, tạm khóa hoặc chấm dứt vĩnh viễn tài khoản của bất kỳ thành viên nào có dấu hiệu vi phạm quy chế hoặc gian lận.</li>
               <li>Hợp tác đầy đủ và cung cấp dữ liệu giao dịch cho cơ quan nhà nước có thẩm quyền khi có văn bản yêu cầu hợp pháp theo quy định pháp luật.</li>

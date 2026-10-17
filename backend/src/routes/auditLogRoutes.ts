@@ -12,7 +12,7 @@ export const INITIAL_AUDIT_LOGS = [
     action: 'SYSTEM_INIT',
     targetType: 'system',
     targetId: 'sys_init',
-    details: 'Khởi động hệ thống sàn giao dịch LQMarket thành công',
+    details: 'Khởi động hệ thống cholienquan.com thành công',
     timestamp: new Date(Date.now() - 3600000 * 24).toISOString()
   },
   {

@@ -149,7 +149,7 @@ export const HomeView: React.FC = () => {
           {/* Top Pill */}
           <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 text-amber-400 text-[10px] sm:text-xs font-bold tracking-wide max-w-full text-center">
             <Sparkles size={13} className="animate-spin text-amber-400 shrink-0" />
-            <span>SÀN GIAO DỊCH LIÊN QUÂN TRUNG GIAN #1 VN</span>
+            <span>HỆ THỐNG MUA BÁN ACC LIÊN QUÂN UY TÍN #1 VN</span>
           </div>
 
           {/* Main Title */}
@@ -755,7 +755,7 @@ export const HomeView: React.FC = () => {
               </div>
               <h3 className="text-sm font-bold text-white">Hệ Thống Giữ Tiền</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Tiền của bạn sẽ được sàn LQMarket tạm giữ an toàn trong ví Escrow. Người bán KHÔNG THỂ lấy tiền nếu chưa hoàn thành đơn.
+                Tiền của bạn sẽ được hệ thống cholienquan.com tạm giữ an toàn trong ví Escrow. Người bán KHÔNG THỂ lấy tiền nếu chưa hoàn thành đơn.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-cyan-400 font-medium flex items-center gap-1">

@@ -1263,7 +1263,7 @@ export const AdminMysteryBoxManagement: React.FC = () => {
                         type="text"
                         value={newCustomContactInfo}
                         onChange={e => setNewCustomContactInfo(e.target.value)}
-                        placeholder="VD: Zalo CSKH 0966923416 hoặc mã CARD-XXXX"
+                        placeholder="VD: Zalo CSKH 0932547709 hoặc mã CARD-XXXX"
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs"
                       />
                     </div>

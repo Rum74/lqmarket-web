@@ -89,9 +89,9 @@ export const ChatModal: React.FC = () => {
         const lower = textToSend.toLowerCase();
 
         if (lower.includes('còn không') || lower.includes('con khong') || lower.includes('acc này')) {
-          reply = 'Dạ acc này vẫn còn và đang có sẵn trên sàn bạn nhé! Bạn bấm [MUA NGAY] là hệ thống sàn LQMarket sẽ bàn giao mật khẩu tự động sau 5 giây ngay lập tức ạ.';
+          reply = 'Dạ acc này vẫn còn và đang có sẵn trên shop bạn nhé! Bạn bấm [MUA NGAY] là hệ thống cholienquan.com sẽ bàn giao mật khẩu tự động sau 5 giây ngay lập tức ạ.';
         } else if (lower.includes('trắng thông tin') || lower.includes('trang thong tin') || lower.includes('bảo hành') || lower.includes('sđt') || lower.includes('email')) {
-          reply = 'Dạ acc cam kết 100% trắng thông tin (chưa cài SĐT, chưa cài Email). Bạn nhận acc có thể đổi pass và liên kết bảo mật chính chủ ngay lập tức. Sàn giữ tiền bảo hiểm nên bạn hoàn toàn an tâm nhé!';
+          reply = 'Dạ acc cam kết 100% trắng thông tin (chưa cài SĐT, chưa cài Email). Bạn nhận acc có thể đổi pass và liên kết bảo mật chính chủ ngay lập tức. Hệ thống giữ tiền bảo hiểm Escrow nên bạn hoàn toàn an tâm nhé!';
         } else if (lower.includes('đổi pass') || lower.includes('doi pass') || lower.includes('hướng dẫn')) {
           reply = 'Dạ shop hỗ trợ hướng dẫn đổi pass và bật mã xác thực 2 lớp Garena từ A-Z luôn ạ. Sau khi mua acc bạn cứ nhắn shop nếu cần hỗ trợ nhé!';
         } else if (lower.includes('fix') || lower.includes('giảm') || lower.includes('bớt') || lower.includes('giare') || lower.includes('học sinh')) {

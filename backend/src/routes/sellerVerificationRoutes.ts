@@ -246,7 +246,7 @@ router.put('/:id/review', authenticateToken, requireAdmin, async (req: Authentic
           userId: verification.userId,
           type: 'system',
           title: 'Hồ sơ Người Bán Uy Tín ĐÃ ĐƯỢC DUYỆT!',
-          message: 'Chúc mừng! Bạn đã chính thức được cấp huy hiệu Người Bán Uy Tín trên sàn LQMarket.',
+          message: 'Chúc mừng! Bạn đã chính thức được cấp huy hiệu Người Bán Uy Tín tại cholienquan.com.',
           read: false,
           createdAt: new Date().toISOString()
         });

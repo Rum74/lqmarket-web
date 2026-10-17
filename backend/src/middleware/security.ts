@@ -53,7 +53,6 @@ function sanitizeInput(obj: any): any {
 export function securityMiddleware(req: Request, res: Response, next: NextFunction) {
   // 1. Protective HTTP Security Headers (Helmet standard)
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');

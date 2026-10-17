@@ -1,6 +1,6 @@
 # LQMarket Backend API (Standalone Server)
 
-Máy chủ Backend API Node.js Express + TypeScript + MongoDB Atlas dành cho sàn giao dịch tài khoản Liên Quân Mobile (LQMarket).
+Máy chủ Backend API Node.js Express + TypeScript + MongoDB Atlas dành cho hệ thống tài khoản Liên Quân Mobile (cholienquan.com).
 
 ---
 

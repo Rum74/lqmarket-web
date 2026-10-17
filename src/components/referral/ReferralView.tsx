@@ -173,7 +173,7 @@ const ReferralContent: React.FC = () => {
               Giới thiệu bạn bè – Cả hai cùng có quà!
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Mời bạn bè tham gia sàn <strong className="text-amber-400">LQMarket</strong>. Khi bạn bè đăng ký bằng mã của bạn và hoàn tất giao dịch mua acc đầu tiên từ{' '}
+              Mời bạn bè tham gia <strong className="text-amber-400">cholienquan.com</strong>. Khi bạn bè đăng ký bằng mã của bạn và hoàn tất giao dịch mua acc đầu tiên từ{' '}
               <strong className="text-amber-400">{formatCurrency(safeSettings.minOrderValue)}</strong>, bạn nhận ngay{' '}
               <strong className="text-emerald-400">+{formatCurrency(safeSettings.referrerReward)}</strong> vào số dư ví rút tiền!
             </p>

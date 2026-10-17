@@ -72,7 +72,7 @@ export const Footer: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Sàn giao dịch và marketplace tài khoản Liên Quân Mobile (Arena of Valor) uy tín hàng đầu. Nền tảng kết nối người mua và người bán với cơ chế trung gian an toàn tuyệt đối.
+              Hệ thống mua bán tài khoản Liên Quân Mobile (Arena of Valor) uy tín hàng đầu. Nền tảng kết nối người mua và người bán với cơ chế trung gian an toàn tuyệt đối.
             </p>
             <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg w-fit">
               <Lock className="w-3.5 h-3.5" />
@@ -302,14 +302,14 @@ export const Footer: React.FC = () => {
             <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs space-y-1">
               <span className="text-slate-400 block text-[10px]">Hotline / Zalo Khiếu Nại 24/7:</span>
               <a
-                href="tel:0966923416"
+                href="tel:0932547709"
                 className="text-amber-400 hover:text-amber-300 font-black text-sm block tracking-wide transition-colors"
               >
-                0966 923 416
+                0932 547 709
               </a>
               <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
                 <a
-                  href="https://zalo.me/0966923416"
+                  href="https://zalo.me/0932547709"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] text-blue-400 hover:underline flex items-center gap-1"
@@ -327,7 +327,7 @@ export const Footer: React.FC = () => {
             Tuyên bố miễn trừ trách nhiệm: LQMarket là nền tảng thương mại điện tử độc lập hỗ trợ kết nối giao dịch giữa người mua và người bán tài khoản game. LQMarket không liên kết chính thức, không được bảo trợ hoặc tài trợ bởi Garena / Tencent Games. Liên Quân Mobile và các tên thương hiệu, hình ảnh liên quan thuộc quyền sở hữu của các chủ thể tương ứng.
           </p>
           <p className="mt-2 text-slate-400">
-            © 2026 LQMarket.vn – Nền tảng giao dịch tài khoản Liên Quân Mobile.
+            © 2026 cholienquan.com – Nền tảng giao dịch tài khoản Liên Quân Mobile.
           </p>
         </div>
       </div>
