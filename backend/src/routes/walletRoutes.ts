@@ -40,65 +40,12 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
   }
 });
 
-// POST /api/wallet/deposit (Direct deposit or simulator)
-router.post('/deposit', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const targetUserId = req.user?.userId || req.body.userId;
-    const { amount, method = 'Chuyển khoản', note = 'Nạp tiền vào ví', transactionCode } = req.body;
-
-    const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'Số tiền nạp không hợp lệ' });
-    }
-
-    const user = await User.findOne({ id: targetUserId });
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
-    }
-
-    user.balance = (user.balance || 0) + numAmount;
-    await user.save();
-
-    const txId = transactionCode || `tx_dep_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const tx = new WalletTransaction({
-      id: txId,
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      type: 'deposit',
-      amount: numAmount,
-      status: 'success',
-      note: `${note} (${String(method).toUpperCase()})`,
-      createdAt: new Date().toISOString()
-    });
-    await tx.save();
-
-    // Create Notification
-    try {
-      const notif = new Notification({
-        id: `notif_dep_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        userId: user.id,
-        type: 'wallet',
-        title: 'Nạp tiền thành công',
-        message: `Bạn đã nạp thành công +${numAmount.toLocaleString('vi-VN')}đ vào ví LQMarket (${String(method).toUpperCase()}). Số dư mới: ${(user.balance).toLocaleString('vi-VN')}đ.`,
-        read: false,
-        createdAt: new Date().toISOString()
-      });
-      await notif.save();
-    } catch (notifErr) {
-      console.warn('Deposit notification notice:', notifErr);
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: `Nạp thành công +${numAmount.toLocaleString('vi-VN')}đ vào ví`,
-      balance: user.balance,
-      transaction: tx.toJSON()
-    });
-  } catch (error: any) {
-    console.error('Wallet deposit error:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi nạp tiền vào ví', error: error.message });
-  }
+// POST /api/wallet/deposit - BLOCKED: All deposits must go through verified PayOS gateway
+router.post('/deposit', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  return res.status(403).json({
+    success: false,
+    message: 'Cổng nạp tiền trực tiếp đã bị vô hiệu hóa. Hệ thống chỉ chấp nhận thanh toán qua cổng PayOS chính thức.'
+  });
 });
 
 // GET /api/wallet/deposit/:id (Lookup deposit transaction by id or orderCode)

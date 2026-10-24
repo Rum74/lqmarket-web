@@ -320,9 +320,9 @@ export const Navbar: React.FC = () => {
                   <Wallet className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
                   <div className="flex items-baseline gap-0.5">
                     <span className="text-[10px] min-[360px]:text-[11px] sm:text-xs font-black tracking-tight text-slate-100 group-hover:text-amber-300 transition-colors">
-                      {currentUser.balance >= 1000000
-                        ? `${(currentUser.balance / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}M`
-                        : `${currentUser.balance.toLocaleString('vi-VN')}đ`}
+                      {(currentUser?.balance ?? 0) >= 1000000
+                        ? `${((currentUser?.balance ?? 0) / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}M`
+                        : `${(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ`}
                     </span>
                   </div>
                   <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center text-[9px] sm:text-[10px] font-black leading-none transition-all ml-0.5 shrink-0">
@@ -432,10 +432,10 @@ export const Navbar: React.FC = () => {
                     />
                     <div className="text-left hidden sm:block">
                       <span className="text-xs font-bold text-slate-200 group-hover:text-white block max-w-[90px] truncate leading-none">
-                        {currentUser.name.split(' ')[0]}
+                        {(currentUser?.name || 'Thành viên').split(' ')[0]}
                       </span>
                       <span className="text-[8px] font-black text-amber-400 uppercase tracking-wide leading-none mt-0.5 block">
-                        {currentUser.role === 'admin' ? 'ADMIN' : currentUser.role === 'seller' ? 'SELLER' : 'MEMBER'}
+                        {currentUser?.role === 'admin' ? 'ADMIN' : currentUser?.role === 'seller' ? 'SELLER' : 'MEMBER'}
                       </span>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:inline group-hover:text-slate-200 transition-colors shrink-0" />
@@ -445,18 +445,18 @@ export const Navbar: React.FC = () => {
                   {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-1rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 text-left animate-in fade-in duration-150">
                       <div className="p-3 border-b border-slate-800 bg-slate-950/60 rounded-xl mb-2">
-                        <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+                        <p className="text-xs font-bold text-white truncate">{currentUser?.name || 'Thành viên'}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{currentUser?.email || ''}</p>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-500/30">
-                            {currentUser.role === 'buyer'
+                            {currentUser?.role === 'buyer'
                               ? '👤 KHÁCH MUA'
-                              : currentUser.role === 'seller'
+                              : currentUser?.role === 'seller'
                               ? '🏪 SHOP SELLER'
                               : '🛡️ SUPER ADMIN'}
                           </span>
                           <span className="text-xs font-bold text-amber-400">
-                            {currentUser.balance.toLocaleString('vi-VN')}đ
+                            {(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ
                           </span>
                         </div>
                       </div>

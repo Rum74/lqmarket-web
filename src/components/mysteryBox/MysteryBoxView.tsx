@@ -185,12 +185,12 @@ export const MysteryBoxView: React.FC = () => {
                   <Wallet size={14} className="text-amber-400" /> Số dư ví của bạn
                 </span>
                 <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                  {isLoggedIn ? currentUser.role.toUpperCase() : 'KHÁCH'}
+                  {isLoggedIn ? (currentUser?.role || 'buyer').toUpperCase() : 'KHÁCH'}
                 </span>
               </div>
 
               <div className="text-2xl font-black text-white font-mono">
-                {isLoggedIn ? `${currentUser.balance.toLocaleString('vi-VN')}đ` : 'Chưa đăng nhập'}
+                {isLoggedIn ? `${(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ` : 'Chưa đăng nhập'}
               </div>
 
               {isLoggedIn ? (

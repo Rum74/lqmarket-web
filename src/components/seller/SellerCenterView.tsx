@@ -321,7 +321,7 @@ export const SellerCenterView: React.FC = () => {
               className="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
             >
               <Wallet size={15} className="text-emerald-400" />
-              <span>Ví: {currentUser.balance.toLocaleString('vi-VN')}đ</span>
+              <span>Ví: {(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ</span>
             </button>
           </div>
         </div>

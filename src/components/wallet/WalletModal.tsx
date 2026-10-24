@@ -644,7 +644,7 @@ export const WalletModal: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Tài khoản: <strong className="text-slate-200">{currentUser.name || 'CRxRum'}</strong> • Số dư ví: <strong className="text-amber-400">{currentUser.balance.toLocaleString('vi-VN')}đ</strong>
+                Tài khoản: <strong className="text-slate-200">{currentUser?.name || 'Thành viên'}</strong> • Số dư ví: <strong className="text-amber-400">{(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ</strong>
               </p>
             </div>
           </div>
@@ -1399,19 +1399,19 @@ export const WalletModal: React.FC = () => {
                   type="number"
                   required
                   min={50000}
-                  max={currentUser.balance}
+                  max={currentUser?.balance ?? 0}
                   value={withdrawAmount}
                   onChange={e => setWithdrawAmount(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 text-amber-400 font-bold text-sm rounded-xl p-2.5 focus:outline-none focus:border-red-500"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">
-                  Khả dụng: {currentUser.balance.toLocaleString('vi-VN')}đ • Phí giao dịch 0đ
+                  Khả dụng: {(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ • Phí giao dịch 0đ
                 </span>
               </div>
 
               <button
                 type="submit"
-                disabled={currentUser.balance < 50000}
+                disabled={(currentUser?.balance ?? 0) < 50000}
                 className="w-full py-3.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-xs transition-all shadow-md shadow-red-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <ArrowUpRight size={16} />

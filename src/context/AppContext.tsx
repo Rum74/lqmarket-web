@@ -821,14 +821,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (userObj && userObj.id) {
           setCurrentUserId(userObj.id);
           setIsLoggedIn(true);
-          setAllUsers(prev => {
-            const filtered = prev.filter(u => u.id !== userObj.id && u.email !== userObj.email);
-            return [userObj, ...filtered];
-          });
         }
 
         const usersList = Array.isArray(payload.allUsers) ? payload.allUsers : Array.isArray(bootRes.allUsers) ? bootRes.allUsers : null;
-        if (usersList) setAllUsers(usersList);
+        setAllUsers(prev => {
+          const map = new Map<string, UserProfile>();
+          for (const u of prev) {
+            if (u && u.id) map.set(u.id, u);
+          }
+          if (usersList) {
+            for (const u of usersList) {
+              if (u && u.id) {
+                const prevU = map.get(u.id);
+                map.set(u.id, {
+                  ...prevU,
+                  ...u,
+                  balance: Number(u.balance ?? prevU?.balance ?? 0) || 0,
+                  pendingBalance: Number(u.pendingBalance ?? prevU?.pendingBalance ?? 0) || 0,
+                  role: u.role || prevU?.role || 'buyer'
+                });
+              }
+            }
+          }
+          if (userObj && userObj.id) {
+            const prevU = map.get(userObj.id);
+            map.set(userObj.id, {
+              ...prevU,
+              ...userObj,
+              balance: Number(userObj.balance ?? prevU?.balance ?? 0) || 0,
+              pendingBalance: Number(userObj.pendingBalance ?? prevU?.pendingBalance ?? 0) || 0,
+              role: userObj.role || prevU?.role || 'buyer'
+            });
+          }
+          return Array.from(map.values());
+        });
 
         const ordersList = Array.isArray(payload.orders) ? payload.orders : Array.isArray(bootRes.orders) ? bootRes.orders : null;
         if (ordersList) setOrders(ordersList);
@@ -1034,25 +1060,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [fetchAllMongoData]);
 
   // Derive Current User
-  const currentUser = useMemo(() => {
+  const currentUser = useMemo<UserProfile>(() => {
     if (!isLoggedIn || !currentUserId) return GUEST_USER;
 
     const matchInAll = allUsers.find(
       u => u && (u.id === currentUserId || (u.email && u.email.toLowerCase() === currentUserId.toLowerCase()))
     );
-    if (matchInAll) return matchInAll;
+
+    let baseUser: any = matchInAll || null;
 
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem('lqmarket_saved_user_profile') : null;
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && (parsed.id === currentUserId || parsed.email?.toLowerCase() === currentUserId.toLowerCase())) {
-          return parsed;
+          baseUser = { ...(baseUser || {}), ...parsed };
         }
       }
     } catch {}
 
-    return GUEST_USER;
+    if (!baseUser) baseUser = GUEST_USER;
+
+    return {
+      ...GUEST_USER,
+      ...baseUser,
+      balance: Number(baseUser.balance ?? 0) || 0,
+      pendingBalance: Number(baseUser.pendingBalance ?? 0) || 0,
+      name: baseUser.name || baseUser.username || 'Thành viên',
+      email: baseUser.email || '',
+      role: (baseUser.role || 'buyer') as UserRole
+    };
   }, [isLoggedIn, currentUserId, allUsers]);
 
   // Synchronize active authentication credentials to localStorage for API headers

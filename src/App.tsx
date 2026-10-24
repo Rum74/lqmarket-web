@@ -138,7 +138,9 @@ const MainLayout: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <MainLayout />
+      <ErrorBoundary fallbackTitle="Đã có sự cố hiển thị giao diện LQMarket">
+        <MainLayout />
+      </ErrorBoundary>
     </AppProvider>
   );
 }

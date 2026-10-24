@@ -394,14 +394,30 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
             { sellerTier: { $in: ['VIP', 'PRO'] as any } }
           ]
         })
-          .select('id name username avatar rating completedSales isVerifiedSeller sellerTier bio createdAt')
+          .select('id name username email role balance pendingBalance avatar rating completedSales isVerifiedSeller sellerTier bio createdAt')
           .limit(40)
           .lean();
         if (publicSellers && publicSellers.length > 0) {
-          allUsers = publicSellers as any;
+          allUsers = publicSellers.map((s: any) => ({
+            ...s,
+            balance: Number(s.balance ?? 0) || 0,
+            pendingBalance: Number(s.pendingBalance ?? 0) || 0,
+            role: s.role || 'seller',
+            email: s.email || ''
+          })) as any;
         }
       } catch (err) {
         console.warn('Could not prefetch public sellers:', err);
+      }
+    }
+
+    // Always ensure currentUser is present in allUsers with their full profile & balance
+    if (currentUser && currentUser.id) {
+      const existingIdx = allUsers.findIndex((u: any) => u && (u.id === currentUser.id || u.email === currentUser.email));
+      if (existingIdx >= 0) {
+        allUsers[existingIdx] = { ...allUsers[existingIdx], ...currentUser };
+      } else {
+        allUsers.unshift(currentUser);
       }
     }
 

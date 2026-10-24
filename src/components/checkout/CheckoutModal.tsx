@@ -463,7 +463,7 @@ export const CheckoutModal: React.FC = () => {
                     <span className="font-semibold">Nguồn tiền: Ví điện tử LQMarket Pay</span>
                   </div>
                   <span className="font-mono font-bold text-amber-300">
-                    {currentUser.balance.toLocaleString('vi-VN')}đ
+                    {(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ
                   </span>
                 </div>
 
@@ -474,7 +474,7 @@ export const CheckoutModal: React.FC = () => {
                       <span>Số dư ví khả dụng đủ để thanh toán.</span>
                     </div>
                     <span className="font-bold">
-                      Còn lại: {(currentUser.balance - finalPrice).toLocaleString('vi-VN')}đ
+                      Còn lại: {Math.max(0, (currentUser?.balance ?? 0) - finalPrice).toLocaleString('vi-VN')}đ
                     </span>
                   </div>
                 ) : (
