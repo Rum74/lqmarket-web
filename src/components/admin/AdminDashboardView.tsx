@@ -12,6 +12,7 @@ import { AdminAuditLogsTab } from './AdminAuditLogsTab';
 import { AdminReferralsTab } from './AdminReferralsTab';
 import { AdminBlindBagWarehouseTab } from './AdminBlindBagWarehouseTab';
 import { AdminMarketingPromotionsTab } from './AdminMarketingPromotionsTab';
+import { AdminDraftLabTab } from './AdminDraftLabTab';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -51,7 +52,8 @@ import {
   Tag,
   FileText,
   Gift,
-  Megaphone
+  Megaphone,
+  Swords
 } from 'lucide-react';
 
 export const AdminDashboardView: React.FC = () => {
@@ -86,7 +88,7 @@ export const AdminDashboardView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'promotions' | 'payouts' | 'users' | 'mystery_box' | 'blind_bag_warehouse' | 'audit_logs' | 'referrals' | 'settings'
+    'pending' | 'accounts' | 'disputes' | 'seller_verification' | 'coupons' | 'promotions' | 'payouts' | 'users' | 'mystery_box' | 'blind_bag_warehouse' | 'audit_logs' | 'referrals' | 'draft_lab' | 'settings'
   >('pending');
   const [rejectionModalAccId, setRejectionModalAccId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
@@ -592,6 +594,18 @@ export const AdminDashboardView: React.FC = () => {
           >
             <Gift size={13} />
             <span>Referral</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('draft_lab')}
+            className={`px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeTab === 'draft_lab'
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black shadow-md'
+                : 'text-blue-400 hover:text-white bg-blue-500/10 border border-blue-500/20'
+            }`}
+          >
+            <Swords size={13} />
+            <span>LQ Draft Lab</span>
           </button>
 
           <button
@@ -1499,6 +1513,11 @@ export const AdminDashboardView: React.FC = () => {
       {/* TAB: REFERRALS */}
       {activeTab === 'referrals' && (
         <AdminReferralsTab />
+      )}
+
+      {/* TAB: LQ DRAFT LAB MANAGEMENT */}
+      {activeTab === 'draft_lab' && (
+        <AdminDraftLabTab />
       )}
 
       {/* DISPUTE RESOLUTION CONFIRMATION MODAL */}

@@ -11,6 +11,7 @@ export type AppView =
   | 'affiliate'
   | 'blog'
   | 'referral'
+  | 'draft_lab'
   | 'quy_che_hoat_dong'
   | 'chinh_sach_bao_mat'
   | 'chinh_sach_nguoi_mua'
@@ -22,6 +23,8 @@ export type AppView =
   | 'dieu_khoan_su_dung';
 
 export const POLICY_ROUTES: Record<string, AppView> = {
+  '/draft-lab': 'draft_lab',
+  '/lq-draft-lab': 'draft_lab',
   '/quy-che-hoat-dong': 'quy_che_hoat_dong',
   '/chinh-sach-bao-mat': 'chinh_sach_bao_mat',
   '/chinh-sach-nguoi-mua': 'chinh_sach_nguoi_mua',
@@ -34,6 +37,7 @@ export const POLICY_ROUTES: Record<string, AppView> = {
 };
 
 export const VIEW_TO_PATH: Partial<Record<AppView, string>> = {
+  draft_lab: '/draft-lab',
   quy_che_hoat_dong: '/quy-che-hoat-dong',
   chinh_sach_bao_mat: '/chinh-sach-bao-mat',
   chinh_sach_nguoi_mua: '/chinh-sach-nguoi-mua',

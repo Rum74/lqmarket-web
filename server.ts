@@ -44,6 +44,7 @@ import affiliateRoutes from './backend/src/routes/affiliateRoutes';
 import { referralRouter } from './backend/src/routes/referralRoutes';
 import blindBagRoutes from './backend/src/routes/blindBagRoutes';
 import promotionRoutes from './backend/src/routes/promotionRoutes';
+import draftLabRoutes from './backend/src/routes/draftLabRoutes';
 import { Setting } from './backend/src/models/Setting';
 
 // Helper to resolve route modules across ESM and CJS imports
@@ -185,6 +186,7 @@ async function startServer() {
   const resolvedReferralRoutes = getRouter(referralRouter);
   const resolvedBlindBagRoutes = getRouter(blindBagRoutes);
   const resolvedPromotionRoutes = getRouter(promotionRoutes);
+  const resolvedDraftLabRoutes = getRouter(draftLabRoutes);
 
   app.use('/api/auth', resolvedAuthRoutes);
   app.use('/api/accounts', resolvedAccountRoutes);
@@ -218,6 +220,8 @@ async function startServer() {
   app.use('/api/referrals', resolvedReferralRoutes);
   app.use('/api/referral', resolvedReferralRoutes); // Alias
   app.use('/api/promotions', resolvedPromotionRoutes);
+  app.use('/api/draft-lab', resolvedDraftLabRoutes);
+  app.use('/api/draftlab', resolvedDraftLabRoutes); // Alias
   app.use('/api/marketing/promotions', resolvedPromotionRoutes);
 
   // Public system settings endpoint (accessible without admin auth)

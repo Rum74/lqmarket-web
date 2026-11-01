@@ -16,6 +16,7 @@ import { SellerCenterView } from './components/seller/SellerCenterView';
 import { AffiliateView } from './components/affiliate/AffiliateView';
 import { ReferralView } from './components/referral/ReferralView';
 import { BlogView } from './components/blog/BlogView';
+import { DraftLabView } from './components/draftLab/DraftLabView';
 import {
   OperatingRegulationsView,
   PrivacyPolicyView,
@@ -77,6 +78,7 @@ const MainLayout: React.FC = () => {
           {currentView === 'affiliate' && <AffiliateView />}
           {currentView === 'referral' && <ReferralView />}
           {currentView === 'blog' && <BlogView />}
+          {currentView === 'draft_lab' && <DraftLabView />}
           {currentView === 'quy_che_hoat_dong' && <OperatingRegulationsView />}
           {currentView === 'chinh_sach_bao_mat' && <PrivacyPolicyView />}
           {currentView === 'chinh_sach_nguoi_mua' && <BuyerPolicyView />}

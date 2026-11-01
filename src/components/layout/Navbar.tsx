@@ -27,7 +27,8 @@ import {
   Store,
   Share2,
   Gift,
-  FileText
+  FileText,
+  Swords
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -182,6 +183,23 @@ export const Navbar: React.FC = () => {
               </span>
             </button>
 
+            {/* LQ Draft Lab */}
+            <button
+              id="nav-btn-draft-lab"
+              onClick={() => setCurrentView('draft_lab')}
+              className={`h-[35px] px-2.5 rounded-lg text-xs xl:text-[13px] font-semibold tracking-tight transition-all duration-200 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentView === 'draft_lab'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40 font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
+              }`}
+            >
+              <Swords className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Draft Lab</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-blue-500 text-white uppercase tracking-wider leading-none">
+                MỚI
+              </span>
+            </button>
+
             {/* Đăng Bán (Dành cho Người Bán / Admin / Khách khi tính năng Người bán bật hoặc Admin) */}
             {canAccessSeller && (!isLoggedIn || currentUser.role === 'seller' || currentUser.role === 'admin') && (
               <button
@@ -235,6 +253,23 @@ export const Navbar: React.FC = () => {
 
               {isMoreMenuOpen && (
                 <div className="absolute top-full right-0 mt-1.5 w-48 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl py-1.5 z-50 text-left animate-in fade-in duration-150">
+                  <button
+                    onClick={() => {
+                      setCurrentView('draft_lab');
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className={`w-full px-3.5 py-2.5 text-xs font-semibold flex items-center justify-between text-left cursor-pointer transition-colors ${
+                      currentView === 'draft_lab' ? 'text-amber-400 bg-amber-500/10' : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Swords className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>LQ Draft Lab</span>
+                    </div>
+                    <span className="text-[9px] bg-blue-500 text-white font-black px-1.5 py-0.2 rounded-full uppercase">
+                      MỚI
+                    </span>
+                  </button>
                   <button
                     onClick={() => {
                       setCurrentView('referral');
@@ -684,6 +719,26 @@ export const Navbar: React.FC = () => {
               </div>
               <span className="px-2 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded-full uppercase tracking-wider animate-pulse">
                 HOT
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentView('draft_lab');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${
+                currentView === 'draft_lab'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-300 hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Swords className="w-4 h-4 text-amber-400" />
+                <span>LQ Draft Lab (Phòng Phân Tích)</span>
+              </div>
+              <span className="px-2 py-0.5 bg-blue-500 text-white text-[9px] font-black rounded-full uppercase tracking-wider">
+                MỚI
               </span>
             </button>
 
