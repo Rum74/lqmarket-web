@@ -238,7 +238,9 @@ export function evaluateTeam(
   const suggestedReplacements: TeamEvaluation['suggestedReplacements'] = [];
 
   if (tankinessScore < 55 || !coveredRoles.has('Đỡ đòn')) {
-    const candidate = INITIAL_DRAFT_HEROES.find(h => h.role === 'Đỡ đòn' && !heroes.some(x => x.id === h.id));
+    const candidate = INITIAL_DRAFT_HEROES.find(
+      (h: DraftHero) => h.role === 'Đỡ đòn' && !heroes.some((x: DraftHero) => x.id === h.id)
+    );
     if (candidate) {
       suggestedReplacements.push({
         slotIndex: 4,
@@ -250,7 +252,9 @@ export function evaluateTeam(
   }
 
   if (damageComposition.physical >= 75 && !coveredRoles.has('Pháp sư')) {
-    const candidate = INITIAL_DRAFT_HEROES.find(h => h.role === 'Pháp sư' && !heroes.some(x => x.id === h.id));
+    const candidate = INITIAL_DRAFT_HEROES.find(
+      (h: DraftHero) => h.role === 'Pháp sư' && !heroes.some((x: DraftHero) => x.id === h.id)
+    );
     if (candidate) {
       suggestedReplacements.push({
         slotIndex: 2,
@@ -262,7 +266,9 @@ export function evaluateTeam(
   }
 
   if (crowdControlScore < 50) {
-    const candidate = INITIAL_DRAFT_HEROES.find(h => h.ratings.crowdControl >= 9 && !heroes.some(x => x.id === h.id));
+    const candidate = INITIAL_DRAFT_HEROES.find(
+      (h: DraftHero) => h.ratings.crowdControl >= 9 && !heroes.some((x: DraftHero) => x.id === h.id)
+    );
     if (candidate) {
       suggestedReplacements.push({
         slotIndex: 0,

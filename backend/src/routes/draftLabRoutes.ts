@@ -3,9 +3,9 @@ import { authenticateToken, requireAdmin, optionalAuth, AuthenticatedRequest } f
 import { DraftHero } from '../models/DraftHero';
 import { DraftAnalysis } from '../models/DraftAnalysis';
 import { DraftSetting } from '../models/DraftSetting';
-import { INITIAL_DRAFT_HEROES } from '../../../src/data/draftHeroesData';
-import { compareTeams, evaluateTeam, DISCLAIMER_TEXT } from '../../../src/utils/draftAnalysisEngine';
-import { DraftHero as IDraftHeroType } from '../../../src/types/draftLab';
+import { INITIAL_DRAFT_HEROES } from '../data/draftHeroesData.js';
+import { compareTeams, evaluateTeam, DISCLAIMER_TEXT } from '../services/draftAnalysisService.js';
+import { DraftHero as IDraftHeroType } from '../types/draftLab.js';
 
 const router = Router();
 
