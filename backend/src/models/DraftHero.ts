@@ -7,8 +7,11 @@ export interface IDraftHero {
   title: string;
   role: string;
   secondaryRole?: string;
+  secondaryRoles?: string[];
+  playstyles?: string[];
   primaryLane: string;
   secondaryLane?: string;
+  secondaryLanes?: string[];
   damageType: string;
   avatar: string;
   ratings: {
@@ -28,6 +31,9 @@ export interface IDraftHero {
   difficulty: string;
   isActive: boolean;
   notes?: string;
+  tacticalNotes?: string;
+  dataSource?: string;
+  lastUpdated?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,8 +45,11 @@ const DraftHeroSchema = new Schema<IDraftHero>(
     title: { type: String, default: '' },
     role: { type: String, required: true },
     secondaryRole: { type: String, default: '' },
+    secondaryRoles: [{ type: String }],
+    playstyles: [{ type: String }],
     primaryLane: { type: String, required: true },
     secondaryLane: { type: String, default: '' },
+    secondaryLanes: [{ type: String }],
     damageType: { type: String, default: 'Vật lý' },
     avatar: { type: String, default: '' },
     ratings: {
@@ -60,6 +69,9 @@ const DraftHeroSchema = new Schema<IDraftHero>(
     difficulty: { type: String, default: 'Trung bình' },
     isActive: { type: Boolean, default: true },
     notes: { type: String, default: '' },
+    tacticalNotes: { type: String, default: '' },
+    dataSource: { type: String, default: 'Garena Liên Quân Mobile VN (01/11/2026)' },
+    lastUpdated: { type: String, default: () => new Date().toISOString() },
     createdAt: { type: String, default: () => new Date().toISOString() },
     updatedAt: { type: String, default: () => new Date().toISOString() }
   },

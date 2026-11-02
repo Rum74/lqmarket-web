@@ -6,15 +6,42 @@ export type DamageType = 'Vật lý' | 'Phép' | 'Chuẩn' | 'Hỗn hợp';
 
 export type HeroDifficulty = 'Dễ' | 'Trung bình' | 'Khó' | 'Rất khó';
 
+export type HeroPlaystyle =
+  | 'Sát thương dồn'
+  | 'Sát thương duy trì'
+  | 'Cấu rỉa'
+  | 'Khống chế'
+  | 'Chống chịu'
+  | 'Mở giao tranh'
+  | 'Bảo kê'
+  | 'Cơ động'
+  | 'Ám sát chủ lực'
+  | 'Đẩy lẻ'
+  | 'Đa dụng';
+
+export const PLAYSTYLE_OPTIONS: HeroPlaystyle[] = [
+  'Sát thương dồn',
+  'Sát thương duy trì',
+  'Cấu rỉa',
+  'Khống chế',
+  'Chống chịu',
+  'Mở giao tranh',
+  'Bảo kê',
+  'Cơ động',
+  'Ám sát chủ lực',
+  'Đẩy lẻ',
+  'Đa dụng'
+];
+
 export interface HeroRatings {
-  tankiness: number;
-  damage: number;
-  crowdControl: number;
-  engage: number;
-  peel: number;
-  mobility: number;
-  earlyGame: number;
-  lateGame: number;
+  tankiness: number;      // 1-10: Khả năng chống chịu
+  damage: number;         // 1-10: Sát thương dồn / DPS
+  crowdControl: number;   // 1-10: Khả năng khống chế cứng/mềm
+  engage: number;         // 1-10: Khả năng mở giao tranh
+  peel: number;           // 1-10: Khả năng bảo kê chủ lực / hồi phục
+  mobility: number;       // 1-10: Độ cơ động / lướt
+  earlyGame: number;      // 1-10: Sức mạnh đầu game
+  lateGame: number;       // 1-10: Sức mạnh cuối game
 }
 
 export interface DraftHero {
@@ -23,38 +50,56 @@ export interface DraftHero {
   title: string;
   role: HeroRole;
   secondaryRole?: HeroRole;
+  secondaryRoles?: HeroRole[];
+  playstyles?: HeroPlaystyle[];
   primaryLane: HeroLane;
   secondaryLane?: HeroLane;
+  secondaryLanes?: HeroLane[];
   damageType: DamageType;
   avatar: string;
   ratings: HeroRatings;
   signatureSkill: string;
-  counters: string[];
-  synergies: string[];
+  counters: string[];     // Tướng khắc chế được tướng này
+  synergies: string[];    // Tướng kết hợp tốt
   tags: string[];
   difficulty: HeroDifficulty;
   isActive: boolean;
   notes?: string;
+  tacticalNotes?: string;
+  dataSource?: string;
+  lastUpdated?: string;
+}
+
+export interface TeamSlot {
+  slotIndex: number;
+  lane: HeroLane;
+  laneName: string;
+  hero: DraftHero | null;
 }
 
 export interface TeamEvaluation {
-  overallScore: number;
+  overallScore: number;            // 0 - 100
   grade: 'S+' | 'S' | 'A' | 'B' | 'C' | 'D';
-  laneBalanceScore: number;
-  damageBalanceScore: number;
-  tankinessScore: number;
-  burstDamageScore: number;
-  crowdControlScore: number;
-  engageScore: number;
-  peelScore: number;
-  teamfightScore: number;
-  earlyGamePower: number;
-  lateGamePower: number;
+  laneBalanceScore: number;        // 0 - 100
+  damageBalanceScore: number;      // 0 - 100
+  tankinessScore: number;          // 0 - 100
+  burstDamageScore: number;        // 0 - 100
+  crowdControlScore: number;       // 0 - 100
+  engageScore: number;             // 0 - 100
+  peelScore: number;               // 0 - 100
+  teamfightScore: number;          // 0 - 100
+  earlyGamePower: number;          // 0 - 100
+  lateGamePower: number;           // 0 - 100
   damageComposition: {
-    physical: number;
-    magic: number;
-    trueDamage: number;
+    physical: number;              // Percentage (e.g. 50%)
+    magic: number;                 // Percentage (e.g. 40%)
+    trueDamage: number;            // Percentage (e.g. 10%)
   };
+  playstyleHighlights?: {
+    playstyle: HeroPlaystyle;
+    count: number;
+    description: string;
+  }[];
   strengths: string[];
   weaknesses: string[];
   tacticalAdvice: string;
@@ -102,6 +147,24 @@ export interface DraftComparisonResult {
   userId?: string;
   userEmail?: string;
   isSaved?: boolean;
+}
+
+export interface SavedDraftItem {
+  id: string;
+  userId: string;
+  userEmail: string;
+  title: string;
+  teamAName: string;
+  teamBName: string;
+  teamAHeroIds: string[];
+  teamBHeroIds: string[];
+  resultSummary: {
+    scoreA: number;
+    scoreB: number;
+    advantage: 'teamA' | 'teamB' | 'even';
+  };
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface DraftLabSettings {

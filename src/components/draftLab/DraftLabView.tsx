@@ -1254,6 +1254,26 @@ export const DraftLabView: React.FC = () => {
               </h3>
 
               <div className="space-y-3 text-xs">
+                {/* Playstyle Highlights */}
+                {analysisResult.evalA.playstyleHighlights && analysisResult.evalA.playstyleHighlights.length > 0 && (
+                  <div>
+                    <span className="font-bold text-amber-400 flex items-center gap-1.5 mb-1.5">
+                      <Sparkles size={13} /> Đặc điểm chất tướng nổi bật:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysisResult.evalA.playstyleHighlights.map((ph, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-semibold"
+                          title={ph.description}
+                        >
+                          {ph.playstyle} ({ph.count})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <span className="font-bold text-emerald-400 flex items-center gap-1.5 mb-1">
                     <CheckCircle2 size={13} /> Điểm mạnh nổi bật:
@@ -1304,6 +1324,26 @@ export const DraftLabView: React.FC = () => {
               </h3>
 
               <div className="space-y-3 text-xs">
+                {/* Playstyle Highlights */}
+                {analysisResult.evalB.playstyleHighlights && analysisResult.evalB.playstyleHighlights.length > 0 && (
+                  <div>
+                    <span className="font-bold text-amber-400 flex items-center gap-1.5 mb-1.5">
+                      <Sparkles size={13} /> Đặc điểm chất tướng nổi bật:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysisResult.evalB.playstyleHighlights.map((ph, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-semibold"
+                          title={ph.description}
+                        >
+                          {ph.playstyle} ({ph.count})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <span className="font-bold text-emerald-400 flex items-center gap-1.5 mb-1">
                     <CheckCircle2 size={13} /> Điểm mạnh nổi bật:

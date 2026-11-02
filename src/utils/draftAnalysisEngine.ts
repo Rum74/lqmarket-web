@@ -3,7 +3,8 @@ import {
   TeamEvaluation,
   DraftComparisonResult,
   LaneMatchup,
-  HeroLane
+  HeroLane,
+  HeroPlaystyle
 } from '../types/draftLab';
 import { INITIAL_DRAFT_HEROES } from '../data/draftHeroesData';
 
@@ -34,6 +35,7 @@ export function evaluateTeam(
       earlyGamePower: 0,
       lateGamePower: 0,
       damageComposition: { physical: 0, magic: 0, trueDamage: 0 },
+      playstyleHighlights: [],
       strengths: ['Chưa chọn tướng nào cho đội hình.'],
       weaknesses: ['Đội hình đang trống, vui lòng chọn ít nhất 1-5 tướng.'],
       tacticalAdvice: 'Chọn đủ 5 tướng theo các vị trí: Tà Thần Caesar, Rừng, Đường Giữa, Xạ Thủ và Trợ Thủ để nhận phân tích chi tiết.',
@@ -42,9 +44,11 @@ export function evaluateTeam(
     };
   }
 
-  // 1. Roles & Lanes Analysis
+  // 1. Roles, Lanes & Playstyle Analysis
   const coveredLanes = new Set<string>();
   const coveredRoles = new Set<string>();
+  const playstyleCounts: Record<string, number> = {};
+
   let physicalCount = 0;
   let magicCount = 0;
   let trueDamageCount = 0;
@@ -60,9 +64,22 @@ export function evaluateTeam(
   for (const h of heroes) {
     coveredLanes.add(h.primaryLane);
     if (h.secondaryLane) coveredLanes.add(h.secondaryLane);
+    if (Array.isArray(h.secondaryLanes)) {
+      h.secondaryLanes.forEach(l => coveredLanes.add(l));
+    }
 
     coveredRoles.add(h.role);
     if (h.secondaryRole) coveredRoles.add(h.secondaryRole);
+    if (Array.isArray(h.secondaryRoles)) {
+      h.secondaryRoles.forEach(r => coveredRoles.add(r));
+    }
+
+    // Playstyles (Chất tướng)
+    if (Array.isArray(h.playstyles)) {
+      for (const p of h.playstyles) {
+        playstyleCounts[p] = (playstyleCounts[p] || 0) + 1;
+      }
+    }
 
     if (h.damageType === 'Vật lý') physicalCount++;
     else if (h.damageType === 'Phép') magicCount++;
@@ -92,7 +109,7 @@ export function evaluateTeam(
   const earlyGamePower = avg(totalEarly);
   const lateGamePower = avg(totalLate);
 
-  // Teamfight potency: calculated from combination of CC, Engage, Damage, and Tankiness
+  // Teamfight potency: combination of CC, Engage, Damage, and Tankiness
   const teamfightScore = Math.min(
     100,
     Math.round(
@@ -119,19 +136,41 @@ export function evaluateTeam(
     trueDamage: Math.round((trueDamageCount / totalDmgShares) * 100)
   };
 
-  // Damage balance score: Best when mixed (both physical and magic have at least 25%)
+  // Damage balance score: Best when mixed
   let damageBalanceScore = 80;
   if (damageComposition.physical > 75) {
-    damageBalanceScore -= 30; // Heavy pure physical penalty
+    damageBalanceScore -= 30; // Pure physical penalty
   } else if (damageComposition.magic > 75) {
-    damageBalanceScore -= 30; // Heavy pure magic penalty
+    damageBalanceScore -= 30; // Pure magic penalty
   } else if (damageComposition.physical >= 30 && damageComposition.magic >= 25) {
     damageBalanceScore = 100; // Ideal hybrid damage mix
   } else {
     damageBalanceScore = 85;
   }
   if (damageComposition.trueDamage >= 15) {
-    damageBalanceScore = Math.min(100, damageBalanceScore + 10); // True damage bonus
+    damageBalanceScore = Math.min(100, damageBalanceScore + 10);
+  }
+
+  // Playstyle highlights
+  const playstyleHighlights: TeamEvaluation['playstyleHighlights'] = [];
+  const recognizedPlaystyles = [
+    { name: 'Cấu rỉa', min: 2, desc: 'Khả năng tiêu hao sinh lực đối phương từ khoảng cách an toàn trước giao tranh rất mạnh.' },
+    { name: 'Mở giao tranh', min: 2, desc: 'Nhiều chiêu thức ép góc và chủ động bắt combat bất ngờ ở hang mục tiêu lớn.' },
+    { name: 'Bảo kê', min: 2, desc: 'Tuyến sau vững chắc, nhiều hiệu ứng che chắn và hồi phục cho xạ thủ an tâm xả sát thương.' },
+    { name: 'Sát thương dồn', min: 2, desc: 'Lượng dồn sát thương bùng nổ tức thì, dễ dàng tiễn chủ lực đối phương lên bảng đếm số.' },
+    { name: 'Đẩy lẻ', min: 1, desc: 'Có chất tướng solo đường và gây sức ép công trình độc lập tốt, kéo dãn đội hình đối thủ.' },
+    { name: 'Khống chế', min: 2, desc: 'Khống chế diện rộng và ngắt nhịp thi triển chiêu của đối thủ cực kỳ đáng gờm.' },
+    { name: 'Chống chịu', min: 2, desc: 'Hàng rào tiền tuyến kiên cố, sẵn sàng hút chiêu và cản phá đợt tràn lên của địch.' }
+  ] as const;
+
+  for (const rp of recognizedPlaystyles) {
+    if ((playstyleCounts[rp.name] || 0) >= rp.min) {
+      playstyleHighlights.push({
+        playstyle: rp.name as HeroPlaystyle,
+        count: playstyleCounts[rp.name],
+        description: rp.desc
+      });
+    }
   }
 
   // Overall Score (Weighted combination)
@@ -172,6 +211,12 @@ export function evaluateTeam(
   if (peelScore >= 75) {
     strengths.push('Bảo kê chủ lực và hồi phục ấn tượng, xạ thủ có nhiều khoảng trống tự do bắn hạ tanker đối phương.');
   }
+  if ((playstyleCounts['Cấu rỉa'] || 0) >= 2) {
+    strengths.push('Sở hữu chất tướng Cấu rỉa (Poke) tầm xa dày đặc, dễ bào mòn máu đối phương trước khi mở combat.');
+  }
+  if ((playstyleCounts['Đẩy lẻ'] || 0) >= 1) {
+    strengths.push('Có mũi nhọn Đẩy lẻ (Split Push) solo đường tốt, kéo giãn cự ly phòng thủ của đối phương.');
+  }
   if (damageComposition.physical >= 30 && damageComposition.magic >= 25) {
     strengths.push('Nguồn sát thương phân bổ cân bằng (Vật lý & Phép), buộc đối phương phải lên cả song giáp.');
   }
@@ -196,14 +241,14 @@ export function evaluateTeam(
   if (crowdControlScore < 55) {
     weaknesses.push('Thiếu khống chế cứng diện rộng, gặp các sát thủ cơ động cao (Nakroth, Aoi, Florentino) sẽ rất khó bắt lại.');
   }
+  if (peelScore < 50 || (playstyleCounts['Bảo kê'] || 0) === 0) {
+    weaknesses.push('Khả năng bảo hộ xạ thủ kém (thiếu chất tướng Bảo kê), chủ lực dễ trở thành miếng mồi ngon cho sát thủ.');
+  }
   if (damageComposition.physical >= 75) {
     weaknesses.push('Quá phụ thuộc sát thương vật lý, đối phương chỉ cần lên Khiên Thất Truyền + Giáp Thống Khổ là sẽ giảm tải đáng kể.');
   }
   if (damageComposition.magic >= 75) {
     weaknesses.push('Quá thiên về sát thương phép, đối phương lên Huân Chương Troy + Giáp Gaia sẽ dễ dàng trụ vững.');
-  }
-  if (peelScore < 50) {
-    weaknesses.push('Khả năng bảo hộ xạ thủ kém, chủ lực dễ trở thành miếng mồi ngon cho sát thủ vòng sau.');
   }
   if (lanesCoveredCount < 5) {
     const missingLanes = coreLanes.filter(l => !coveredLanes.has(l));
@@ -246,7 +291,7 @@ export function evaluateTeam(
         slotIndex: 4,
         currentHeroName: heroes[4]?.name || 'Vị trí 5',
         suggestedHero: candidate,
-        reason: 'Bổ sung Đỡ đòn cứng cáp (như Thane/Toro/Maloch) để làm dày tuyến đầu và hút sát thương.'
+        reason: 'Bổ sung Đỡ đòn cứng cáp mang chất tướng Chống chịu / Mở giao tranh (như Thane/Toro/Maloch) để làm dày tuyến đầu.'
       });
     }
   }
@@ -260,21 +305,24 @@ export function evaluateTeam(
         slotIndex: 2,
         currentHeroName: heroes[2]?.name || 'Đường Giữa',
         suggestedHero: candidate,
-        reason: 'Bổ sung Pháp sư sốc dame phép (Liliana/Raz/Krixi) để đa dạng hóa nguồn sát thương, chống đối phương lên giáp.'
+        reason: 'Bổ sung Pháp sư sốc dame phép (Liliana/Raz/Krixi) để đa dạng hóa nguồn sát thương, chống đối phương dồn giáp vật lý.'
       });
     }
   }
 
-  if (crowdControlScore < 50) {
+  if (peelScore < 50 || (playstyleCounts['Bảo kê'] || 0) === 0) {
     const candidate = INITIAL_DRAFT_HEROES.find(
-      (h: DraftHero) => h.ratings.crowdControl >= 9 && !heroes.some((x: DraftHero) => x.id === h.id)
+      (h: DraftHero) =>
+        Array.isArray(h.playstyles) &&
+        h.playstyles.includes('Bảo kê') &&
+        !heroes.some((x: DraftHero) => x.id === h.id)
     );
     if (candidate) {
       suggestedReplacements.push({
         slotIndex: 0,
         currentHeroName: heroes[0]?.name || 'Trợ thủ',
         suggestedHero: candidate,
-        reason: `Cần thêm tướng có khống chế diện rộng như ${candidate.name} để dễ mở giao tranh và giữ chân kẻ địch.`
+        reason: `Bổ sung tướng có chất tướng Bảo kê (như ${candidate.name} / Helen / Annette) để bảo bọc xạ thủ trước sát thủ đối phương.`
       });
     }
   }
@@ -293,6 +341,7 @@ export function evaluateTeam(
     earlyGamePower,
     lateGamePower,
     damageComposition,
+    playstyleHighlights,
     strengths,
     weaknesses,
     tacticalAdvice,
@@ -322,7 +371,6 @@ export function compareTeams(
   ];
 
   const laneMatchups: LaneMatchup[] = lanes.map((l, idx) => {
-    // Match by slot or preferred lane
     const heroA = teamA[idx] || teamA.find(h => h.primaryLane === l.lane) || null;
     const heroB = teamB[idx] || teamB.find(h => h.primaryLane === l.lane) || null;
 
@@ -370,7 +418,6 @@ export function compareTeams(
       heroB.ratings.crowdControl * 0.2 +
       heroB.ratings.mobility * 0.2;
 
-    // Check specific counter logic
     const aCountersB = heroA.counters?.includes(heroB.name) || heroB.counters?.includes(heroA.name);
     const bCountersA = heroB.counters?.includes(heroA.name);
 

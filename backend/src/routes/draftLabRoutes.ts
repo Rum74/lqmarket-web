@@ -379,12 +379,50 @@ router.get('/admin/stats', authenticateToken, requireAdmin, async (_req, res: Re
 
     const settings = await getSettingsDoc();
 
+    // Role breakdown
+    const roleBreakdown: Record<string, number> = {
+      'Đấu sĩ': 0,
+      'Pháp sư': 0,
+      'Xạ thủ': 0,
+      'Sát thủ': 0,
+      'Đỡ đòn': 0,
+      'Trợ thủ': 0
+    };
+
+    let missingAvatarCount = 0;
+    let missingInfoCount = 0;
+
+    for (const h of dbHeroes) {
+      if (roleBreakdown[h.role] !== undefined) {
+        roleBreakdown[h.role]++;
+      }
+      if (!h.avatar || h.avatar.includes('placeholder')) {
+        missingAvatarCount++;
+      }
+      if (!h.notes && !h.signatureSkill) {
+        missingInfoCount++;
+      }
+    }
+
+    // Missing compared to official roster
+    const dbNames = new Set(dbHeroes.map(h => h.name.toLowerCase().trim()));
+    const missingOfficialCount = INITIAL_DRAFT_HEROES.filter(
+      h => !dbNames.has(h.name.toLowerCase().trim())
+    ).length;
+
     return res.json({
       success: true,
       data: {
         totalAnalyses,
         totalSaved,
         totalCustomHeroes: dbHeroes.length,
+        totalOfficialHeroes: INITIAL_DRAFT_HEROES.length,
+        missingOfficialCount,
+        roleBreakdown,
+        missingAvatarCount,
+        missingInfoCount,
+        lastDataSync: '01/11/2026',
+        dataSource: 'Garena Liên Quân Mobile Việt Nam (01/11/2026)',
         settings,
         recentAnalyses
       }
@@ -393,6 +431,218 @@ router.get('/admin/stats', authenticateToken, requireAdmin, async (_req, res: Re
     return res.status(500).json({
       success: false,
       message: 'Lỗi tải thống kê quản trị LQ Draft Lab.',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/draft-lab/admin/heroes/missing
+ * Return heroes from official roster not yet in database
+ */
+router.get('/admin/heroes/missing', authenticateToken, requireAdmin, async (_req, res: Response) => {
+  try {
+    const dbHeroes = await DraftHero.find({}).lean();
+    const existingIds = new Set(dbHeroes.map(h => h.id));
+    const existingNames = new Set(dbHeroes.map(h => h.name.toLowerCase().trim()));
+
+    const missingHeroes = INITIAL_DRAFT_HEROES.filter(
+      h => !existingIds.has(h.id) && !existingNames.has(h.name.toLowerCase().trim())
+    );
+
+    return res.json({
+      success: true,
+      count: missingHeroes.length,
+      totalOfficialHeroes: INITIAL_DRAFT_HEROES.length,
+      totalInDb: dbHeroes.length,
+      data: missingHeroes
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể kiểm tra danh sách tướng còn thiếu.',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/draft-lab/admin/heroes/batch
+ * Bulk add or sync heroes with duplicate prevention and retry support
+ */
+router.post('/admin/heroes/batch', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { heroes, skipExisting = true, updateExisting = false } = req.body;
+    if (!Array.isArray(heroes) || heroes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Danh sách tướng cung cấp không hợp lệ hoặc đang trống.'
+      });
+    }
+
+    const dbHeroes = await DraftHero.find({}).lean();
+    const existingMapById = new Map<string, any>();
+    const existingMapByName = new Map<string, any>();
+    for (const h of dbHeroes) {
+      existingMapById.set(h.id, h);
+      existingMapByName.set(h.name.toLowerCase().trim(), h);
+    }
+
+    let addedCount = 0;
+    let skippedCount = 0;
+    let updatedCount = 0;
+    const errors: { index: number; heroName: string; reason: string }[] = [];
+    const addedList: any[] = [];
+
+    for (let i = 0; i < heroes.length; i++) {
+      const item = heroes[i];
+      if (!item || !item.name || !item.name.trim()) {
+        errors.push({ index: i, heroName: item?.name || 'Vô danh', reason: 'Tên tướng không được để trống' });
+        continue;
+      }
+      if (!item.role) {
+        errors.push({ index: i, heroName: item.name, reason: 'Vai trò chính là bắt buộc' });
+        continue;
+      }
+
+      const normalizedName = item.name.toLowerCase().trim();
+      const existing = existingMapById.get(item.id) || existingMapByName.get(normalizedName);
+
+      if (existing) {
+        if (skipExisting && !updateExisting) {
+          skippedCount++;
+          continue;
+        }
+        if (updateExisting) {
+          await DraftHero.updateOne(
+            { id: existing.id },
+            {
+              $set: {
+                ...item,
+                id: existing.id,
+                notes: existing.notes || item.notes || '',
+                tacticalNotes: existing.tacticalNotes || item.tacticalNotes || '',
+                updatedAt: new Date().toISOString()
+              }
+            }
+          );
+          updatedCount++;
+          continue;
+        }
+        skippedCount++;
+        continue;
+      }
+
+      // Create new record
+      try {
+        const heroId =
+          item.id ||
+          `hero_${normalizedName.replace(/[^a-z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 6)}`;
+        const created = await DraftHero.create({
+          ...item,
+          id: heroId,
+          name: item.name.trim(),
+          title: item.title || '',
+          role: item.role,
+          secondaryRoles: Array.isArray(item.secondaryRoles)
+            ? item.secondaryRoles
+            : item.secondaryRole
+            ? [item.secondaryRole]
+            : [],
+          playstyles: Array.isArray(item.playstyles) ? item.playstyles : [],
+          primaryLane: item.primaryLane || 'Caesar',
+          secondaryLanes: Array.isArray(item.secondaryLanes)
+            ? item.secondaryLanes
+            : item.secondaryLane
+            ? [item.secondaryLane]
+            : [],
+          damageType: item.damageType || 'Vật lý',
+          avatar:
+            item.avatar ||
+            'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=80',
+          ratings: {
+            tankiness: item.ratings?.tankiness ?? 5,
+            damage: item.ratings?.damage ?? 5,
+            crowdControl: item.ratings?.crowdControl ?? 5,
+            engage: item.ratings?.engage ?? 5,
+            peel: item.ratings?.peel ?? 5,
+            mobility: item.ratings?.mobility ?? 5,
+            earlyGame: item.ratings?.earlyGame ?? 5,
+            lateGame: item.ratings?.lateGame ?? 5
+          },
+          signatureSkill: item.signatureSkill || '',
+          counters: Array.isArray(item.counters) ? item.counters : [],
+          synergies: Array.isArray(item.synergies) ? item.synergies : [],
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          difficulty: item.difficulty || 'Trung bình',
+          isActive: item.isActive !== false,
+          notes: item.notes || '',
+          tacticalNotes: item.tacticalNotes || item.notes || '',
+          dataSource: item.dataSource || 'Garena Liên Quân Mobile VN (01/11/2026)',
+          lastUpdated: new Date().toISOString()
+        });
+
+        existingMapById.set(created.id, created);
+        existingMapByName.set(normalizedName, created);
+        addedCount++;
+        addedList.push(created);
+      } catch (err: any) {
+        errors.push({ index: i, heroName: item.name, reason: err.message || 'Lỗi thêm vào cơ sở dữ liệu' });
+      }
+    }
+
+    const totalInDb = await DraftHero.countDocuments({});
+
+    return res.json({
+      success: true,
+      message: `Đã xử lý danh sách: Thêm mới ${addedCount}, Bỏ qua ${skippedCount} trùng lặp, Lỗi ${errors.length}.`,
+      addedCount,
+      skippedCount,
+      updatedCount,
+      errorCount: errors.length,
+      errors,
+      totalInDb
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể thêm danh sách tướng hàng loạt.',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/draft-lab/admin/heroes/check-duplicates
+ * Check for duplicate heroes by name or id
+ */
+router.get('/admin/heroes/check-duplicates', authenticateToken, requireAdmin, async (_req, res: Response) => {
+  try {
+    const dbHeroes = await DraftHero.find({}).lean();
+    const nameMap = new Map<string, any[]>();
+    for (const h of dbHeroes) {
+      const norm = h.name.toLowerCase().trim();
+      const list = nameMap.get(norm) || [];
+      list.push(h);
+      nameMap.set(norm, list);
+    }
+
+    const duplicates: { name: string; count: number; items: any[] }[] = [];
+    for (const [name, list] of nameMap.entries()) {
+      if (list.length > 1) {
+        duplicates.push({ name, count: list.length, items: list });
+      }
+    }
+
+    return res.json({
+      success: true,
+      duplicateCount: duplicates.length,
+      duplicates
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể kiểm tra dữ liệu trùng lặp.',
       error: error.message
     });
   }

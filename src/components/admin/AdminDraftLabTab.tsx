@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { DraftHero, HeroRole, HeroLane } from '../../types/draftLab';
+import { DraftHero, HeroRole, HeroLane, HeroPlaystyle, PLAYSTYLE_OPTIONS } from '../../types/draftLab';
 import { INITIAL_DRAFT_HEROES, ROLE_OPTIONS, LANE_OPTIONS } from '../../data/draftHeroesData';
+import { BatchAddHeroesModal } from './BatchAddHeroesModal';
 import api from '../../lib/apiClient';
 import {
   Swords,
@@ -17,7 +18,12 @@ import {
   Sliders,
   Power,
   X,
-  Check
+  Check,
+  Layers,
+  Download,
+  Copy,
+  Sparkles,
+  Info
 } from 'lucide-react';
 
 export const AdminDraftLabTab: React.FC = () => {
@@ -31,6 +37,16 @@ export const AdminDraftLabTab: React.FC = () => {
   const [isModuleEnabled, setIsModuleEnabled] = useState(true);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  // Batch Add Modal State
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+
+  // Duplicate Check Modal / State
+  const [duplicateScan, setDuplicateScan] = useState<{
+    duplicateCount: number;
+    duplicates: { name: string; count: number; items: any[] }[];
+  } | null>(null);
+  const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
 
   // Edit / Add Hero Modal State
   const [editingHero, setEditingHero] = useState<Partial<DraftHero> | null>(null);
@@ -69,10 +85,16 @@ export const AdminDraftLabTab: React.FC = () => {
   const filteredHeroes = heroes.filter(h => {
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      if (!h.name.toLowerCase().includes(q) && !h.title.toLowerCase().includes(q)) return false;
+      const matchName = h.name.toLowerCase().includes(q);
+      const matchTitle = h.title?.toLowerCase().includes(q) ?? false;
+      const matchTag = h.tags?.some(t => t.toLowerCase().includes(q)) ?? false;
+      if (!matchName && !matchTitle && !matchTag) return false;
     }
     if (selectedRole !== 'Tất cả') {
-      if (h.role !== selectedRole && h.secondaryRole !== selectedRole) return false;
+      const isPrimary = h.role === selectedRole;
+      const isSecondaryLegacy = h.secondaryRole === selectedRole;
+      const isSecondaryArr = h.secondaryRoles?.includes(selectedRole as HeroRole) ?? false;
+      if (!isPrimary && !isSecondaryLegacy && !isSecondaryArr) return false;
     }
     return true;
   });
@@ -97,6 +119,58 @@ export const AdminDraftLabTab: React.FC = () => {
     }
   };
 
+  // Check duplicates
+  const handleCheckDuplicates = async () => {
+    setIsScanningDuplicates(true);
+    try {
+      const res = await api.get('/api/draft-lab/admin/heroes/check-duplicates');
+      if (res.data?.success) {
+        setDuplicateScan(res.data);
+        if (res.data.duplicateCount === 0) {
+          setStatusMsg('Cơ sở dữ liệu hoàn toàn sạch sẽ, không có tướng nào bị trùng lặp!');
+          setTimeout(() => setStatusMsg(null), 3500);
+        }
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Không thể quét dữ liệu trùng.');
+    } finally {
+      setIsScanningDuplicates(false);
+    }
+  };
+
+  // Export JSON
+  const handleExportJSON = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(heroes, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `lienquan_heroes_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const headers = ['id', 'name', 'title', 'role', 'primaryLane', 'damageType', 'playstyles', 'difficulty'];
+    const rows = heroes.map(h => [
+      h.id,
+      `"${h.name}"`,
+      `"${h.title || ''}"`,
+      `"${h.role}"`,
+      `"${h.primaryLane}"`,
+      `"${h.damageType}"`,
+      `"${(h.playstyles || []).join(';')}"`,
+      `"${h.difficulty}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', encodeURI(csvContent));
+    downloadAnchor.setAttribute('download', `lienquan_heroes_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   // Save / Update Hero
   const handleSaveHeroSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +185,9 @@ export const AdminDraftLabTab: React.FC = () => {
         ...editingHero,
         id: editingHero.id || `hero_${editingHero.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
         isActive: editingHero.isActive ?? true,
+        secondaryRoles: editingHero.secondaryRoles || (editingHero.secondaryRole ? [editingHero.secondaryRole] : []),
+        playstyles: editingHero.playstyles || [],
+        tacticalNotes: editingHero.tacticalNotes || editingHero.notes || '',
         ratings: {
           tankiness: Number(editingHero.ratings?.tankiness || 5),
           damage: Number(editingHero.ratings?.damage || 5),
@@ -154,6 +231,19 @@ export const AdminDraftLabTab: React.FC = () => {
     }
   };
 
+  // Role Breakdown counts
+  const roleBreakdown: Record<string, number> = {
+    'Đấu sĩ': 0,
+    'Pháp sư': 0,
+    'Xạ thủ': 0,
+    'Sát thủ': 0,
+    'Đỡ đòn': 0,
+    'Trợ thủ': 0
+  };
+  heroes.forEach(h => {
+    if (roleBreakdown[h.role] !== undefined) roleBreakdown[h.role]++;
+  });
+
   return (
     <div className="space-y-6 text-left animate-in fade-in duration-200">
       {/* Toast Alert */}
@@ -170,7 +260,7 @@ export const AdminDraftLabTab: React.FC = () => {
       )}
 
       {/* Top Overview Cards & Toggle Switch */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {/* Module Switch Card */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-md space-y-2">
           <div className="flex items-center justify-between">
@@ -204,9 +294,19 @@ export const AdminDraftLabTab: React.FC = () => {
 
         {/* Total Heroes */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-md space-y-1">
-          <span className="text-xs font-bold text-slate-400">TỔNG TƯỚNG LIÊN QUÂN</span>
-          <p className="text-2xl font-black text-white font-mono">{heroes.length}</p>
-          <span className="text-[11px] text-slate-500">Chuẩn 6 vai trò chính</span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400">TỔNG TƯỚNG LIÊN QUÂN</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+              01/11/2026
+            </span>
+          </div>
+          <p className="text-2xl font-black text-white font-mono">
+            {heroes.length}{' '}
+            <span className="text-xs text-slate-500 font-normal">/ {INITIAL_DRAFT_HEROES.length} tướng</span>
+          </p>
+          <span className="text-[11px] text-slate-500 block truncate">
+            Nguồn: Garena Liên Quân Mobile VN
+          </span>
         </div>
 
         {/* Total Analyses Count */}
@@ -215,7 +315,7 @@ export const AdminDraftLabTab: React.FC = () => {
           <p className="text-2xl font-black text-amber-400 font-mono">
             {stats?.totalAnalyses ?? 0}
           </p>
-          <span className="text-[11px] text-slate-500">Người dùng & khách truy cập</span>
+          <span className="text-[11px] text-slate-500">Người dùng &amp; khách truy cập</span>
         </div>
 
         {/* Total Saved Drafts */}
@@ -228,51 +328,136 @@ export const AdminDraftLabTab: React.FC = () => {
         </div>
       </div>
 
+      {/* Role Distribution & Health Banner */}
+      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-slate-300 flex items-center gap-1.5">
+            <Info size={14} className="text-amber-400" />
+            <span>Phân bổ vai trò trong hệ thống:</span>
+          </span>
+          <span className="text-slate-400 text-[11px]">
+            Cập nhật máy chủ Việt Nam: <strong>01/11/2026</strong>
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-1 text-xs font-semibold">
+          {Object.entries(roleBreakdown).map(([role, count]) => (
+            <div
+              key={role}
+              className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2"
+            >
+              <span className="text-slate-400">{role}:</span>
+              <span className="text-amber-400 font-mono font-bold">{count}</span>
+            </div>
+          ))}
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+            <span className="text-slate-400">Còn thiếu:</span>
+            <span className="text-rose-400 font-mono font-bold">
+              {Math.max(0, INITIAL_DRAFT_HEROES.length - heroes.length)}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Hero Management Table & Search */}
       <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div>
             <h3 className="text-base font-black text-white flex items-center gap-2">
-              <Swords className="w-5 h-5 text-amber-400" /> QUẢN LÝ DANH SÁCH TƯỚNG
+              <Swords className="w-5 h-5 text-amber-400" /> QUẢN LÝ DANH SÁCH TƯỚNG LIÊN QUÂN
             </h3>
             <p className="text-xs text-slate-400">
-              Thêm mới, cập nhật vai trò, chỉ số chiến thuật hoặc ẩn/hiện tướng
+              Quản trị toàn diện tướng, vai trò chính/phụ, chất tướng và chỉ số chiến thuật chuẩn Garena
             </p>
           </div>
 
-          <button
-            onClick={() =>
-              setEditingHero({
-                name: '',
-                title: '',
-                role: 'Đấu sĩ',
-                primaryLane: 'Caesar',
-                damageType: 'Vật lý',
-                avatar: '',
-                ratings: {
-                  tankiness: 5,
-                  damage: 5,
-                  crowdControl: 5,
-                  engage: 5,
-                  peel: 5,
-                  mobility: 5,
-                  earlyGame: 5,
-                  lateGame: 5
-                },
-                signatureSkill: '',
-                counters: [],
-                synergies: [],
-                tags: [],
-                difficulty: 'Trung bình',
-                isActive: true
-              })
-            }
-            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 shrink-0 self-start sm:self-auto"
-          >
-            <Plus size={15} />
-            <span>Thêm Tướng Mới</span>
-          </button>
+          {/* Action Buttons Bar */}
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            {/* THÊM DANH SÁCH TƯỚNG (Batch Add Button) */}
+            <button
+              onClick={() => setIsBatchModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-lg active:scale-95"
+            >
+              <Layers size={15} />
+              <span>+ THÊM DANH SÁCH TƯỚNG</span>
+            </button>
+
+            {/* Thêm 1 Tướng Mới */}
+            <button
+              onClick={() =>
+                setEditingHero({
+                  name: '',
+                  title: '',
+                  role: 'Đấu sĩ',
+                  primaryLane: 'Caesar',
+                  damageType: 'Vật lý',
+                  avatar: '',
+                  secondaryRoles: [],
+                  playstyles: [],
+                  tacticalNotes: '',
+                  ratings: {
+                    tankiness: 5,
+                    damage: 5,
+                    crowdControl: 5,
+                    engage: 5,
+                    peel: 5,
+                    mobility: 5,
+                    earlyGame: 5,
+                    lateGame: 5
+                  },
+                  signatureSkill: '',
+                  counters: [],
+                  synergies: [],
+                  tags: [],
+                  difficulty: 'Trung bình',
+                  isActive: true
+                })
+              }
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Plus size={14} />
+              <span>Thêm 1 Tướng</span>
+            </button>
+
+            {/* Check Duplicates */}
+            <button
+              onClick={handleCheckDuplicates}
+              disabled={isScanningDuplicates}
+              className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-all"
+              title="Quét dữ liệu trùng lặp"
+            >
+              <AlertTriangle size={14} className="text-amber-400" />
+              <span>Kiểm tra trùng</span>
+            </button>
+
+            {/* Export buttons */}
+            <button
+              onClick={handleExportJSON}
+              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs cursor-pointer"
+              title="Xuất danh sách JSON"
+            >
+              <Download size={14} />
+            </button>
+          </div>
         </div>
+
+        {/* Duplicate Scan Alert (if any) */}
+        {duplicateScan && duplicateScan.duplicateCount > 0 && (
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} />
+              <span>
+                Phát hiện <strong>{duplicateScan.duplicateCount}</strong> tướng có bản ghi trùng lặp trong database!
+              </span>
+            </div>
+            <button
+              onClick={() => setDuplicateScan(null)}
+              className="text-slate-400 hover:text-white text-xs underline cursor-pointer"
+            >
+              Đóng
+            </button>
+          </div>
+        )}
 
         {/* Search & Filters */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -282,13 +467,13 @@ export const AdminDraftLabTab: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Tìm kiếm tướng theo tên hoặc danh hiệu..."
+              placeholder="Tìm kiếm theo tên (Dyadia, Dolia, Stuart, Florentino, Elsu...)..."
               className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 text-xs">
-            {ROLE_OPTIONS.map(r => (
+            {['Tất cả', ...ROLE_OPTIONS].map(r => (
               <button
                 key={r}
                 onClick={() => setSelectedRole(r)}
@@ -310,7 +495,8 @@ export const AdminDraftLabTab: React.FC = () => {
             <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-black tracking-wider border-b border-slate-800">
               <tr>
                 <th className="p-3">Tướng</th>
-                <th className="p-3">Vai Trò</th>
+                <th className="p-3">Vai Trò Chính / Phụ</th>
+                <th className="p-3">Chất Tướng (Playstyle)</th>
                 <th className="p-3">Đường Đi</th>
                 <th className="p-3">Loại Sát Thương</th>
                 <th className="p-3">Chỉ Số Chính (Tank/Dmg/CC)</th>
@@ -318,67 +504,112 @@ export const AdminDraftLabTab: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
-              {filteredHeroes.map(hero => (
-                <tr key={hero.id} className="hover:bg-slate-850/50 transition-colors">
-                  <td className="p-3 flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-800 border border-slate-700 shrink-0">
-                      <img src={hero.avatar} alt={hero.name} className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <span className="font-bold text-white block">{hero.name}</span>
-                      <span className="text-[10px] text-slate-400">{hero.title}</span>
-                    </div>
-                  </td>
-                  <td className="p-3 font-semibold text-slate-300">
-                    {hero.role} {hero.secondaryRole ? `· ${hero.secondaryRole}` : ''}
-                  </td>
-                  <td className="p-3">
-                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">
-                      {hero.primaryLane}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        hero.damageType === 'Chuẩn'
-                          ? 'bg-amber-400/20 text-amber-300'
-                          : hero.damageType === 'Phép'
-                          ? 'bg-purple-500/20 text-purple-300'
-                          : 'bg-rose-500/20 text-rose-300'
-                      }`}
-                    >
-                      {hero.damageType}
-                    </span>
-                  </td>
-                  <td className="p-3 font-mono text-[11px] text-slate-400">
-                    <span className="text-emerald-400">{hero.ratings.tankiness}</span> /{' '}
-                    <span className="text-rose-400">{hero.ratings.damage}</span> /{' '}
-                    <span className="text-amber-400">{hero.ratings.crowdControl}</span>
-                  </td>
-                  <td className="p-3 text-right space-x-1 whitespace-nowrap">
-                    <button
-                      onClick={() => setEditingHero(hero)}
-                      className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                      title="Chỉnh sửa"
-                    >
-                      <Edit2 size={13} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteHero(hero.id, hero.name)}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                      title="Xóa"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filteredHeroes.map(hero => {
+                const secRoles =
+                  hero.secondaryRoles && hero.secondaryRoles.length > 0
+                    ? hero.secondaryRoles.join(', ')
+                    : hero.secondaryRole || '';
+
+                return (
+                  <tr key={hero.id} className="hover:bg-slate-850/50 transition-colors">
+                    <td className="p-3 flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-slate-800 border border-slate-700 shrink-0">
+                        <img
+                          src={hero.avatar}
+                          alt={hero.name}
+                          className="w-full h-full object-cover"
+                          onError={e => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <span className="font-bold text-white block text-sm">{hero.name}</span>
+                        <span className="text-[10px] text-amber-400/90">{hero.title}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-semibold text-slate-200 block">{hero.role}</span>
+                      {secRoles && (
+                        <span className="text-[10px] text-slate-400 block">Phụ: {secRoles}</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {hero.playstyles && hero.playstyles.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {hero.playstyles.slice(0, 3).map(ps => (
+                            <span
+                              key={ps}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80"
+                            >
+                              {ps}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-600 italic text-[11px]">Chưa gắn</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">
+                        {hero.primaryLane}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          hero.damageType === 'Chuẩn'
+                            ? 'bg-amber-400/20 text-amber-300'
+                            : hero.damageType === 'Phép'
+                            ? 'bg-purple-500/20 text-purple-300'
+                            : 'bg-rose-500/20 text-rose-300'
+                        }`}
+                      >
+                        {hero.damageType}
+                      </span>
+                    </td>
+                    <td className="p-3 font-mono text-[11px] text-slate-400">
+                      <span className="text-emerald-400">{hero.ratings.tankiness}</span> /{' '}
+                      <span className="text-rose-400">{hero.ratings.damage}</span> /{' '}
+                      <span className="text-amber-400">{hero.ratings.crowdControl}</span>
+                    </td>
+                    <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                      <button
+                        onClick={() => setEditingHero(hero)}
+                        className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Chỉnh sửa chi tiết"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteHero(hero.id, hero.name)}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Xóa"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Edit / Add Modal */}
+      {/* Batch Add Modal */}
+      <BatchAddHeroesModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        existingHeroes={heroes}
+        onSuccess={() => {
+          loadAdminData();
+          setStatusMsg('Đã cập nhật danh sách tướng thành công!');
+          setTimeout(() => setStatusMsg(null), 3500);
+        }}
+      />
+
+      {/* Edit / Add Single Hero Modal */}
       {editingHero && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
           <div
@@ -405,7 +636,7 @@ export const AdminDraftLabTab: React.FC = () => {
                   required
                   value={editingHero.name || ''}
                   onChange={e => setEditingHero({ ...editingHero, name: e.target.value })}
-                  placeholder="Ví dụ: Erin, Billow..."
+                  placeholder="Ví dụ: Dyadia, Dolia, Stuart..."
                   className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
                 />
               </div>
@@ -416,7 +647,7 @@ export const AdminDraftLabTab: React.FC = () => {
                   type="text"
                   value={editingHero.title || ''}
                   onChange={e => setEditingHero({ ...editingHero, title: e.target.value })}
-                  placeholder="Ví dụ: Tinh Linh Ánh Trăng..."
+                  placeholder="Ví dụ: Vũ Điệu Ước Nguyện, Cửu Vĩ Yêu Hồ..."
                   className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
                 />
               </div>
@@ -450,6 +681,37 @@ export const AdminDraftLabTab: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Playstyles Selection (Chất tướng) */}
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  Chất Tướng (Đặc điểm chiến đấu)
+                </label>
+                <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950 rounded-xl border border-slate-800">
+                  {PLAYSTYLE_OPTIONS.map(ps => {
+                    const isSelected = editingHero.playstyles?.includes(ps);
+                    return (
+                      <button
+                        type="button"
+                        key={ps}
+                        onClick={() => {
+                          const current = new Set(editingHero.playstyles || []);
+                          if (current.has(ps)) current.delete(ps);
+                          else current.add(ps);
+                          setEditingHero({ ...editingHero, playstyles: Array.from(current) });
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 font-bold'
+                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {ps}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -503,6 +765,23 @@ export const AdminDraftLabTab: React.FC = () => {
                   value={editingHero.signatureSkill || ''}
                   onChange={e => setEditingHero({ ...editingHero, signatureSkill: e.target.value })}
                   placeholder="Mô tả kỹ năng trấn phái..."
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Ghi Chú Chiến Thuật</label>
+                <textarea
+                  rows={2}
+                  value={editingHero.tacticalNotes || editingHero.notes || ''}
+                  onChange={e =>
+                    setEditingHero({
+                      ...editingHero,
+                      tacticalNotes: e.target.value,
+                      notes: e.target.value
+                    })
+                  }
+                  placeholder="Lối chơi, thời điểm tăng tiến sức mạnh..."
                   className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
                 />
               </div>

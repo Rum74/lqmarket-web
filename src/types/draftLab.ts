@@ -6,6 +6,33 @@ export type DamageType = 'Vật lý' | 'Phép' | 'Chuẩn' | 'Hỗn hợp';
 
 export type HeroDifficulty = 'Dễ' | 'Trung bình' | 'Khó' | 'Rất khó';
 
+export type HeroPlaystyle =
+  | 'Sát thương dồn'
+  | 'Sát thương duy trì'
+  | 'Cấu rỉa'
+  | 'Khống chế'
+  | 'Chống chịu'
+  | 'Mở giao tranh'
+  | 'Bảo kê'
+  | 'Cơ động'
+  | 'Ám sát chủ lực'
+  | 'Đẩy lẻ'
+  | 'Đa dụng';
+
+export const PLAYSTYLE_OPTIONS: HeroPlaystyle[] = [
+  'Sát thương dồn',
+  'Sát thương duy trì',
+  'Cấu rỉa',
+  'Khống chế',
+  'Chống chịu',
+  'Mở giao tranh',
+  'Bảo kê',
+  'Cơ động',
+  'Ám sát chủ lực',
+  'Đẩy lẻ',
+  'Đa dụng'
+];
+
 export interface HeroRatings {
   tankiness: number;      // 1-10: Khả năng chống chịu
   damage: number;         // 1-10: Sát thương dồn / DPS
@@ -23,8 +50,11 @@ export interface DraftHero {
   title: string;
   role: HeroRole;
   secondaryRole?: HeroRole;
+  secondaryRoles?: HeroRole[];
+  playstyles?: HeroPlaystyle[];
   primaryLane: HeroLane;
   secondaryLane?: HeroLane;
+  secondaryLanes?: HeroLane[];
   damageType: DamageType;
   avatar: string;
   ratings: HeroRatings;
@@ -35,6 +65,9 @@ export interface DraftHero {
   difficulty: HeroDifficulty;
   isActive: boolean;
   notes?: string;
+  tacticalNotes?: string;
+  dataSource?: string;
+  lastUpdated?: string;
 }
 
 export interface TeamSlot {
@@ -62,6 +95,11 @@ export interface TeamEvaluation {
     magic: number;                 // Percentage (e.g. 40%)
     trueDamage: number;            // Percentage (e.g. 10%)
   };
+  playstyleHighlights?: {
+    playstyle: HeroPlaystyle;
+    count: number;
+    description: string;
+  }[];
   strengths: string[];
   weaknesses: string[];
   tacticalAdvice: string;
