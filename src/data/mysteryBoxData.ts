@@ -443,7 +443,7 @@ export const DEFAULT_MYSTERY_BOX_REWARDS: MysteryBoxRewardItem[] = [
     isJackpot: true,
     accountData: {
       rank: 'Chiến Tướng',
-      heroesCount: 118,
+      heroesCount: 130,
       skinsCount: 220,
       rareSkinName: 'Nakroth Thứ Nguyên Vệ Thần SSS + Raz Muay Thái + Tulen Thần Sứ',
       credentials: {

@@ -101,13 +101,20 @@ router.get('/heroes', async (_req, res: Response) => {
   try {
     const dbHeroes = await DraftHero.find({ isActive: true }).lean();
 
-    // Map by ID so admin DB overrides take precedence over hardcoded defaults
+    // Map by normalized name and ID so admin DB overrides take precedence without duplicates
     const heroMap = new Map<string, any>();
     for (const h of INITIAL_DRAFT_HEROES) {
-      heroMap.set(h.id, h);
+      const normName = (h.name.toLowerCase().trim() === 'riktor' || h.name.toLowerCase().trim() === 'richter')
+        ? 'richter'
+        : h.name.toLowerCase().trim();
+      heroMap.set(normName, h);
     }
     for (const dbH of dbHeroes) {
-      heroMap.set(dbH.id, { ...heroMap.get(dbH.id), ...dbH });
+      const normName = (dbH.name.toLowerCase().trim() === 'riktor' || dbH.name.toLowerCase().trim() === 'richter')
+        ? 'richter'
+        : dbH.name.toLowerCase().trim();
+      const existing = heroMap.get(normName) || heroMap.get(dbH.id);
+      heroMap.set(normName, { ...existing, ...dbH });
     }
 
     const allHeroes = Array.from(heroMap.values());
@@ -472,9 +479,13 @@ router.get('/admin/heroes/missing', authenticateToken, requireAdmin, async (_req
     const existingIds = new Set(dbHeroes.map(h => h.id));
     const existingNames = new Set(dbHeroes.map(h => h.name.toLowerCase().trim()));
 
-    const missingHeroes = INITIAL_DRAFT_HEROES.filter(
-      h => !existingIds.has(h.id) && !existingNames.has(h.name.toLowerCase().trim())
-    );
+    const missingHeroes = INITIAL_DRAFT_HEROES.filter(h => {
+      if (existingIds.has(h.id)) return false;
+      const norm = h.name.toLowerCase().trim();
+      if (existingNames.has(norm)) return false;
+      if ((norm === 'riktor' || norm === 'richter') && (existingNames.has('riktor') || existingNames.has('richter'))) return false;
+      return true;
+    });
 
     return res.json({
       success: true,
@@ -561,9 +572,10 @@ router.post('/admin/heroes/batch', authenticateToken, requireAdmin, async (req: 
 
       // Create new record
       try {
+        const slug = item.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
         const heroId =
           item.id ||
-          `hero_${normalizedName.replace(/[^a-z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 6)}`;
+          `hero_${slug}_${Math.random().toString(36).substring(2, 6)}`;
         const normalizedRole = normalizeBackendRole(item.role);
         const normalizedLane = normalizeBackendLane(item.primaryLane);
 
@@ -588,23 +600,26 @@ router.post('/admin/heroes/batch', authenticateToken, requireAdmin, async (req: 
           damageType: item.damageType || 'Vật lý',
           avatar:
             item.avatar ||
+            item.avatarUrl ||
             'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=80',
           ratings: {
-            tankiness: item.ratings?.tankiness ?? 5,
-            damage: item.ratings?.damage ?? 5,
-            crowdControl: item.ratings?.crowdControl ?? 5,
+            tankiness: item.ratings?.tankiness ?? (normalizedRole === 'Đỡ đòn' ? 9 : normalizedRole === 'Đấu sĩ' ? 7 : 4),
+            damage: item.ratings?.damage ?? (normalizedRole === 'Xạ thủ' || normalizedRole === 'Sát thủ' || normalizedRole === 'Pháp sư' ? 9 : 6),
+            crowdControl: item.ratings?.crowdControl ?? (normalizedRole === 'Trợ thủ' ? 8 : 5),
             engage: item.ratings?.engage ?? 5,
             peel: item.ratings?.peel ?? 5,
             mobility: item.ratings?.mobility ?? 5,
-            earlyGame: item.ratings?.earlyGame ?? 5,
-            lateGame: item.ratings?.lateGame ?? 5
+            earlyGame: item.ratings?.earlyGame ?? item.earlyPower ?? 6,
+            lateGame: item.ratings?.lateGame ?? item.latePower ?? 7
           },
 
           signatureSkill: item.signatureSkill || '',
           counters: Array.isArray(item.counters) ? item.counters : [],
           synergies: Array.isArray(item.synergies) ? item.synergies : [],
           tags: Array.isArray(item.tags) ? item.tags : [],
-          difficulty: item.difficulty || 'Trung bình',
+          difficulty: typeof item.difficulty === 'number'
+            ? (item.difficulty >= 4 ? 'Khó' : item.difficulty >= 2 ? 'Trung bình' : 'Dễ')
+            : (item.difficulty || 'Trung bình'),
           isActive: item.isActive !== false,
           notes: item.notes || '',
           tacticalNotes: item.tacticalNotes || item.notes || '',

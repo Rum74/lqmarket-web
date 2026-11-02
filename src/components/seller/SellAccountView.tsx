@@ -537,12 +537,12 @@ export const SellAccountView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1">
-                  Số lượng Tướng sở hữu (tối đa 118):
+                  Số lượng Tướng sở hữu (tối đa 130):
                 </label>
                 <input
                   type="number"
                   min={1}
-                  max={118}
+                  max={130}
                   value={heroesCount}
                   onChange={e => setHeroesCount(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-xl p-3 focus:outline-none focus:border-amber-500"

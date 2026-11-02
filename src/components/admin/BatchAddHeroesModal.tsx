@@ -57,13 +57,17 @@ export const BatchAddHeroesModal: React.FC<BatchAddHeroesModalProps> = ({
     totalInDb?: number;
   } | null>(null);
 
-  // Compute missing heroes compared to DB
+  // Compute missing heroes compared to DB (130 official roster)
   const missingHeroes = useMemo(() => {
     const existingNames = new Set(existingHeroes.map(h => h.name.toLowerCase().trim()));
     const existingIds = new Set(existingHeroes.map(h => h.id));
-    return INITIAL_DRAFT_HEROES.filter(
-      h => !existingIds.has(h.id) && !existingNames.has(h.name.toLowerCase().trim())
-    );
+    return INITIAL_DRAFT_HEROES.filter(h => {
+      if (existingIds.has(h.id)) return false;
+      const norm = h.name.toLowerCase().trim();
+      if (existingNames.has(norm)) return false;
+      if ((norm === 'riktor' || norm === 'richter') && (existingNames.has('riktor') || existingNames.has('richter'))) return false;
+      return true;
+    });
   }, [existingHeroes]);
 
   // Filter missing heroes list
@@ -216,22 +220,24 @@ const normalizeImportRole = (role?: string): HeroRole => {
             primaryLane: mappedLane,
             secondaryLanes: Array.isArray(item.secondaryLanes) ? item.secondaryLanes : [],
             damageType: item.damageType || 'Vật lý',
-            avatar: item.avatar || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150',
+            avatar: item.avatar || item.avatarUrl || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150',
             ratings: item.ratings || {
-              tankiness: 5,
-              damage: 5,
-              crowdControl: 5,
+              tankiness: mappedRole === 'Đỡ đòn' ? 9 : mappedRole === 'Đấu sĩ' ? 7 : 4,
+              damage: mappedRole === 'Xạ thủ' || mappedRole === 'Sát thủ' || mappedRole === 'Pháp sư' ? 9 : 6,
+              crowdControl: mappedRole === 'Trợ thủ' ? 8 : 5,
               engage: 5,
               peel: 5,
               mobility: 5,
-              earlyGame: 5,
-              lateGame: 5
+              earlyGame: item.earlyPower ?? 6,
+              lateGame: item.latePower ?? 7
             },
             signatureSkill: item.signatureSkill || '',
             counters: item.counters || [],
             synergies: item.synergies || [],
-            tags: item.tags || [],
-            difficulty: item.difficulty || 'Trung bình',
+            tags: item.tags || (item.isMeta ? ['Meta 2026', `Tier ${item.tier || 'S'}`] : []),
+            difficulty: typeof item.difficulty === 'number'
+              ? (item.difficulty >= 4 ? 'Khó' : item.difficulty >= 2 ? 'Trung bình' : 'Dễ')
+              : (item.difficulty || 'Trung bình'),
             isActive: true,
             notes: item.notes || item.tacticalNotes || ''
           } as DraftHero;
@@ -468,7 +474,7 @@ const normalizeImportRole = (role?: string): HeroRole => {
                 <div className="text-center py-16 space-y-3">
                   <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
                   <h4 className="text-base font-bold text-white">
-                    Cơ sở dữ liệu đã đầy đủ toàn bộ 118 tướng!
+                    Cơ sở dữ liệu đã đầy đủ toàn bộ {INITIAL_DRAFT_HEROES.length || 130} tướng!
                   </h4>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
                     Không còn tướng nào thiếu so với danh sách chính thức Garena Liên Quân Mobile Việt Nam (01/11/2026).

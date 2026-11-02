@@ -39,8 +39,10 @@ import priceAlertRoutes from './routes/priceAlertRoutes';
 import referralRoutes, { referralRouter } from './routes/referralRoutes';
 import blindBagRoutes from './routes/blindBagRoutes';
 import promotionRoutes from './routes/promotionRoutes';
+import draftLabRoutes from './routes/draftLabRoutes';
 
 async function startServer() {
+
   const app = express();
   const PORT = Number(process.env.PORT) || 5000;
 
@@ -186,6 +188,8 @@ async function startServer() {
   app.use('/api/referral', resolvedReferralRoutes);
   app.use('/api/promotions', promotionRoutes);
   app.use('/api/marketing/promotions', promotionRoutes);
+  app.use('/api/draft-lab', draftLabRoutes);
+  app.use('/api/draftlab', draftLabRoutes);
 
   // Global Webhook listeners
   app.all('/webhook', (req, res, next) => {

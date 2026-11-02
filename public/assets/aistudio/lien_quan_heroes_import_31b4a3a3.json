@@ -1546,5 +1546,17 @@
       "Đẩy lẻ",
       "Cơ động"
     ]
+  },
+  {
+    "name": "Augur",
+    "title": "Đại Ty Mệnh",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cơ động",
+      "Ám sát chủ lực"
+    ]
   }
 ]
