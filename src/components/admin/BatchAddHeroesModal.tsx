@@ -113,7 +113,30 @@ export const BatchAddHeroesModal: React.FC<BatchAddHeroesModalProps> = ({
     setSelectedHeroIds(next);
   };
 
-  // Submit Batch from Official Missing
+const normalizeImportLane = (lane?: string): HeroLane => {
+  if (!lane) return 'Caesar';
+  const l = String(lane).trim().toLowerCase();
+  if (l.includes('jungle') || l.includes('rừng') || l === 'jg') return 'Rừng';
+  if (l.includes('dragon') || l.includes('ad') || l.includes('bot') || l.includes('xạ thủ')) return 'AD';
+  if (l.includes('mid') || l.includes('pháp sư')) return 'Mid';
+  if (l.includes('support') || l.includes('sp') || l.includes('trợ thủ') || l.includes('đỡ đòn')) return 'Support';
+  if (l.includes('caesar') || l.includes('top') || l.includes('đấu sĩ')) return 'Caesar';
+  return 'Caesar';
+};
+
+const normalizeImportRole = (role?: string): HeroRole => {
+  if (!role) return 'Đấu sĩ';
+  const r = String(role).trim().toLowerCase();
+  if (r.includes('đấu sĩ') || r.includes('fighter')) return 'Đấu sĩ';
+  if (r.includes('pháp sư') || r.includes('mage')) return 'Pháp sư';
+  if (r.includes('xạ thủ') || r.includes('marksman')) return 'Xạ thủ';
+  if (r.includes('sát thủ') || r.includes('assassin')) return 'Sát thủ';
+  if (r.includes('đỡ đòn') || r.includes('tank')) return 'Đỡ đòn';
+  if (r.includes('trợ thủ') || r.includes('support')) return 'Trợ thủ';
+  return 'Đấu sĩ';
+};
+
+  // Submit Batch from Official Missing or Custom Input
   const handleSubmitBatch = async (heroesToAdd: DraftHero[]) => {
     if (heroesToAdd.length === 0) {
       alert('Vui lòng chọn ít nhất 1 tướng để thêm vào hệ thống.');
@@ -129,16 +152,18 @@ export const BatchAddHeroesModal: React.FC<BatchAddHeroesModalProps> = ({
         updateExisting: false
       });
 
-      if (res.data?.success) {
-        setResultSummary(res.data);
-        if (res.data.addedCount > 0) {
-          onSuccess(res.data.addedCount);
+      const isSuccess = Boolean(res?.success || res?.data?.success);
+      if (isSuccess) {
+        const summary = res?.addedCount !== undefined ? res : (res?.data || res);
+        setResultSummary(summary);
+        if (summary.addedCount > 0) {
+          onSuccess(summary.addedCount);
         }
       } else {
-        alert(res.data?.message || 'Có lỗi xảy ra khi thêm danh sách tướng.');
+        alert(res?.message || res?.data?.message || 'Có lỗi xảy ra khi thêm danh sách tướng.');
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Không thể kết nối đến máy chủ.');
+      alert(err.response?.data?.message || err.message || 'Không thể kết nối đến máy chủ.');
     } finally {
       setIsSubmitting(false);
     }
@@ -177,14 +202,18 @@ export const BatchAddHeroesModal: React.FC<BatchAddHeroesModalProps> = ({
           if (!item.name || !item.role) {
             throw new Error(`Dòng ${idx + 1}: Thiếu thuộc tính "name" hoặc "role".`);
           }
+          const heroName = String(item.name).trim();
+          const mappedRole = normalizeImportRole(item.role);
+          const mappedLane = normalizeImportLane(item.primaryLane);
+
           return {
-            id: item.id || `hero_${item.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-            name: String(item.name).trim(),
+            id: item.id || `hero_${heroName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+            name: heroName,
             title: item.title || '',
-            role: item.role as HeroRole,
+            role: mappedRole,
             secondaryRoles: Array.isArray(item.secondaryRoles) ? item.secondaryRoles : [],
             playstyles: Array.isArray(item.playstyles) ? item.playstyles : [],
-            primaryLane: (item.primaryLane as HeroLane) || 'Caesar',
+            primaryLane: mappedLane,
             secondaryLanes: Array.isArray(item.secondaryLanes) ? item.secondaryLanes : [],
             damageType: item.damageType || 'Vật lý',
             avatar: item.avatar || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150',
@@ -209,6 +238,7 @@ export const BatchAddHeroesModal: React.FC<BatchAddHeroesModalProps> = ({
         });
         setParsedCustomHeroes(validated);
       } else {
+
         // Parse CSV: name,title,role,primaryLane,damageType,playstyles
         const lines = rawInput.trim().split('\n');
         if (lines.length <= 1) {

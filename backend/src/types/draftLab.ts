@@ -174,3 +174,78 @@ export interface DraftLabSettings {
   maxSavedDraftsPremium: number;
   announcementNotice?: string;
 }
+
+export interface AIDraftAnalysisResult {
+  id: string;
+  cacheKey: string;
+  isCached: boolean;
+  aiModel: string;
+  isGrounded: boolean;
+  patchVersion: string;
+  generatedAt: string;
+  verdict: {
+    favoredTeam: 'A' | 'B' | 'Even';
+    winProbabilityA: number;
+    winProbabilityB: number;
+    headline: string;
+    keyAdvantageSummary: string;
+    strategicAnalysis: string;
+  };
+  laneMatchups: Array<{
+    lane: 'Caesar' | 'Rừng' | 'Mid' | 'AD' | 'Support';
+    heroA: string;
+    heroB: string;
+    advantage: 'A' | 'B' | 'Even';
+    advantageScore: number;
+    tacticalTip: string;
+  }>;
+  synergies: {
+    teamA: Array<{
+      heroes: string[];
+      comboName: string;
+      tacticalValue: string;
+    }>;
+    teamB: Array<{
+      heroes: string[];
+      comboName: string;
+      tacticalValue: string;
+    }>;
+  };
+  gamePhaseStrategy: {
+    earlyGame: {
+      advantage: 'A' | 'B' | 'Even';
+      teamAPlan: string;
+      teamBPlan: string;
+    };
+    midGame: {
+      advantage: 'A' | 'B' | 'Even';
+      teamAPlan: string;
+      teamBPlan: string;
+    };
+    lateGame: {
+      advantage: 'A' | 'B' | 'Even';
+      teamAPlan: string;
+      teamBPlan: string;
+    };
+  };
+  winConditions: {
+    teamA: string[];
+    teamB: string[];
+  };
+  proMetaReference: {
+    analogousDrafts: string;
+    tournamentMatch: string;
+    proTeamCitation: string;
+    banRecommendation: string[];
+  };
+  reliability: {
+    level: 'Cao' | 'Trung bình' | 'Cần kiểm chứng';
+    confidenceScore: number;
+    dataSourceNote: string;
+  };
+  sources: Array<{
+    title: string;
+    url: string;
+  }>;
+}
+

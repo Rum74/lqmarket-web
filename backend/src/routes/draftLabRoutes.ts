@@ -1,13 +1,39 @@
 import { Router, Response } from 'express';
-import { authenticateToken, requireAdmin, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
-import { DraftHero } from '../models/DraftHero';
-import { DraftAnalysis } from '../models/DraftAnalysis';
-import { DraftSetting } from '../models/DraftSetting';
+import { authenticateToken, requireAdmin, optionalAuth, AuthenticatedRequest } from '../middleware/auth.js';
+import { DraftHero } from '../models/DraftHero.js';
+import { DraftAnalysis } from '../models/DraftAnalysis.js';
+import { DraftSetting } from '../models/DraftSetting.js';
+import { AIAnalysisCache } from '../models/AIAnalysisCache.js';
 import { INITIAL_DRAFT_HEROES } from '../data/draftHeroesData.js';
 import { compareTeams, evaluateTeam, DISCLAIMER_TEXT } from '../services/draftAnalysisService.js';
+import { generateAIDraftAnalysis } from '../services/aiDraftAnalysisService.js';
 import { DraftHero as IDraftHeroType } from '../types/draftLab.js';
 
 const router = Router();
+
+export function normalizeBackendLane(lane?: string): string {
+  if (!lane) return 'Caesar';
+  const l = String(lane).trim().toLowerCase();
+  if (l.includes('jungle') || l.includes('rừng') || l === 'jg') return 'Rừng';
+  if (l.includes('dragon') || l.includes('ad') || l.includes('bot') || l.includes('xạ thủ')) return 'AD';
+  if (l.includes('mid') || l.includes('pháp sư')) return 'Mid';
+  if (l.includes('support') || l.includes('sp') || l.includes('trợ thủ') || l.includes('đỡ đòn')) return 'Support';
+  if (l.includes('caesar') || l.includes('top') || l.includes('đấu sĩ')) return 'Caesar';
+  return 'Caesar';
+}
+
+export function normalizeBackendRole(role?: string): string {
+  if (!role) return 'Đấu sĩ';
+  const r = String(role).trim().toLowerCase();
+  if (r.includes('đấu sĩ') || r.includes('fighter')) return 'Đấu sĩ';
+  if (r.includes('pháp sư') || r.includes('mage')) return 'Pháp sư';
+  if (r.includes('xạ thủ') || r.includes('marksman')) return 'Xạ thủ';
+  if (r.includes('sát thủ') || r.includes('assassin')) return 'Sát thủ';
+  if (r.includes('đỡ đòn') || r.includes('tank')) return 'Đỡ đòn';
+  if (r.includes('trợ thủ') || r.includes('support')) return 'Trợ thủ';
+  return 'Đấu sĩ';
+}
+
 
 // Helper to get or init draft settings
 async function getSettingsDoc() {
@@ -538,19 +564,22 @@ router.post('/admin/heroes/batch', authenticateToken, requireAdmin, async (req: 
         const heroId =
           item.id ||
           `hero_${normalizedName.replace(/[^a-z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 6)}`;
+        const normalizedRole = normalizeBackendRole(item.role);
+        const normalizedLane = normalizeBackendLane(item.primaryLane);
+
         const created = await DraftHero.create({
           ...item,
           id: heroId,
           name: item.name.trim(),
           title: item.title || '',
-          role: item.role,
+          role: normalizedRole,
           secondaryRoles: Array.isArray(item.secondaryRoles)
             ? item.secondaryRoles
             : item.secondaryRole
             ? [item.secondaryRole]
             : [],
           playstyles: Array.isArray(item.playstyles) ? item.playstyles : [],
-          primaryLane: item.primaryLane || 'Caesar',
+          primaryLane: normalizedLane,
           secondaryLanes: Array.isArray(item.secondaryLanes)
             ? item.secondaryLanes
             : item.secondaryLane
@@ -570,6 +599,7 @@ router.post('/admin/heroes/batch', authenticateToken, requireAdmin, async (req: 
             earlyGame: item.ratings?.earlyGame ?? 5,
             lateGame: item.ratings?.lateGame ?? 5
           },
+
           signatureSkill: item.signatureSkill || '',
           counters: Array.isArray(item.counters) ? item.counters : [],
           synergies: Array.isArray(item.synergies) ? item.synergies : [],
@@ -741,4 +771,91 @@ router.post('/admin/settings', authenticateToken, requireAdmin, async (req: Auth
   }
 });
 
+/**
+ * POST /api/draft-lab/ai-analyze
+ * Run deep AI tactical draft analysis (Gemini Flash + Search Grounding + Meta cache)
+ */
+router.post('/ai-analyze', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { teamA, teamB, teamAName, teamBName, forceRefresh } = req.body;
+
+    if (!Array.isArray(teamA) || teamA.length === 0 || !Array.isArray(teamB) || teamB.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn tối thiểu 1 tướng cho mỗi đội để AI phân tích.'
+      });
+    }
+
+    const aiResult = await generateAIDraftAnalysis({
+      teamA,
+      teamB,
+      teamAName,
+      teamBName,
+      forceRefresh: Boolean(forceRefresh)
+    });
+
+    return res.json({
+      success: true,
+      message: 'Phân tích chiến thuật AI hoàn tất.',
+      data: aiResult
+    });
+  } catch (error: any) {
+    console.error('Error in /api/draft-lab/ai-analyze:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi trong quá trình phân tích chiến thuật AI.',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/draft-lab/admin/ai-settings
+ * Retrieve AI model status & caching metrics
+ */
+router.get('/admin/ai-settings', authenticateToken, requireAdmin, async (_req, res: Response) => {
+  try {
+    const hasKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim());
+    const cacheCount = await AIAnalysisCache.countDocuments({});
+
+    return res.json({
+      success: true,
+      data: {
+        isGeminiAvailable: hasKey,
+        activeModel: 'gemini-3.8-flash',
+        patchVersion: '2026.11 (S4-2026)',
+        groundingEnabled: true,
+        cachedAnalysesCount: cacheCount
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể tải cấu hình AI.',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/draft-lab/admin/ai-cache/clear
+ * Purge cached AI analyses
+ */
+router.post('/admin/ai-cache/clear', authenticateToken, requireAdmin, async (_req, res: Response) => {
+  try {
+    await AIAnalysisCache.deleteMany({});
+    return res.json({
+      success: true,
+      message: 'Đã xóa toàn bộ bộ nhớ đệm phân tích AI thành công!'
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể xóa bộ nhớ đệm AI.',
+      error: error.message
+    });
+  }
+});
+
 export default router;
+

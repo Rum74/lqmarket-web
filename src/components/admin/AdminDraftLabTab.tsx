@@ -23,7 +23,9 @@ import {
   Download,
   Copy,
   Sparkles,
-  Info
+  Info,
+  Bot,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminDraftLabTab: React.FC = () => {
@@ -32,6 +34,16 @@ export const AdminDraftLabTab: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('Tất cả');
+
+  // AI Intelligence Stats
+  const [aiStats, setAiStats] = useState<{
+    isGeminiAvailable: boolean;
+    activeModel: string;
+    patchVersion: string;
+    groundingEnabled: boolean;
+    cachedAnalysesCount: number;
+  } | null>(null);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   // Module toggle
   const [isModuleEnabled, setIsModuleEnabled] = useState(true);
@@ -56,19 +68,37 @@ export const AdminDraftLabTab: React.FC = () => {
   const loadAdminData = async () => {
     try {
       setIsLoading(true);
-      const [heroesRes, statsRes] = await Promise.all([
+      const [heroesRes, statsRes, aiRes] = await Promise.all([
         api.get('/api/draft-lab/heroes').catch(() => null),
-        api.get('/api/draft-lab/admin/stats').catch(() => null)
+        api.get('/api/draft-lab/admin/stats').catch(() => null),
+        api.get('/api/draft-lab/admin/ai-settings').catch(() => null)
       ]);
 
-      if (heroesRes?.data?.success && Array.isArray(heroesRes.data.data)) {
-        setHeroes(heroesRes.data.data);
+      const isHeroesSuccess = Boolean(heroesRes?.success || heroesRes?.data?.success);
+      if (isHeroesSuccess) {
+        const list = Array.isArray(heroesRes?.data?.data)
+          ? heroesRes.data.data
+          : Array.isArray(heroesRes?.data)
+          ? heroesRes.data
+          : Array.isArray(heroesRes)
+          ? heroesRes
+          : [];
+        if (list.length > 0) setHeroes(list);
       }
-      if (statsRes?.data?.success) {
-        setStats(statsRes.data.data);
-        if (statsRes.data.data.settings) {
-          setIsModuleEnabled(statsRes.data.data.settings.enabled ?? true);
+
+      const isStatsSuccess = Boolean(statsRes?.success || statsRes?.data?.success);
+      if (isStatsSuccess) {
+        const statsData = statsRes?.data?.data || statsRes?.data || statsRes;
+        setStats(statsData);
+        if (statsData?.settings) {
+          setIsModuleEnabled(statsData.settings.enabled ?? true);
         }
+      }
+
+      const isAiSuccess = Boolean(aiRes?.success || aiRes?.data?.success);
+      if (isAiSuccess) {
+        const aiData = aiRes?.data?.data || aiRes?.data || aiRes;
+        setAiStats(aiData);
       }
     } catch (err) {
       console.warn('Error loading admin draft lab data:', err);
@@ -76,6 +106,7 @@ export const AdminDraftLabTab: React.FC = () => {
       setIsLoading(false);
     }
   };
+
 
   useEffect(() => {
     loadAdminData();
@@ -201,16 +232,17 @@ export const AdminDraftLabTab: React.FC = () => {
       };
 
       const res = await api.post('/api/draft-lab/admin/hero', payload);
-      if (res.data?.success) {
+      const isSuccess = Boolean(res?.success || res?.data?.success);
+      if (isSuccess) {
         setStatusMsg(`Đã lưu thông tin tướng ${editingHero.name} thành công!`);
         setEditingHero(null);
         loadAdminData();
         setTimeout(() => setStatusMsg(null), 3000);
       } else {
-        alert(res.data?.message || 'Không thể lưu tướng.');
+        alert(res?.message || res?.data?.message || 'Không thể lưu tướng.');
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi lưu thông tin tướng.');
+      alert(err.response?.data?.message || err.message || 'Lỗi khi lưu thông tin tướng.');
     } finally {
       setIsSavingHero(false);
     }
@@ -221,17 +253,42 @@ export const AdminDraftLabTab: React.FC = () => {
     if (!confirm(`Bạn có chắc muốn xóa tướng "${heroName}" khỏi danh sách?`)) return;
     try {
       const res = await api.delete(`/api/draft-lab/admin/hero/${heroId}`);
-      if (res.data?.success) {
+      const isSuccess = Boolean(res?.success || res?.data?.success);
+      if (isSuccess) {
         setStatusMsg(`Đã xóa tướng ${heroName} khỏi hệ thống.`);
         loadAdminData();
         setTimeout(() => setStatusMsg(null), 3000);
+      } else {
+        alert(res?.message || res?.data?.message || 'Không thể xóa tướng.');
       }
     } catch (err) {
       alert('Không thể xóa tướng.');
     }
   };
 
+  // Clear AI Cache
+  const handleClearAiCache = async () => {
+    if (!confirm('Xác nhận xóa sạch toàn bộ bộ nhớ đệm phân tích AI để làm mới dữ liệu?')) return;
+    setIsClearingCache(true);
+    try {
+      const res = await api.post('/api/draft-lab/admin/ai-cache/clear');
+      const isSuccess = Boolean(res?.success || res?.data?.success);
+      if (isSuccess) {
+        setStatusMsg('Đã dọn sạch toàn bộ bộ nhớ đệm AI thành công!');
+        loadAdminData();
+        setTimeout(() => setStatusMsg(null), 3000);
+      } else {
+        alert(res?.message || res?.data?.message || 'Không thể xóa bộ nhớ đệm AI.');
+      }
+    } catch (err) {
+      alert('Không thể xóa bộ nhớ đệm AI.');
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
+
   // Role Breakdown counts
+
   const roleBreakdown: Record<string, number> = {
     'Đấu sĩ': 0,
     'Pháp sư': 0,
@@ -327,6 +384,41 @@ export const AdminDraftLabTab: React.FC = () => {
           <span className="text-[11px] text-slate-500">Thành viên đăng nhập lưu</span>
         </div>
       </div>
+
+      {/* AI Intelligence & Caching Status Card */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-cyan-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shrink-0">
+            <Bot size={22} />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="font-black text-sm text-white">AI CHUYÊN GIA CHIẾN THUẬT (GEMINI FLASH)</h4>
+              <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold">
+                Mô hình: {aiStats?.activeModel || 'gemini-3.8-flash'}
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                Grounding: Garena VN &amp; ĐTDV
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Đang lưu trữ <strong className="text-white">{aiStats?.cachedAnalysesCount ?? 0}</strong> trận đối đầu trong bộ nhớ đệm (Cache) để tối ưu thời gian phản hồi &lt;500ms.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleClearAiCache}
+            disabled={isClearingCache}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <RefreshCw size={13} className={isClearingCache ? 'animate-spin' : ''} />
+            <span>Xóa Cache AI</span>
+          </button>
+        </div>
+      </div>
+
 
       {/* Role Distribution & Health Banner */}
       <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">

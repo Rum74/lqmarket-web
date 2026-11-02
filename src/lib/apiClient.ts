@@ -130,33 +130,67 @@ export async function apiRequest<T = any>(
     console.log('[API RESPONSE]', res.status, url);
     console.log('[API DATA]', data);
 
+    const isSuccess = res.ok && data.success !== false;
+
     if (!res.ok) {
       const isEndpointUnavailable = res.status === 405 || res.status === 404 || res.status === 502 || res.status === 503 || res.status === 500;
-      return {
+      const errorMsg = data.message || (isEndpointUnavailable ? 'Máy chủ API tạm thời gián đoạn.' : `Lỗi yêu cầu (${res.status})`);
+      const errObj: any = {
         success: false,
-        message: data.message || (isEndpointUnavailable ? 'Máy chủ API tạm thời gián đoạn.' : `Lỗi yêu cầu (${res.status})`),
+        message: errorMsg,
         errorCode: isEndpointUnavailable ? 'HTTP_UNAVAILABLE' : (data.errorCode || `HTTP_${res.status}`),
         httpStatus: res.status,
         isUnavailable: isEndpointUnavailable,
         ...data
       };
+      // Provide Axios-style res.data fallback
+      errObj.data = {
+        success: false,
+        message: errorMsg,
+        ...(typeof data === 'object' && data !== null ? data : {})
+      };
+      return errObj;
     }
 
-    return {
-      success: data.success !== false,
+    const resultObj: any = {
+      success: isSuccess,
+      httpStatus: res.status,
       ...data
     };
+
+    // If resultObj.data already exists (e.g. data is an array or object), also ensure Axios-style .data.success works
+    if (resultObj.data !== undefined) {
+      if (typeof resultObj.data === 'object' && resultObj.data !== null && !Array.isArray(resultObj.data)) {
+        if (resultObj.data.success === undefined) resultObj.data.success = isSuccess;
+        if (resultObj.data.message === undefined && data.message) resultObj.data.message = data.message;
+      }
+    } else {
+      // If no nested data field was returned by backend, provide data containing full body
+      resultObj.data = {
+        success: isSuccess,
+        message: data.message,
+        ...data
+      };
+    }
+
+    return resultObj;
   } catch (error: any) {
     clearTimeout(timeoutId);
     const isAbort = error.name === 'AbortError';
     console.warn('[API ERROR]', method, url, isAbort ? 'Timed out' : error.message);
 
-    return {
+    const failMsg = isAbort ? 'Kết nối máy chủ quá hạn (25s).' : 'Không thể kết nối trực tiếp đến máy chủ API.';
+    const failObj: any = {
       success: false,
-      message: isAbort ? 'Kết nối máy chủ quá hạn (25s).' : 'Không thể kết nối trực tiếp đến máy chủ API.',
+      message: failMsg,
       errorCode: isAbort ? 'TIMEOUT' : 'NETWORK_ERROR',
       isUnavailable: true
     };
+    failObj.data = {
+      success: false,
+      message: failMsg
+    };
+    return failObj;
   }
 }
 

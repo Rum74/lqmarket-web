@@ -1,0 +1,1550 @@
+[
+  {
+    "name": "Evita",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Tamyn",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Flowborn",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Dyadia",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Edras",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Goverra",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Heino",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Billow",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Bolt Baron",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Biron",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Dolia",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Charlotte",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Tachi",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Dirak",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Qi",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Erin",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Ming",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Bijan",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Bonnie",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Teeri",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Yue",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Hỗn hợp",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Yan",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Aya",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Aoi",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Iggy",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Bright",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Lorion",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Dextra",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Sinestrea",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Thorne",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Allain",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Zata",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Rouie",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Laville",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Paine",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Ata",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Keera",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Ishar",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Eland'orr",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Krizzix",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Volkath",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Celica",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Zip",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Enzo",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Yena",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Errol",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Capheny",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Hayate",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Hỗn hợp",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "D'Arcy",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Veres",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Florentino",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Hỗn hợp",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Sephera",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Quillen",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Wiro",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Richter",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Elsu",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Y'bneth",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Amily",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Annette",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Baldum",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Roxie",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Marja",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Rourke",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Arum",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Wisp",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "The Flash",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Max",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Liliana",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Tulen",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Omen",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Lindis",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "TeeMee",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Moren",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Kil'Groth",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Xeniel",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Wonder Woman",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Superman",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Tel'Annas",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Astrid",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Ryoma",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Stuart",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Arduin",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Zill",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Murad",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Ignis",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Zuka",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Airi",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Kaine",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Lauriel",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Raz",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Skud",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Preyta",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Ilumia",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Slimz",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Arthur",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Kriknak",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Ngộ Không",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Maloch",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Helen",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Jinna",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Cresht",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Natalya",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Lumburr",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Fennik",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Aleister",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Grakk",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Nakroth",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Taara",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Toro",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Yorn",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Gildur",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Alice",
+    "title": "",
+    "role": "Trợ thủ",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Bảo kê",
+      "Khống chế",
+      "Mở giao tranh"
+    ]
+  },
+  {
+    "name": "Azzen'Ka",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Ormarr",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Butterfly",
+    "title": "",
+    "role": "Sát thủ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Ám sát chủ lực",
+      "Cơ động",
+      "Sát thương dồn"
+    ]
+  },
+  {
+    "name": "Violet",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  },
+  {
+    "name": "Chaugnar",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Phép",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Điêu Thuyền",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Zephys",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Kahlii",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Omega",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Support",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Triệu Vân",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Jungle",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Mganga",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Krixi",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Mina",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Lữ Bố",
+    "title": "",
+    "role": "Đấu sĩ",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Đa dụng"
+    ]
+  },
+  {
+    "name": "Veera",
+    "title": "",
+    "role": "Pháp sư",
+    "primaryLane": "Mid",
+    "damageType": "Phép",
+    "playstyles": [
+      "Sát thương dồn",
+      "Cấu rỉa",
+      "Khống chế"
+    ]
+  },
+  {
+    "name": "Thane",
+    "title": "",
+    "role": "Đỡ đòn",
+    "primaryLane": "Caesar",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Chống chịu",
+      "Mở giao tranh",
+      "Bảo kê"
+    ]
+  },
+  {
+    "name": "Valhein",
+    "title": "",
+    "role": "Xạ thủ",
+    "primaryLane": "Dragon",
+    "damageType": "Vật lý",
+    "playstyles": [
+      "Sát thương duy trì",
+      "Đẩy lẻ",
+      "Cơ động"
+    ]
+  }
+]
