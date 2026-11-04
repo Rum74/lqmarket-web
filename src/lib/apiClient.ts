@@ -115,7 +115,6 @@ export async function apiRequest<T = any>(
   const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   const method = options.method || 'GET';
-  console.log('[API REQUEST]', method, url);
 
   try {
     const res = await fetch(url, {
@@ -127,8 +126,6 @@ export async function apiRequest<T = any>(
     clearTimeout(timeoutId);
 
     const data = await res.json().catch(() => ({}));
-    console.log('[API RESPONSE]', res.status, url);
-    console.log('[API DATA]', data);
 
     const isSuccess = res.ok && data.success !== false;
 
@@ -177,7 +174,6 @@ export async function apiRequest<T = any>(
   } catch (error: any) {
     clearTimeout(timeoutId);
     const isAbort = error.name === 'AbortError';
-    console.warn('[API ERROR]', method, url, isAbort ? 'Timed out' : error.message);
 
     const failMsg = isAbort ? 'Kết nối máy chủ quá hạn (25s).' : 'Không thể kết nối trực tiếp đến máy chủ API.';
     const failObj: any = {

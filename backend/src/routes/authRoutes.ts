@@ -25,7 +25,6 @@ router.post('/register', async (req: Request, res: Response) => {
       accountInput,
       password,
       phone,
-      role = 'buyer',
       referralCode,
       ref
     } = req.body;

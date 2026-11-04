@@ -60,13 +60,11 @@ export const SellerProfileModal: React.FC = () => {
     const abortController = new AbortController();
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-    console.log(`[SELLER PROFILE REQUEST] sellerId: ${selectedSellerId}, requestId: ${requestId}, timestamp: ${new Date().toISOString()}`);
     setIsLoadingSeller(true);
 
     api.get(`/api/seller/${encodeURIComponent(selectedSellerId)}`, { signal: abortController.signal })
       .then(res => {
         if (ignore) {
-          console.log(`[SELLER PROFILE IGNORED] Stale response discarded for requestId: ${requestId}`);
           return;
         }
 
@@ -79,15 +77,11 @@ export const SellerProfileModal: React.FC = () => {
             totalSoldAmount: sellerObj.totalSoldAmount || 0
           };
 
-          console.log(`[SELLER PROFILE RESPONSE] requestId: ${requestId}, sellerId: ${sellerObj.id || selectedSellerId}, soldCount: ${statsObj.soldCount}, reviewCount: ${statsObj.reviewCount}, averageRating: ${statsObj.averageRating}`);
-
           setFetchedSeller(sellerObj);
           setFetchedStats(statsObj);
           if (Array.isArray(res.reviews)) {
             setFetchedReviews(res.reviews);
           }
-
-          console.log(`[SELLER PROFILE STATE UPDATE] requestId: ${requestId}, soldCount: ${statsObj.soldCount}, reviewCount: ${statsObj.reviewCount}`);
 
           if (typeof setAllUsers === 'function') {
             setAllUsers(prev => {
@@ -99,10 +93,8 @@ export const SellerProfileModal: React.FC = () => {
           }
         }
       })
-      .catch(err => {
-        if (!ignore && err.name !== 'AbortError') {
-          console.error(`[SELLER PROFILE ERROR] requestId: ${requestId}:`, err);
-        }
+      .catch(() => {
+        // Silent error handling
       })
       .finally(() => {
         if (!ignore) {

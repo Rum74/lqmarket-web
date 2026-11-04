@@ -110,20 +110,57 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
 router.put('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { role, status, balance, isVerifiedSeller, sellerTier } = req.body;
+    const { role, status, isVerifiedSeller, sellerTier } = req.body;
 
     const user = await User.findOne({ id });
     if (!user) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
     }
 
-    if (role !== undefined) user.role = role;
-    if (status !== undefined) user.status = status;
-    if (balance !== undefined) user.balance = Number(balance);
-    if (isVerifiedSeller !== undefined) user.isVerifiedSeller = Boolean(isVerifiedSeller);
-    if (sellerTier !== undefined) user.sellerTier = sellerTier;
+    // Prevent non-superadmin or self-promotion to admin
+    if (role === 'admin' && user.role !== 'admin') {
+      const callingAdmin = req.user?.userId;
+      if (callingAdmin === user.id) {
+        return res.status(403).json({ success: false, message: 'Không thể tự phân quyền quản trị viên cho chính mình.' });
+      }
+    }
+
+    const changes: string[] = [];
+    if (role !== undefined && user.role !== role) {
+      changes.push(`role: ${user.role} -> ${role}`);
+      user.role = role;
+    }
+    if (status !== undefined && user.status !== status) {
+      changes.push(`status: ${user.status} -> ${status}`);
+      user.status = status;
+    }
+    if (isVerifiedSeller !== undefined && user.isVerifiedSeller !== Boolean(isVerifiedSeller)) {
+      changes.push(`isVerifiedSeller: ${user.isVerifiedSeller} -> ${Boolean(isVerifiedSeller)}`);
+      user.isVerifiedSeller = Boolean(isVerifiedSeller);
+    }
+    if (sellerTier !== undefined && user.sellerTier !== sellerTier) {
+      changes.push(`sellerTier: ${user.sellerTier} -> ${sellerTier}`);
+      user.sellerTier = sellerTier;
+    }
 
     await user.save();
+
+    // Log to AuditLog
+    if (changes.length > 0) {
+      try {
+        const audit = new AuditLog({
+          id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          adminId: req.user?.userId || 'admin',
+          adminName: req.user?.email || 'Super Admin',
+          action: 'UPDATE_USER_ROLE_STATUS',
+          targetType: 'user',
+          targetId: user.id,
+          details: `Admin cập nhật thông tin user "${user.name}" (${user.email}): ${changes.join(', ')}`,
+          timestamp: new Date().toISOString()
+        });
+        await audit.save();
+      } catch (err) {}
+    }
 
     return res.json({ success: true, message: 'Cập nhật người dùng thành công', user: user.toJSON() });
   } catch (error: any) {

@@ -38,62 +38,6 @@ export async function authenticateToken(
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
-  if (token) {
-    const payload = verifyToken(token);
-    if (payload) {
-      req.user = payload;
-      return next();
-    }
-  }
-
-  // Fallback: Verify identity via X-User-Id / X-User-Role against User database
-  const fallbackUserId = (req.headers['x-user-id'] as string) || (req.body && req.body.userId) || (req.body && req.body.adminId);
-  const roleHeader = String(req.headers['x-user-role'] || '').trim().toLowerCase();
-
-  if (roleHeader === 'admin' || fallbackUserId === 'admin' || fallbackUserId === 'user_admin_super') {
-    req.user = {
-      userId: fallbackUserId || 'user_admin_super',
-      email: 'admin@lqmarket.vn',
-      role: 'admin',
-      username: 'admin',
-      name: 'Super Admin'
-    };
-    return next();
-  }
-
-  if (fallbackUserId) {
-    try {
-      const user = await User.findOne({
-        $or: [
-          { id: fallbackUserId },
-          { username: fallbackUserId },
-          { email: fallbackUserId }
-        ]
-      }).lean();
-
-      if (user) {
-        req.user = {
-          userId: user.id,
-          email: user.email,
-          role: user.role || (roleHeader === 'admin' ? 'admin' : 'buyer'),
-          username: user.username,
-          name: user.name
-        };
-        return next();
-      }
-    } catch (e) {}
-
-    // Safe fallback for active session
-    req.user = {
-      userId: fallbackUserId,
-      email: `${fallbackUserId}@cholienquan.com`,
-      role: (roleHeader === 'admin' ? 'admin' : (roleHeader === 'seller' ? 'seller' : 'buyer')) as any,
-      username: fallbackUserId,
-      name: fallbackUserId
-    };
-    return next();
-  }
-
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -102,11 +46,45 @@ export async function authenticateToken(
     });
   }
 
-  return res.status(401).json({
-    success: false,
-    message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.',
-    errorCode: 'INVALID_TOKEN'
-  });
+  const payload = verifyToken(token);
+  if (!payload || !payload.userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.',
+      errorCode: 'INVALID_TOKEN'
+    });
+  }
+
+  try {
+    const user = await User.findOne({ id: payload.userId }).select('id email username name role status').lean();
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Tài khoản không tồn tại trên hệ thống.',
+        errorCode: 'USER_NOT_FOUND'
+      });
+    }
+
+    if (user.status === 'banned') {
+      return res.status(403).json({
+        success: false,
+        message: 'Tài khoản của bạn đã bị khóa vĩnh viễn do vi phạm điều khoản bảo mật.',
+        errorCode: 'USER_BANNED'
+      });
+    }
+
+    req.user = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      username: user.username,
+      name: user.name
+    };
+    return next();
+  } catch (dbErr) {
+    req.user = payload;
+    return next();
+  }
 }
 
 export async function optionalAuth(
@@ -119,62 +97,28 @@ export async function optionalAuth(
 
   if (token) {
     const payload = verifyToken(token);
-    if (payload) {
-      req.user = payload;
-      return next();
-    }
-  }
-
-  // Fallback headers if token is absent or invalid
-  const fallbackUserId = (req.headers['x-user-id'] as string) || (req.query?.userId as string);
-  const roleHeader = (req.headers['x-user-role'] as string) || '';
-
-  if (fallbackUserId && fallbackUserId !== 'null' && fallbackUserId !== 'undefined') {
-    if (roleHeader === 'admin' || fallbackUserId === 'admin' || fallbackUserId === 'user_admin_super') {
-      req.user = {
-        userId: fallbackUserId === 'admin' ? 'user_admin_super' : fallbackUserId,
-        email: 'admin@lqmarket.vn',
-        role: 'admin',
-        username: 'admin',
-        name: 'Super Admin'
-      };
-      return next();
-    }
-
-    try {
-      const user = await User.findOne({
-        $or: [
-          { id: fallbackUserId },
-          { username: fallbackUserId },
-          { email: fallbackUserId }
-        ]
-      }).lean();
-
-      if (user) {
-        req.user = {
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          username: user.username,
-          name: user.name
-        };
-        return next();
+    if (payload && payload.userId) {
+      try {
+        const user = await User.findOne({ id: payload.userId }).select('id email username name role status').lean();
+        if (user && user.status !== 'banned') {
+          req.user = {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            username: user.username,
+            name: user.name
+          };
+        }
+      } catch {
+        req.user = payload;
       }
-    } catch (e) {}
-
-    req.user = {
-      userId: fallbackUserId,
-      email: `${fallbackUserId}@cholienquan.com`,
-      role: (roleHeader === 'seller' ? 'seller' : 'buyer') as any,
-      username: fallbackUserId,
-      name: fallbackUserId
-    };
+    }
   }
 
-  next();
+  return next();
 }
 
-export function requireAdmin(
+export async function requireAdmin(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -186,10 +130,25 @@ export function requireAdmin(
       errorCode: 'FORBIDDEN_ADMIN_ONLY'
     });
   }
+
+  // Strict double-check against MongoDB
+  try {
+    const dbUser = await User.findOne({ id: req.user.userId }).select('role status').lean();
+    if (!dbUser || dbUser.role !== 'admin' || dbUser.status === 'banned') {
+      return res.status(403).json({
+        success: false,
+        message: 'Quyền quản trị viên không hợp lệ hoặc tài khoản đã bị đình chỉ.',
+        errorCode: 'FORBIDDEN_ADMIN_VERIFICATION_FAILED'
+      });
+    }
+  } catch (err) {
+    // Continue if DB transient check
+  }
+
   next();
 }
 
-export function requireSeller(
+export async function requireSeller(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -201,6 +160,18 @@ export function requireSeller(
       errorCode: 'FORBIDDEN_SELLER_ONLY'
     });
   }
+
+  try {
+    const dbUser = await User.findOne({ id: req.user.userId }).select('role status').lean();
+    if (!dbUser || (dbUser.role !== 'seller' && dbUser.role !== 'admin') || dbUser.status === 'banned') {
+      return res.status(403).json({
+        success: false,
+        message: 'Quyền người bán không hợp lệ.',
+        errorCode: 'FORBIDDEN_SELLER_FAILED'
+      });
+    }
+  } catch (err) {}
+
   next();
 }
 

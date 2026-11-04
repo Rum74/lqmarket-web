@@ -905,14 +905,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setPriceAlerts(loadedAlerts);
         }
 
-        console.log('[APP STATE] Successfully loaded from MongoDB:', {
-          accountsCount: fetchedAccounts ? fetchedAccounts.length : 0,
-          ordersCount: ordersList ? ordersList.length : 0,
-          mysteryBoxesCount: boxes ? boxes.length : 0,
-          transactionsCount: txs ? txs.length : 0,
-          usersCount: usersList ? usersList.length : 0
-        });
-
         setCloudSyncStatus('synced');
         return;
       }
