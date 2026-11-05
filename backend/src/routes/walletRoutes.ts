@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import mongoose from 'mongoose';
 import { User } from '../models/User';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { WithdrawalRequest } from '../models/WithdrawalRequest';
@@ -126,7 +127,14 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       });
     }
 
-    const user = await User.findOne({ id: userId });
+    const user = await User.findOne({
+      $or: [
+        { id: userId },
+        { _id: mongoose.isValidObjectId(userId) ? userId : undefined },
+        { username: userId },
+        { email: userId }
+      ].filter(Boolean)
+    });
     if (!user) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản người dùng' });
     }
@@ -134,16 +142,17 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
     if (user.balance < numAmount) {
       return res.status(400).json({
         success: false,
-        message: `Số dư ví khả dụng không đủ (${user.balance.toLocaleString('vi-VN')}đ / ${numAmount.toLocaleString('vi-VN')}đ)`
+        message: `Số dư ví khả dụng không đủ (${(user.balance || 0).toLocaleString('vi-VN')}đ / ${numAmount.toLocaleString('vi-VN')}đ)`
       });
     }
 
-    // Deduct user balance and hold in pending
-    user.balance -= numAmount;
-    user.pendingBalance = (user.pendingBalance || 0) + numAmount;
+    // Deduct user available balance and hold in pending
+    user.balance = Math.max(0, (user.balance || 0) - numAmount);
+    user.pendingBalance = (Number(user.pendingBalance) || 0) + numAmount;
     user.bankName = bankName;
     user.bankAccount = bankAccount;
     user.bankAccountName = bankAccountName;
+    user.updatedAt = new Date().toISOString();
     await user.save();
 
     const withdrawId = `wdr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -200,7 +209,9 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       success: true,
       message: 'Yêu cầu rút tiền đã được gửi. Admin sẽ duyệt và chuyển khoản trong vòng 1-24h.',
       withdrawalRequest: newRequest.toJSON(),
-      transaction: tx.toJSON()
+      transaction: tx.toJSON(),
+      newBalance: user.balance,
+      newPendingBalance: user.pendingBalance
     });
   } catch (error: any) {
     console.error('Withdrawal error:', error);

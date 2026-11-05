@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { WithdrawalRequest } from '../models/WithdrawalRequest';
 import { User } from '../models/User';
@@ -165,13 +166,31 @@ export async function approvePayout(
     );
   }
 
-  // 5. Deduct user's pending balance in MongoDB
+  // 5. Deduct user's pending balance in MongoDB (and shortfall from balance if pending was not pre-held)
   let user = null;
   if (userId) {
-    user = await User.findOne({ id: userId });
+    user = await User.findOne({
+      $or: [
+        { id: userId },
+        { _id: mongoose.isValidObjectId(userId) ? userId : undefined },
+        { username: userId },
+        { email: userId }
+      ].filter(Boolean)
+    });
     if (user) {
       const currentPending = Number(user.pendingBalance) || 0;
-      user.pendingBalance = Math.max(0, currentPending - rawAmount);
+      const currentBalance = Number(user.balance) || 0;
+
+      // When request was created, funds were transferred to pendingBalance.
+      // So approval officially clears the held amount from pendingBalance.
+      // If pendingBalance was insufficient, deduct remaining shortfall from balance!
+      const deductFromPending = Math.min(currentPending, rawAmount);
+      const remainingShortfall = rawAmount - deductFromPending;
+
+      user.pendingBalance = Math.max(0, currentPending - deductFromPending);
+      if (remainingShortfall > 0) {
+        user.balance = Math.max(0, currentBalance - remainingShortfall);
+      }
       user.updatedAt = nowIso;
       await user.save();
 
@@ -326,13 +345,22 @@ export async function rejectPayout(
   // 4. Refund money back to user balance in MongoDB
   let user = null;
   if (userId) {
-    user = await User.findOne({ id: userId });
+    user = await User.findOne({
+      $or: [
+        { id: userId },
+        { _id: mongoose.isValidObjectId(userId) ? userId : undefined },
+        { username: userId },
+        { email: userId }
+      ].filter(Boolean)
+    });
     if (user) {
       const currentBalance = Number(user.balance) || 0;
       const currentPending = Number(user.pendingBalance) || 0;
 
+      // Refund held amount from pending back to available balance
+      const refundFromPending = Math.min(currentPending, rawAmount);
+      user.pendingBalance = Math.max(0, currentPending - refundFromPending);
       user.balance = currentBalance + rawAmount;
-      user.pendingBalance = Math.max(0, currentPending - rawAmount);
       user.updatedAt = nowIso;
       await user.save();
 

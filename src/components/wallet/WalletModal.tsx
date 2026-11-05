@@ -644,7 +644,10 @@ export const WalletModal: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Tài khoản: <strong className="text-slate-200">{currentUser?.name || 'Thành viên'}</strong> • Số dư ví: <strong className="text-amber-400">{(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ</strong>
+                Tài khoản: <strong className="text-slate-200">{currentUser?.name || 'Thành viên'}</strong> • Khả dụng: <strong className="text-amber-400">{(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ</strong>
+                {(currentUser?.pendingBalance ?? 0) > 0 && (
+                  <span className="text-amber-300 ml-1.5">• Tạm giữ chờ duyệt: <strong>{(currentUser?.pendingBalance ?? 0).toLocaleString('vi-VN')}đ</strong></span>
+                )}
               </p>
             </div>
           </div>
@@ -1404,9 +1407,13 @@ export const WalletModal: React.FC = () => {
                   onChange={e => setWithdrawAmount(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 text-amber-400 font-bold text-sm rounded-xl p-2.5 focus:outline-none focus:border-red-500"
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Khả dụng: {(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ • Phí giao dịch 0đ
-                </span>
+                <div className="text-[10px] text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                  <span>Khả dụng: <strong className="text-amber-400">{(currentUser?.balance ?? 0).toLocaleString('vi-VN')}đ</strong></span>
+                  {(currentUser?.pendingBalance ?? 0) > 0 && (
+                    <span className="text-amber-300">• Đang tạm giữ: <strong>{(currentUser?.pendingBalance ?? 0).toLocaleString('vi-VN')}đ</strong></span>
+                  )}
+                  <span className="text-slate-600">• Phí giao dịch 0đ</span>
+                </div>
               </div>
 
               <button

@@ -383,15 +383,19 @@ export const AdminDashboardView: React.FC = () => {
     }
   };
 
-  const handleDeleteUserSubmit = () => {
+  const handleDeleteUserSubmit = async () => {
     if (!deletingUser) return;
     if (deletingUser.id === currentUser.id) {
       alert('Không thể xóa tài khoản Admin đang đăng nhập.');
       return;
     }
-    adminDeleteUser(deletingUser.id);
-    showNotification(`Đã xóa tài khoản "${deletingUser.name}" khỏi hệ thống.`);
-    setDeletingUser(null);
+    const res = await adminDeleteUser(deletingUser.id);
+    if (res.success) {
+      showNotification(res.message || `Đã xóa tài khoản "${deletingUser.name}" khỏi hệ thống.`);
+      setDeletingUser(null);
+    } else {
+      alert(res.message || 'Lỗi khi xóa người dùng.');
+    }
   };
 
   return (
@@ -1254,10 +1258,20 @@ export const AdminDashboardView: React.FC = () => {
                       <div className="p-1.5 px-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
                         <Wallet size={13} className="text-amber-400 shrink-0" />
                         <div>
-                          <div className="text-[9px] text-slate-500 uppercase font-bold leading-tight">Số dư ví:</div>
-                          <div className="text-xs font-black text-amber-400 leading-tight">
-                            {(user.balance || 0).toLocaleString('vi-VN')}đ
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-slate-500 uppercase font-bold leading-tight">Khả dụng:</span>
+                            <span className="text-xs font-black text-amber-400 leading-tight">
+                              {(user.balance || 0).toLocaleString('vi-VN')}đ
+                            </span>
                           </div>
+                          {(user.pendingBalance || 0) > 0 && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[8px] text-amber-500 uppercase font-bold leading-tight">Tạm giữ rút:</span>
+                              <span className="text-[10px] font-bold text-amber-300 leading-tight">
+                                {(user.pendingBalance || 0).toLocaleString('vi-VN')}đ
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 

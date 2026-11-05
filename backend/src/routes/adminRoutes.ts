@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import mongoose from 'mongoose';
 import { User } from '../models/User';
 import { Account } from '../models/Account';
 import { Order } from '../models/Order';
@@ -165,6 +166,81 @@ router.put('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
     return res.json({ success: true, message: 'Cập nhật người dùng thành công', user: user.toJSON() });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Lỗi cập nhật người dùng' });
+  }
+});
+
+// DELETE /api/admin/users/:id - Xóa người dùng hoàn toàn khỏi MongoDB
+router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const currentAdminId = req.user?.userId;
+
+    if (id === currentAdminId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể xóa tài khoản Admin đang đăng nhập vào hệ thống.'
+      });
+    }
+
+    const user = await User.findOne({
+      $or: [
+        { id },
+        { _id: mongoose.isValidObjectId(id) ? id : undefined },
+        { username: id },
+        { email: id }
+      ].filter(Boolean)
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng trong cơ sở dữ liệu MongoDB.'
+      });
+    }
+
+    // Protect super admin account
+    if (user.role === 'admin' && (user.id === 'user_admin_super' || user.username === 'admin' || user.email === 'admin@cholienquan.com')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Không thể xóa tài khoản Super Admin quản trị tối cao của hệ thống.'
+      });
+    }
+
+    const userName = user.name;
+    const userEmail = user.email;
+    const targetUserId = user.id;
+
+    // Delete user from MongoDB
+    await User.deleteOne({ _id: user._id });
+
+    // Save Admin Audit Log
+    try {
+      const audit = new AuditLog({
+        id: `audit_${Date.now()}_del_${Math.random().toString(36).substring(2, 6)}`,
+        adminId: currentAdminId || 'admin',
+        adminName: req.user?.email || req.user?.name || 'Super Admin',
+        action: 'DELETE_USER',
+        targetType: 'user',
+        targetId: targetUserId,
+        details: `Admin đã xóa vĩnh viễn tài khoản người dùng "${userName}" (${userEmail}, ID: ${targetUserId}) khỏi cơ sở dữ liệu MongoDB.`,
+        timestamp: new Date().toISOString()
+      });
+      await audit.save();
+    } catch (auditErr) {
+      console.warn('Audit log write error:', auditErr);
+    }
+
+    return res.json({
+      success: true,
+      message: `Đã xóa tài khoản "${userName}" (${userEmail}) khỏi cơ sở dữ liệu thành công!`,
+      deletedUserId: targetUserId
+    });
+  } catch (error: any) {
+    console.error('Delete user error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi xóa người dùng khỏi MongoDB: ' + (error?.message || error)
+    });
   }
 });
 

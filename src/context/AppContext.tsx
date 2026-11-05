@@ -1100,7 +1100,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && (parsed.id === currentUserId || parsed.email?.toLowerCase() === currentUserId.toLowerCase())) {
-          baseUser = { ...(baseUser || {}), ...parsed };
+          if (!baseUser) {
+            baseUser = parsed;
+          } else {
+            // Fresh database/state fields from baseUser ALWAYS take precedence over stale cached profile
+            baseUser = { ...parsed, ...baseUser };
+          }
         }
       }
     } catch {}
@@ -1674,9 +1679,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): boolean => {
     if (currentUser.balance < amount) return false;
 
+    const numAmount = Number(amount);
+    const newBalance = Math.max(0, (currentUser.balance || 0) - numAmount);
+    const newPending = (Number(currentUser.pendingBalance) || 0) + numAmount;
+
+    // Immediately update balance and pendingBalance in allUsers
     setAllUsers(prev =>
-      prev.map(u => (u.id === currentUser.id ? { ...u, balance: Math.max(0, u.balance - amount), pendingBalance: (u.pendingBalance || 0) + amount } : u))
+      prev.map(u => (u.id === currentUser.id ? { ...u, balance: newBalance, pendingBalance: newPending } : u))
     );
+
+    // Immediately sync to localStorage so memo doesn't read stale cached balance
+    try {
+      const raw = localStorage.getItem('lqmarket_saved_user_profile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        localStorage.setItem('lqmarket_saved_user_profile', JSON.stringify({
+          ...parsed,
+          balance: newBalance,
+          pendingBalance: newPending
+        }));
+      }
+    } catch {}
 
     const targetBankName = bankDetails?.bankName || bankInfo.split(' - ')[0] || 'Vietcombank';
     const targetBankCode = bankDetails?.bankCode || getBankBinCode(targetBankName);
@@ -1689,9 +1712,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userName: currentUser.name,
       userEmail: currentUser.email,
       type: 'withdraw',
-      amount: -amount,
+      amount: -numAmount,
       status: 'pending',
-      note: `Yêu cầu rút tiền về ${bankInfo}`,
+      note: `Yêu cầu rút tiền về ${bankInfo} - Đang tạm giữ chờ duyệt`,
       bankName: targetBankName,
       bankCode: targetBankCode,
       bankAccount: targetAccount,
@@ -1706,7 +1729,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userId: currentUser.id,
       userEmail: currentUser.email,
       userName: currentUser.name,
-      amount,
+      amount: numAmount,
       bankName: targetBankName,
       bankCode: targetBankCode,
       bankAccount: targetAccount,
@@ -1716,7 +1739,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTransactions(prev => prev.map(t => t.id === newTx.id ? res.transaction : t));
       }
       fetchAllMongoData();
-    }).catch(err => console.warn('MongoDB withdraw notice:', err));
+    }).catch(err => {
+      console.warn('MongoDB withdraw notice:', err);
+      // Rollback on error
+      setAllUsers(prev =>
+        prev.map(u => (u.id === currentUser.id ? { ...u, balance: currentUser.balance, pendingBalance: currentUser.pendingBalance } : u))
+      );
+      setTransactions(prev => prev.filter(t => t.id !== newTx.id));
+    });
 
     return true;
   };
@@ -2366,10 +2396,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (userId === currentUser.id) {
       return { success: false, message: 'Không thể xóa tài khoản Admin đang đăng nhập!' };
     }
-    setAllUsers(prev => prev.filter(u => u.id !== userId));
     try {
       const res = await api.delete(`/api/admin/users/${userId}`);
-      return { success: true, message: res.message || 'Đã xóa tài khoản khỏi hệ thống!' };
+      if (res && res.success) {
+        setAllUsers(prev => prev.filter(u => u.id !== userId));
+        fetchAllMongoData();
+        return { success: true, message: res.message || 'Đã xóa tài khoản khỏi hệ thống!' };
+      }
+      return { success: false, message: res?.message || 'Lỗi khi xóa người dùng.' };
     } catch (e: any) {
       return { success: false, message: e.message || 'Lỗi khi xóa người dùng.' };
     }
