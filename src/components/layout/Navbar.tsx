@@ -90,7 +90,7 @@ export const Navbar: React.FC = () => {
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full overflow-x-clip transition-all">
+    <header className="sticky top-0 z-50 bg-[#0b1220]/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg shadow-black/20 w-full transition-all">
       {/* Main Header Container (Synchronized with 1536px canvas) */}
       <div className="w-full max-w-[1536px] mx-auto px-2 sm:px-5 lg:px-6 xl:px-8">
         <div className="flex items-center justify-between h-[56px] sm:h-[68px] w-full gap-1 sm:gap-2 xl:gap-4">
@@ -402,7 +402,7 @@ export const Navbar: React.FC = () => {
 
                   {/* Notification Popover */}
                   {isNotifOpen && (
-                    <div className="absolute right-0 mt-2 w-72 sm:w-88 max-w-[calc(100vw-1rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden text-left">
+                    <div className="absolute right-0 top-full mt-2 w-72 sm:w-88 max-w-[calc(100vw-1rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-[100] overflow-hidden text-left">
                       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
                         <div className="flex items-center gap-2">
                           <Bell className="w-4 h-4 text-amber-400" />
@@ -478,7 +478,7 @@ export const Navbar: React.FC = () => {
 
                   {/* User Dropdown Menu */}
                   {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-1rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 text-left animate-in fade-in duration-150">
+                    <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-[100] p-2 text-left animate-in fade-in duration-150">
                       <div className="p-3 border-b border-slate-800 bg-slate-950/60 rounded-xl mb-2">
                         <p className="text-xs font-bold text-white truncate">{currentUser?.name || 'Thành viên'}</p>
                         <p className="text-[11px] text-slate-400 truncate">{currentUser?.email || ''}</p>

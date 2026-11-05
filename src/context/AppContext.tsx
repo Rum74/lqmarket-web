@@ -735,30 +735,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? bootRes.data.accounts
           : null;
 
-        if (Array.isArray(fetchedAccounts) && fetchedAccounts.length > 0) {
+        if (Array.isArray(fetchedAccounts)) {
           const norm = fetchedAccounts.map(normalizeAccount);
           setAccounts(norm);
           try {
-            const compactCache = norm.slice(0, 50).map(a => ({
-              ...a,
-              images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
-            }));
-            localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
+            if (norm.length > 0) {
+              const compactCache = norm.slice(0, 50).map(a => ({
+                ...a,
+                images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
+              }));
+              localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
+            } else {
+              localStorage.removeItem('lqmarket_cached_accounts');
+            }
           } catch {}
         } else {
           // Resilient fallback: fetch /api/accounts directly if bootstrap did not return accounts
           api.get('/api/accounts?limit=100')
             .then(accRes => {
               const list = accRes?.data || accRes?.accounts;
-              if (Array.isArray(list) && list.length > 0) {
+              if (Array.isArray(list)) {
                 const norm = list.map(normalizeAccount);
                 setAccounts(norm);
                 try {
-                  const compactCache = norm.slice(0, 50).map(a => ({
-                    ...a,
-                    images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
-                  }));
-                  localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
+                  if (norm.length > 0) {
+                    const compactCache = norm.slice(0, 50).map(a => ({
+                      ...a,
+                      images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
+                    }));
+                    localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
+                  } else {
+                    localStorage.removeItem('lqmarket_cached_accounts');
+                  }
                 } catch {}
               }
             })
@@ -929,7 +937,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       if (accRes && accRes.success && Array.isArray(accRes.data || accRes.accounts)) {
-        setAccounts((accRes.data || accRes.accounts).map(normalizeAccount));
+        const rawList = accRes.data || accRes.accounts;
+        const norm = rawList.map(normalizeAccount);
+        setAccounts(norm);
+        try {
+          if (norm.length > 0) {
+            const compactCache = norm.slice(0, 50).map(a => ({
+              ...a,
+              images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
+            }));
+            localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
+          } else {
+            localStorage.removeItem('lqmarket_cached_accounts');
+          }
+        } catch {}
       }
       if (statsRes && statsRes.success) {
         if (typeof statsRes.totalCompletedTransactions === 'number') {
@@ -981,7 +1002,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setAllUsers(adminUsersRes.data || adminUsersRes.users);
             }
             if (adminProductsRes?.success && Array.isArray(adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts)) {
-              setAccounts((adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts).map(normalizeAccount));
+              const rawList = adminProductsRes.data || adminProductsRes.products || adminProductsRes.accounts;
+              const norm = rawList.map(normalizeAccount);
+              setAccounts(norm);
+              try {
+                if (norm.length > 0) {
+                  const compactCache = norm.slice(0, 50).map(a => ({
+                    ...a,
+                    images: (a.images || []).map(img => img.startsWith('data:') ? img.slice(0, 200) : img)
+                  }));
+                  localStorage.setItem('lqmarket_cached_accounts', JSON.stringify(compactCache));
+                } else {
+                  localStorage.removeItem('lqmarket_cached_accounts');
+                }
+              } catch {}
             }
             if (adminOrdersRes?.success && Array.isArray(adminOrdersRes.data || adminOrdersRes.orders)) {
               setOrders(adminOrdersRes.data || adminOrdersRes.orders);
