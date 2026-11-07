@@ -62,13 +62,12 @@ export async function approvePayout(
     if (tx) {
       wdr = await WithdrawalRequest.findOne({
         $or: [
-          { transactionId: cleanId },
-          { id: (tx as any).withdrawalRequestId },
           { id: cleanId.replace('tx_', 'wdr_') },
-          { id: `wdr_${cleanId.replace('tx_', '')}` },
-          // Match by user, amount and pending status
-          { userId: tx.userId, amount: Math.abs(tx.amount), status: 'pending' }
-        ]
+          { id: (tx as any).withdrawalRequestId },
+          { id: (tx as any).referenceId },
+          { transactionId: cleanId },
+          { id: `wdr_${cleanId.replace('tx_', '')}` }
+        ].filter(Boolean)
       });
     } else {
       // Fallback search in WithdrawalRequest
@@ -80,15 +79,41 @@ export async function approvePayout(
       });
     }
   } else {
-    // Found wdr, look for associated tx
+    // Found wdr, look for associated tx strictly by shared ID or foreign key
     tx = await WalletTransaction.findOne({
       $or: [
-        { withdrawalRequestId: wdr.id },
-        { id: (wdr as any).transactionId },
         { id: cleanId.replace('wdr_', 'tx_') },
-        { userId: wdr.userId, amount: -Math.abs(wdr.amount), status: 'pending' }
-      ]
+        { id: (wdr as any).transactionId },
+        { withdrawalRequestId: wdr.id },
+        { referenceId: wdr.id }
+      ].filter(Boolean)
     });
+  }
+
+  // Fallback search for unlinked tx only if strict match was not found
+  if (!tx && wdr) {
+    const wTime = new Date(wdr.createdAt).getTime();
+    const candidateTxs = await WalletTransaction.find({
+      userId: wdr.userId,
+      amount: -Math.abs(wdr.amount),
+      type: 'withdraw'
+    }).lean();
+
+    let bestTx: any = null;
+    let minDiff = 30000;
+    for (const c of candidateTxs) {
+      // Never match a tx that is already explicitly linked to a DIFFERENT wdr
+      if (c.withdrawalRequestId && c.withdrawalRequestId !== wdr.id) continue;
+      if (c.referenceId && c.referenceId.startsWith('wdr_') && c.referenceId !== wdr.id) continue;
+      const diff = Math.abs(new Date(c.createdAt).getTime() - wTime);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestTx = c;
+      }
+    }
+    if (bestTx) {
+      tx = await WalletTransaction.findOne({ id: bestTx.id });
+    }
   }
 
   console.log('[APPROVE WITHDRAWAL]');
@@ -108,6 +133,34 @@ export async function approvePayout(
     console.log('matchedCount: 0');
     console.log('modifiedCount: 0');
     console.log('newStatus: approved (already approved)');
+
+    const effectiveNote = adminNote || wdr.referenceNote || '';
+    if (adminNote && adminNote !== wdr.referenceNote) {
+      await WithdrawalRequest.updateOne(
+        { id: wdr.id },
+        { $set: { referenceNote: adminNote, updatedAt: nowIso } }
+      );
+      wdr.referenceNote = adminNote;
+    }
+
+    if (tx && (tx.status !== 'success' || (effectiveNote && !tx.note?.includes(effectiveNote)))) {
+      await WalletTransaction.updateOne(
+        { id: tx.id },
+        {
+          $set: {
+            status: 'success',
+            withdrawalRequestId: wdr.id,
+            referenceId: wdr.id,
+            processedAt: wdr.processedAt || nowIso,
+            note: effectiveNote
+              ? `${tx.note ? tx.note.split(' - Ghi chú Admin:')[0] : 'Rút tiền'} - Ghi chú Admin: ${effectiveNote}`
+              : tx.note
+          }
+        }
+      );
+      tx = await WalletTransaction.findOne({ id: tx.id });
+    }
+
     return {
       success: true,
       message: `Yêu cầu rút tiền ${wdr.id} đã được giải ngân thành công trước đó.`,
@@ -126,6 +179,7 @@ export async function approvePayout(
       $set: {
         status: 'approved',
         referenceNote: adminNote || wdr.referenceNote || '',
+        transactionId: tx?.id || (wdr as any).transactionId || cleanId.replace('wdr_', 'tx_'),
         processedAt: nowIso,
         updatedAt: nowIso
       }
@@ -157,10 +211,11 @@ export async function approvePayout(
         $set: {
           status: 'success',
           withdrawalRequestId: wdr.id,
+          referenceId: wdr.id,
           processedAt: nowIso,
           note: adminNote
             ? `${tx.note ? tx.note.split(' - Ghi chú Admin:')[0] : 'Rút tiền'} - Ghi chú Admin: ${adminNote}`
-            : tx.note
+            : (wdr.referenceNote ? `${tx.note ? tx.note.split(' - Ghi chú Admin:')[0] : 'Rút tiền'} - Ghi chú Admin: ${wdr.referenceNote}` : tx.note)
         }
       }
     );
@@ -255,23 +310,55 @@ export async function rejectPayout(
     if (tx) {
       wdr = await WithdrawalRequest.findOne({
         $or: [
-          { transactionId: cleanId },
-          { id: (tx as any).withdrawalRequestId },
           { id: cleanId.replace('tx_', 'wdr_') },
-          { id: `wdr_${cleanId.replace('tx_', '')}` },
-          { userId: tx.userId, amount: Math.abs(tx.amount), status: 'pending' }
+          { id: (tx as any).withdrawalRequestId },
+          { id: (tx as any).referenceId },
+          { transactionId: cleanId },
+          { id: `wdr_${cleanId.replace('tx_', '')}` }
+        ].filter(Boolean)
+      });
+    } else {
+      wdr = await WithdrawalRequest.findOne({
+        $or: [
+          { id: cleanId.replace('tx_', 'wdr_') },
+          { transactionId: cleanId }
         ]
       });
     }
   } else {
     tx = await WalletTransaction.findOne({
       $or: [
-        { withdrawalRequestId: wdr.id },
-        { id: (wdr as any).transactionId },
         { id: cleanId.replace('wdr_', 'tx_') },
-        { userId: wdr.userId, amount: -Math.abs(wdr.amount), status: 'pending' }
-      ]
+        { id: (wdr as any).transactionId },
+        { withdrawalRequestId: wdr.id },
+        { referenceId: wdr.id }
+      ].filter(Boolean)
     });
+  }
+
+  // Fallback search for unlinked tx only if strict match was not found
+  if (!tx && wdr) {
+    const wTime = new Date(wdr.createdAt).getTime();
+    const candidateTxs = await WalletTransaction.find({
+      userId: wdr.userId,
+      amount: -Math.abs(wdr.amount),
+      type: 'withdraw'
+    }).lean();
+
+    let bestTx: any = null;
+    let minDiff = 30000;
+    for (const c of candidateTxs) {
+      if (c.withdrawalRequestId && c.withdrawalRequestId !== wdr.id) continue;
+      if (c.referenceId && c.referenceId.startsWith('wdr_') && c.referenceId !== wdr.id) continue;
+      const diff = Math.abs(new Date(c.createdAt).getTime() - wTime);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestTx = c;
+      }
+    }
+    if (bestTx) {
+      tx = await WalletTransaction.findOne({ id: bestTx.id });
+    }
   }
 
   console.log('[REJECT WITHDRAWAL]');

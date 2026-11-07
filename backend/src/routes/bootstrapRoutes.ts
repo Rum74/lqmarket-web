@@ -187,6 +187,10 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         if (w.status === 'approved') {
           existingTx.status = 'success';
           existingTx.processedAt = w.processedAt || existingTx.processedAt || new Date().toISOString();
+          if (w.referenceNote) {
+            const baseNote = existingTx.note ? existingTx.note.split(' - Ghi chú Admin:')[0] : 'Yêu cầu rút tiền';
+            existingTx.note = `${baseNote} - Ghi chú Admin: ${w.referenceNote}`;
+          }
         } else if (w.status === 'rejected') {
           existingTx.status = 'failed';
           existingTx.rejectReason = w.rejectionReason || existingTx.rejectReason || 'Bị từ chối';
@@ -229,6 +233,10 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         if (w.status === 'approved') {
           bestMatch.status = 'success';
           bestMatch.processedAt = w.processedAt || bestMatch.processedAt || new Date().toISOString();
+          if (w.referenceNote) {
+            const baseNote = bestMatch.note ? bestMatch.note.split(' - Ghi chú Admin:')[0] : 'Yêu cầu rút tiền';
+            bestMatch.note = `${baseNote} - Ghi chú Admin: ${w.referenceNote}`;
+          }
         } else if (w.status === 'rejected') {
           bestMatch.status = 'failed';
           bestMatch.rejectReason = w.rejectionReason || bestMatch.rejectReason || 'Bị từ chối';

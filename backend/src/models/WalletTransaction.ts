@@ -22,6 +22,7 @@ export interface IWalletTransaction {
   checkoutUrl?: string;
   rejectReason?: string;
   processedAt?: string;
+  withdrawalRequestId?: string;
   createdAt: string;
 }
 
@@ -47,6 +48,7 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
     note: { type: String, default: '' },
     description: { type: String, default: '' },
     referenceId: { type: String, default: null, index: true },
+    withdrawalRequestId: { type: String, default: null, index: true },
     bankName: { type: String },
     bankCode: { type: String },
     bankAccount: { type: String },
