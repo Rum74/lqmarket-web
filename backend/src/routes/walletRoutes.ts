@@ -155,7 +155,9 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
     user.updatedAt = new Date().toISOString();
     await user.save();
 
-    const withdrawId = `wdr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const sharedKey = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const withdrawId = `wdr_${sharedKey}`;
+    const txId = `tx_${sharedKey}`;
 
     const newRequest = new WithdrawalRequest({
       id: withdrawId,
@@ -167,6 +169,7 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       bankAccount,
       bankAccountName,
       status: 'pending',
+      transactionId: txId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
@@ -174,7 +177,7 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
 
     // Record wallet transaction
     const tx = new WalletTransaction({
-      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: txId,
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
@@ -185,6 +188,8 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       bankName,
       bankAccount,
       bankAccountName,
+      referenceId: withdrawId,
+      withdrawalRequestId: withdrawId,
       createdAt: new Date().toISOString()
     });
     await tx.save();

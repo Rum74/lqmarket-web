@@ -163,24 +163,25 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
       };
     });
 
-    // 3. Merge Transactions & WithdrawalRequests cleanly without dropping pending status
-    const mergedTransactions: any[] = [...allTransactionsRaw];
+    // 3. Merge Transactions & WithdrawalRequests cleanly with strict 1-to-1 association
+    const mergedTransactions: any[] = allTransactionsRaw.map((t: any) => ({ ...t }));
+    const pairedTxIds = new Set<string>();
+
+    // Pass 1: Strict Exact ID and Foreign Key Matching
     for (const w of allWithdrawalsRaw) {
-      const existingTx = mergedTransactions.find(
-        t =>
+      const existingTx = mergedTransactions.find((t: any) =>
+        !pairedTxIds.has(t.id) && (
           t.id === w.id ||
+          t.withdrawalRequestId === w.id ||
+          t.referenceId === w.id ||
+          (w as any).transactionId === t.id ||
           t.id === `tx_${w.id.replace('wdr_', '')}` ||
-          t.id === w.id.replace('wdr_', 'tx_') ||
-          (t.type === 'withdraw' &&
-            t.userId === w.userId &&
-            Math.abs(t.amount) === w.amount &&
-            Math.abs(new Date(t.createdAt).getTime() - new Date(w.createdAt).getTime()) < 120000)
+          t.id === w.id.replace('wdr_', 'tx_')
+        )
       );
 
-      const mappedStatus =
-        w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending';
-
       if (existingTx) {
+        pairedTxIds.add(existingTx.id);
         existingTx.withdrawalRequestId = w.id;
         // Source of truth for payout status is strictly WithdrawalRequest.status
         if (w.status === 'approved') {
@@ -197,7 +198,51 @@ router.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) =
         if (w.bankCode) existingTx.bankCode = w.bankCode;
         if (w.bankAccount) existingTx.bankAccount = w.bankAccount;
         if (w.bankAccountName) existingTx.bankAccountName = w.bankAccountName;
+      }
+    }
+
+    // Pass 2: Unpaired items matched by closest timestamp and exact user & amount
+    for (const w of allWithdrawalsRaw) {
+      const alreadyPaired = mergedTransactions.some((t: any) => t.withdrawalRequestId === w.id);
+      if (alreadyPaired) continue;
+
+      const wTime = new Date(w.createdAt).getTime();
+      let bestMatch: any = null;
+      let minDiff = 20000; // max 20 seconds difference for co-created records
+
+      for (const t of mergedTransactions) {
+        if (pairedTxIds.has(t.id)) continue;
+        if (t.type !== 'withdraw') continue;
+        if (t.userId !== w.userId) continue;
+        if (Math.abs(t.amount) !== Math.abs(w.amount)) continue;
+
+        const diff = Math.abs(new Date(t.createdAt).getTime() - wTime);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatch = t;
+        }
+      }
+
+      if (bestMatch) {
+        pairedTxIds.add(bestMatch.id);
+        bestMatch.withdrawalRequestId = w.id;
+        if (w.status === 'approved') {
+          bestMatch.status = 'success';
+          bestMatch.processedAt = w.processedAt || bestMatch.processedAt || new Date().toISOString();
+        } else if (w.status === 'rejected') {
+          bestMatch.status = 'failed';
+          bestMatch.rejectReason = w.rejectionReason || bestMatch.rejectReason || 'Bị từ chối';
+          bestMatch.processedAt = w.processedAt || bestMatch.processedAt || new Date().toISOString();
+        } else if (w.status === 'pending') {
+          bestMatch.status = 'pending';
+        }
+        if (w.bankName) bestMatch.bankName = w.bankName;
+        if (w.bankCode) bestMatch.bankCode = w.bankCode;
+        if (w.bankAccount) bestMatch.bankAccount = w.bankAccount;
+        if (w.bankAccountName) bestMatch.bankAccountName = w.bankAccountName;
       } else {
+        const mappedStatus =
+          w.status === 'approved' ? 'success' : w.status === 'rejected' ? 'failed' : 'pending';
         mergedTransactions.push({
           id: w.id,
           withdrawalRequestId: w.id,
